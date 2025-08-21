@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+
 #[derive(Resource)]
 pub struct GameAssets {
     pub player_texture: Handle<Image>,

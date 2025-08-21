@@ -4,9 +4,11 @@ use bevy::render::camera::ScalingMode;
 use std::f32::consts::TAU;
 use bevy::time::*;
 
+
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
+use crate::enemy_types::*;
 
 // Setup Systems
 pub fn startup_debug() {
@@ -280,30 +282,6 @@ pub fn move_player(
     }
 }
 
-pub fn move_enemies(
-    mut enemy_query: Query<(&mut Transform, &mut Enemy)>,
-    time: Res<Time>,
-) {
-    for (mut transform, mut enemy) in enemy_query.iter_mut() {
-        let mut enemy_c = enemy.clone();
-        match &mut enemy_c.ai_type {
-            EnemyAI::Static => {},
-            EnemyAI::Linear { direction } => {
-                transform.translation += (direction.extend(0.0) * enemy.speed * time.delta_secs());
-            },
-            EnemyAI::Sine { amplitude, frequency, phase } => {
-                *phase += time.delta_secs() * *frequency;
-                transform.translation.y -= enemy.speed * time.delta_secs();
-                transform.translation.x += *amplitude * phase.sin() * time.delta_secs();
-            },
-            EnemyAI::MiniBoss { pattern: _, timer } => {
-                *timer += time.delta_secs();
-                transform.translation.y -= enemy.speed * 0.5 * time.delta_secs();
-            },
-        }
-    }
-}
-
 pub fn move_projectiles(
     mut projectile_query: Query<(&mut Transform, &Projectile)>,
     time: Res<Time>,
@@ -551,11 +529,12 @@ pub fn update_particle_emitters(
 pub fn handle_collisions(
     mut commands: Commands,
     projectile_query: Query<(Entity, &Transform, &Collider, &Projectile)>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, &Enemy), (With<Enemy>, Without<Projectile>, Without<Player>)>,
-    player_query: Query<(Entity, &Transform, &Collider, &Player), (With<Player>, Without<Enemy>, Without<Projectile>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, &crate::enemy_types::Enemy), (With<crate::enemy_types::Enemy>, Without<Projectile>, Without<Player>)>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player), (With<Player>, Without<crate::enemy_types::Enemy>, Without<Projectile>)>,
     mut explosion_events: EventWriter<SpawnExplosion>,
     mut particle_events: EventWriter<SpawnParticles>,
     mut player_hit_events: EventWriter<PlayerHit>,
+    mut spawn_events: EventWriter<SpawnEnemy>,
     mut game_score: ResMut<GameScore>,
 ) {
     // Projectile vs Enemy collisions
@@ -583,23 +562,35 @@ pub fn handle_collisions(
                 });
                 
                 if enemy_health.0 <= 0 {
+                    // Handle spawner death - spawn minions
+                    if matches!(enemy.enemy_type, crate::enemy_types::EnemyType::Spawner) {
+                        for i in 0..3 {
+                            let angle = (i as f32 * 120.0).to_radians();
+                            let offset = Vec2::new(angle.cos() * 40.0, angle.sin() * 40.0);
+                            
+                            spawn_events.write(SpawnEnemy {
+                                position: enemy_transform.translation + offset.extend(0.0),
+                                ai_type: crate::enemy_types::EnemyAI::Linear { 
+                                    direction: Vec2::new(angle.cos() * 0.5, -0.8).normalize() 
+                                },
+                                enemy_type: crate::enemy_types::EnemyType::SpawnerMinion,
+                            });
+                        }
+                    }
+                    
                     commands.entity(enemy_entity).despawn();
                     
-                    let points = match enemy.enemy_type {
-                        EnemyType::Boss => 1000,
-                        EnemyType::Heavy => 300,
-                        EnemyType::Fast => 200,
-                        EnemyType::Basic => 100,
-                    };
-                    
+                    let points = enemy.enemy_type.get_points();
                     let multiplier = game_score.score_multiplier.max(1.0);
                     game_score.current += (points as f32 * multiplier) as u32;
                     
                     explosion_events.write(SpawnExplosion {
                         position: enemy_transform.translation,
                         intensity: match enemy.enemy_type {
-                            EnemyType::Boss => 2.0,
-                            EnemyType::Heavy => 1.5,
+                            crate::enemy_types::EnemyType::Boss => 2.0,
+                            crate::enemy_types::EnemyType::Spawner => 1.8,
+                            crate::enemy_types::EnemyType::Heavy => 1.5,
+                            crate::enemy_types::EnemyType::Turret => 1.3,
                             _ => 1.0,
                         },
                         enemy_type: Some(enemy.enemy_type.clone()),
@@ -629,16 +620,23 @@ pub fn handle_collisions(
     
     // Enemy vs Player direct collision
     if let Ok((_, player_transform, player_collider, _)) = player_query.single() {
-        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, _) in enemy_query.iter_mut() {
+        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, enemy) in enemy_query.iter_mut() {
             let distance = player_transform.translation.distance(enemy_transform.translation);
             if distance < player_collider.radius + enemy_collider.radius {
-                // Player takes damage
+                // Different damage based on enemy type
+                let collision_damage = match enemy.enemy_type {
+                    crate::enemy_types::EnemyType::Kamikaze => 35, // High damage
+                    crate::enemy_types::EnemyType::Boss => 30,
+                    crate::enemy_types::EnemyType::Heavy => 25,
+                    _ => 20,
+                };
+                
                 player_hit_events.write(PlayerHit {
                     position: player_transform.translation,
-                    damage: 25,
+                    damage: collision_damage,
                 });
                 
-                // Enemy also takes damage/dies from collision
+                // Enemy takes damage from collision
                 enemy_health.0 -= 50;
                 
                 explosion_events.write(SpawnExplosion {
@@ -654,6 +652,7 @@ pub fn handle_collisions(
         }
     }
 }
+
 
 // Update Systems
 pub fn update_explosions(
@@ -775,12 +774,7 @@ pub fn spawn_enemy_system(
 ) {
     if let Some(assets) = assets {
         for event in enemy_events.read() {
-            let (health, size, color) = match &event.enemy_type {
-                EnemyType::Boss => (100, 30.0, Color::srgb(1.0, 0.3, 0.3)),
-                EnemyType::Heavy => (50, 20.0, Color::srgb(0.8, 0.8, 0.3)),
-                EnemyType::Fast => (15, 12.0, Color::srgb(0.3, 0.8, 1.0)),
-                EnemyType::Basic => (20, 15.0, Color::WHITE),
-            };
+            let (health, size, speed, color) = event.enemy_type.get_stats();
             
             commands.spawn((
                 Sprite {
@@ -789,11 +783,12 @@ pub fn spawn_enemy_system(
                     ..default()
                 },
                 Transform::from_translation(event.position),
-                Enemy {
+                crate::enemy_types::Enemy {
                     ai_type: event.ai_type.clone(),
                     health,
-                    speed: 150.0,
+                    speed,
                     enemy_type: event.enemy_type.clone(),
+                    formation_id: None,
                 },
                 Collider { radius: size },
                 Health(health),

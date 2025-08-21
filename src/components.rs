@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::enemy_types::*;
 
 #[derive(Component)]
 pub struct Player {
@@ -6,30 +7,6 @@ pub struct Player {
     pub roll_factor: f32,
     pub lives: i32,
     pub invincible_timer: f32,
-}
-
-#[derive(Component, Clone)]
-pub struct Enemy {
-    pub ai_type: EnemyAI,
-    pub health: i32,
-    pub speed: f32,
-    pub enemy_type: EnemyType,
-}
-
-#[derive(Clone)]
-pub enum EnemyType {
-    Basic,
-    Fast,
-    Heavy,
-    Boss,
-}
-
-#[derive(Component)]
-pub enum EnemyAI {
-    Static,
-    Linear { direction: Vec2 },
-    Sine { amplitude: f32, frequency: f32, phase: f32 },
-    MiniBoss { pattern: usize, timer: f32 },
 }
 
 #[derive(Component)]
@@ -174,25 +151,6 @@ pub struct FinalScoreText;
 
 #[derive(Component)]
 pub struct GameOverText;
-
-// Helper implementations
-impl Clone for EnemyAI {
-    fn clone(&self) -> Self {
-        match self {
-            EnemyAI::Static => EnemyAI::Static,
-            EnemyAI::Linear { direction } => EnemyAI::Linear { direction: *direction },
-            EnemyAI::Sine { amplitude, frequency, phase } => EnemyAI::Sine {
-                amplitude: *amplitude,
-                frequency: *frequency,
-                phase: *phase,
-            },
-            EnemyAI::MiniBoss { pattern, timer } => EnemyAI::MiniBoss {
-                pattern: *pattern,
-                timer: *timer,
-            },
-        }
-    }
-}
 
 impl Default for ParticleConfig {
     fn default() -> Self {

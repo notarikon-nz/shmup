@@ -1,18 +1,19 @@
 use bevy::prelude::*;
-use crate::components::{EnemyAI, PowerUpType, ParticleConfig, EnemyType};
+use crate::components::{PowerUpType, ParticleConfig};
+use crate::enemy_types::{EnemyAI, EnemyType};
 
 #[derive(Event)]
 pub struct SpawnExplosion {
     pub position: Vec3,
     pub intensity: f32,
-    pub enemy_type: Option<EnemyType>,    
+    pub enemy_type: Option<EnemyType>,
 }
 
 #[derive(Event)]
 pub struct SpawnEnemy {
     pub position: Vec3,
     pub ai_type: EnemyAI,
-    pub enemy_type: EnemyType,    
+    pub enemy_type: EnemyType,
 }
 
 #[derive(Event)]

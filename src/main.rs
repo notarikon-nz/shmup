@@ -5,11 +5,15 @@ mod components;
 mod resources;
 mod systems;
 mod events;
+mod enemy_types;
+mod enemy_systems;
 
 use components::*;
 use resources::*;
 use systems::*;
 use events::*;
+use enemy_types::*;
+use enemy_systems::*;
 
 fn main() {
     App::new()
@@ -48,10 +52,15 @@ fn main() {
             handle_input.run_if(in_state(GameState::Playing)),
             move_player.run_if(in_state(GameState::Playing)),
             spawn_projectiles.run_if(in_state(GameState::Playing)),
-            spawn_enemies.run_if(in_state(GameState::Playing)),
+            spawn_enemies_enhanced.run_if(in_state(GameState::Playing)),
             spawn_powerups.run_if(in_state(GameState::Playing)),
             enemy_shooting.run_if(in_state(GameState::Playing)),
+            turret_shooting.run_if(in_state(GameState::Playing)),
             move_enemies.run_if(in_state(GameState::Playing)),
+            update_spawner_enemies.run_if(in_state(GameState::Playing)),
+        ))
+        .add_systems(Update, (            
+            update_formations.run_if(in_state(GameState::Playing)),
             move_projectiles.run_if(in_state(GameState::Playing)),
             move_powerups.run_if(in_state(GameState::Playing)),
             handle_collisions.run_if(in_state(GameState::Playing)),
