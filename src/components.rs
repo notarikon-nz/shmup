@@ -143,6 +143,9 @@ pub struct Shield {
 }
 
 #[derive(Component)]
+pub struct ShieldVisual;
+
+#[derive(Component)]
 pub struct SpeedBoost {
     pub timer: f32,
     pub multiplier: f32,

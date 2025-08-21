@@ -438,36 +438,33 @@ pub fn spawn_engine_particles(
     mut particle_events: EventWriter<SpawnParticles>,
     player_query: Query<&Transform, With<EngineTrail>>,
     input_state: Res<InputState>,
-    assets: Option<Res<GameAssets>>,
     time: Res<Time>,
     mut spawn_timer: Local<f32>,
 ) {
-    if assets.is_some() {
-        *spawn_timer -= time.delta_secs();
-        
-        if *spawn_timer <= 0.0 {
-            for transform in player_query.iter() {
-                let intensity = input_state.movement.length().max(0.3);
-                
-                particle_events.write(SpawnParticles {
-                    position: transform.translation + Vec3::new(0.0, -20.0, -0.1),
-                    count: (intensity * 8.0) as u32,
-                    config: ParticleConfig {
-                        color_start: Color::srgb(0.2, 0.6, 1.0),
-                        color_end: Color::srgba(0.8, 0.9, 1.0, 0.0),
-                        velocity_range: (
-                            Vec2::new(-30.0, -150.0),
-                            Vec2::new(30.0, -50.0)
-                        ),
-                        lifetime_range: (0.2, 0.6),
-                        size_range: (1.0, 3.0),
-                        gravity: Vec2::ZERO,
-                    },
-                });
-            }
+    *spawn_timer -= time.delta_secs();
+    
+    if *spawn_timer <= 0.0 {
+        for transform in player_query.iter() {
+            let intensity = input_state.movement.length().max(0.3);
             
-            *spawn_timer = 0.05;
+            particle_events.write(SpawnParticles {
+                position: transform.translation + Vec3::new(0.0, -20.0, -0.1),
+                count: (intensity * 8.0) as u32,
+                config: ParticleConfig {
+                    color_start: Color::srgb(0.2, 0.6, 1.0),
+                    color_end: Color::srgba(0.8, 0.9, 1.0, 0.0),
+                    velocity_range: (
+                        Vec2::new(-30.0, -150.0),
+                        Vec2::new(30.0, -50.0)
+                    ),
+                    lifetime_range: (0.2, 0.6),
+                    size_range: (0.3, 1.0),
+                    gravity: Vec2::ZERO,
+                },
+            });
         }
+        
+        *spawn_timer = 0.05;
     }
 }
 
@@ -548,6 +545,7 @@ pub fn update_particle_emitters(
         }
     }
 }
+
 
 // COLLISION SYSTEM
 pub fn handle_collisions(
@@ -711,7 +709,8 @@ pub fn cleanup_offscreen(
         Without<HighScoreText>, 
         Without<HealthBar>,
         Without<LivesText>,
-        Without<MultiplierText>
+        Without<MultiplierText>,
+        Without<ShieldVisual>
     )>,
 ) {
     for (entity, transform) in query.iter() {
@@ -761,7 +760,7 @@ pub fn spawn_explosion_system(
                     color_end: Color::srgba(color.to_srgba().red, color.to_srgba().green * 0.5, 0.0, 0.0),
                     velocity_range: (Vec2::new(-200.0, -200.0), Vec2::new(200.0, 200.0)),
                     lifetime_range: (0.3, 1.0),
-                    size_range: (2.0 * size_mult, 8.0 * size_mult),
+                    size_range: (0.25 * size_mult, 1.0 * size_mult),
                     gravity: Vec2::new(0.0, -50.0),
                 },
             });
@@ -863,14 +862,16 @@ pub fn load_high_scores(mut game_score: ResMut<GameScore>) {
     game_score.high_scores = vec![10000, 7500, 5000, 2500, 1000];
 }
 
+pub fn save_high_score_system(mut game_score: ResMut<GameScore>) {
+    save_high_score(&mut game_score);
+}
+
 pub fn save_high_score(game_score: &mut GameScore) {
     if game_score.current > 0 {
         game_score.high_scores.push(game_score.current);
         game_score.high_scores.sort_by(|a, b| b.cmp(a));
-        game_score.high_scores.truncate(10); // Keep top 10
-        
-        // Reset for new game
-        game_score.current = 0;
+        game_score.high_scores.truncate(10);
+        // Don't reset current score here - let reset_game_state_on_restart handle it
     }
 }
 
@@ -1048,6 +1049,17 @@ pub fn handle_powerup_collection(
                             timer: *duration,
                             alpha_timer: 0.0,
                         });
+                        
+                        // Spawn shield visual effect
+                        commands.spawn((
+                            Sprite {
+                                color: Color::srgba(0.4, 0.8, 1.0, 0.3),
+                                custom_size: Some(Vec2::splat(60.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(player_transform.translation),
+                            ShieldVisual,
+                        ));
                     }
                     PowerUpType::Speed { multiplier, duration } => {
                         commands.entity(player_entity).insert(SpeedBoost {
@@ -1077,25 +1089,67 @@ pub fn handle_powerup_collection(
 
 pub fn update_player_effects(
     mut commands: Commands,
-    mut player_query: Query<(Entity, &mut Player), With<Player>>,
+    mut player_query: Query<(Entity, &mut Player, &Transform), With<Player>>,
     mut shield_query: Query<(Entity, &mut Shield)>,
+    mut shield_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<ShieldVisual>, Without<Player>)>,
     mut speed_query: Query<(Entity, &mut SpeedBoost)>,
     mut multiplier_query: Query<(Entity, &mut ScoreMultiplier)>,
     mut rapid_fire_query: Query<(Entity, &mut RapidFire)>,
     mut game_score: ResMut<GameScore>,
     time: Res<Time>,
 ) {
-    if let Ok((_, mut player)) = player_query.single_mut() {
+    if let Ok((_, mut player, player_transform)) = player_query.single_mut() {
         player.invincible_timer = (player.invincible_timer - time.delta_secs()).max(0.0);
     }
 
-    // Update shield
+    // Update shield and shield visual
+    let mut shield_active = false;
     for (entity, mut shield) in shield_query.iter_mut() {
         shield.timer -= time.delta_secs();
         shield.alpha_timer += time.delta_secs();
+        shield_active = true;
         
         if shield.timer <= 0.0 {
             commands.entity(entity).remove::<Shield>();
+            shield_active = false;
+        }
+    }
+
+    // Update shield visual effect
+    if let Ok((player_entity, _, player_transform)) = player_query.single() {
+        if shield_active {
+            // Update existing shield visual or create new one if missing
+            if let Ok((_, mut shield_transform, mut shield_sprite)) = shield_visual_query.single_mut() {
+                // Follow player position
+                shield_transform.translation = player_transform.translation;
+                
+                // Pulsing effect
+                let pulse = (time.elapsed_secs() * 4.0).sin() * 0.1 + 0.9;
+                shield_transform.scale = Vec3::splat(pulse);
+                
+                // Breathing alpha effect
+                let alpha = 0.2 + (time.elapsed_secs() * 3.0).sin().abs() * 0.2;
+                shield_sprite.color.set_alpha(alpha);
+                
+                // Slow rotation
+                shield_transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 0.5);
+            } else {
+                // Create shield visual if it doesn't exist
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgba(0.4, 0.8, 1.0, 0.3),
+                        custom_size: Some(Vec2::splat(60.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(player_transform.translation),
+                    ShieldVisual,
+                ));
+            }
+        } else {
+            // Remove shield visual when shield expires
+            for (shield_visual_entity, _, _) in shield_visual_query.iter() {
+                commands.entity(shield_visual_entity).despawn();
+            }
         }
     }
 

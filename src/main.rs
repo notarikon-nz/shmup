@@ -75,7 +75,7 @@ fn main() {
             check_game_over,
             handle_restart_input,
         ).run_if(in_state(GameState::Playing)))
-        .add_systems(OnEnter(GameState::GameOver), setup_game_over_ui)
+        .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
         .add_systems(OnEnter(GameState::Playing), reset_game_state_on_restart)
         .add_systems(OnEnter(GameState::Paused), setup_pause_ui)
