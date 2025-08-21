@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy::render::camera::ScalingMode;
+use std::f32::consts::TAU;
+use bevy::time::*;
 
 use crate::components::*;
 use crate::resources::*;
@@ -11,8 +13,8 @@ pub fn startup_debug() {
     info!("=== STARTUP SYSTEMS RUNNING ===");
 }
 
+// Setup Systems
 pub fn setup_camera(mut commands: Commands) {
-    info!("Setting up camera...");
     commands.spawn((
         Camera2d,
         Projection::from(OrthographicProjection {
@@ -22,7 +24,6 @@ pub fn setup_camera(mut commands: Commands) {
             ..OrthographicProjection::default_2d()
         }),
     ));
-    info!("Camera setup complete");
 }
 
 pub fn setup_background(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -55,9 +56,12 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         Player {
             speed: 400.0,
             roll_factor: 0.3,
+            lives: 3,
+            invincible_timer: 0.0,
         },
         Collider { radius: 16.0 },
         Health(100),
+        EngineTrail,
     ));
 }
 
@@ -67,7 +71,12 @@ pub fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
         enemy_texture: asset_server.load("textures/enemy.png"),
         projectile_texture: asset_server.load("textures/bullet.png"),
         explosion_texture: asset_server.load("textures/explosion.png"),
+        particle_texture: asset_server.load("textures/particle.png"),
         health_powerup_texture: asset_server.load("textures/health_powerup.png"),
+        shield_powerup_texture: asset_server.load("textures/shield_powerup.png"),
+        speed_powerup_texture: asset_server.load("textures/speed_powerup.png"),
+        multiplier_powerup_texture: asset_server.load("textures/multiplier_powerup.png"),
+        rapidfire_powerup_texture: asset_server.load("textures/rapidfire_powerup.png"),
         background_layers: vec![
             asset_server.load("textures/bg_layer1.png"),
             asset_server.load("textures/bg_layer2.png"),
@@ -78,27 +87,28 @@ pub fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
         sfx_powerup: asset_server.load("audio/powerup.ogg"),
         music: asset_server.load("audio/music.ogg"),
     };
-    
     commands.insert_resource(assets);
-    
-    let pool = ProjectilePool {
-        entities: Vec::with_capacity(1000),
+}
+
+pub fn init_particle_pool(mut commands: Commands) {
+    commands.insert_resource(ParticlePool {
+        entities: Vec::with_capacity(2000),
         index: 0,
-    };
-    commands.insert_resource(pool);
+    });
+    commands.insert_resource(ShootingState {
+        rate_multiplier: 1.0,
+        base_rate: 0.1,
+    });
 }
 
 pub fn setup_ui(mut commands: Commands) {
-    info!("=== STARTING UI SETUP ===");
-    
-    // Health bar background (dark border)
-    info!("Creating health bar background...");
+    // Health bar background
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
-            bottom: Val::Px(20.0),
-            width: Val::Px(204.0), // Slightly larger for border effect
+            bottom: Val::Px(60.0),
+            width: Val::Px(204.0),
             height: Val::Px(24.0),
             border: UiRect::all(Val::Px(2.0)),
             ..default()
@@ -107,15 +117,13 @@ pub fn setup_ui(mut commands: Commands) {
         BorderColor(Color::srgb(0.8, 0.8, 0.8)),
         HealthBar,
     ));
-    info!("Health bar background created");
     
-    // Health bar fill (red bar)
-    info!("Creating health bar fill...");
+    // Health bar fill
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(22.0),
-            bottom: Val::Px(22.0),
+            bottom: Val::Px(62.0),
             width: Val::Px(200.0),
             height: Val::Px(20.0),
             ..default()
@@ -123,10 +131,22 @@ pub fn setup_ui(mut commands: Commands) {
         BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
         HealthBarFill,
     ));
-    info!("Health bar fill created");
+
+    // Lives text
+    commands.spawn((
+        Text::new("Lives: 3"),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            bottom: Val::Px(20.0),
+            ..default()
+        },
+        TextFont { font_size: 20.0, ..default() },
+        TextColor(Color::WHITE),
+        LivesText,
+    ));
 
     // Score text
-    info!("Creating score text...");
     commands.spawn((
         Text::new("Score: 0"),
         Node {
@@ -135,17 +155,12 @@ pub fn setup_ui(mut commands: Commands) {
             top: Val::Px(20.0),
             ..default()
         },
-        TextFont {
-            font_size: 24.0,
-            ..default()
-        },
+        TextFont { font_size: 24.0, ..default() },
         TextColor(Color::WHITE),
         ScoreText,
     ));
-    info!("Score text created");
     
     // High score text
-    info!("Creating high score text...");
     commands.spawn((
         Text::new("High: 0"),
         Node {
@@ -154,20 +169,40 @@ pub fn setup_ui(mut commands: Commands) {
             top: Val::Px(50.0),
             ..default()
         },
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
+        TextFont { font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.8, 0.8, 0.8)),
         HighScoreText,
     ));
-    info!("High score text created");
-    
-    info!("=== UI SETUP COMPLETE ===");
+
+    // Multiplier text
+    commands.spawn((
+        Text::new(""),
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(20.0),
+            top: Val::Px(80.0),
+            ..default()
+        },
+        TextFont { font_size: 18.0, ..default() },
+        TextColor(Color::srgb(1.0, 0.8, 0.2)),
+        MultiplierText,
+    ));
 }
 
 
-
+pub fn handle_pause_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    current_state: Res<State<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if keyboard.just_pressed(KeyCode::Escape) {
+        match current_state.get() {
+            GameState::Playing => next_state.set(GameState::Paused),
+            GameState::Paused => next_state.set(GameState::Playing),
+            _ => {}
+        }
+    }
+}
 
 // Input Systems
 pub fn handle_input(
@@ -291,38 +326,33 @@ pub fn spawn_enemies(
         let x_positions = [-400.0, -200.0, 0.0, 200.0, 400.0];
         let spawn_x = x_positions[enemy_spawner.enemies_spawned as usize % x_positions.len()];
         
-        let ai_type = if enemy_spawner.wave_timer < 20.0 {
-            EnemyAI::Linear { 
-                direction: Vec2::new(0.0, -1.0) 
-            }
+        let (ai_type, enemy_type) = if enemy_spawner.wave_timer < 20.0 {
+            (EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) }, EnemyType::Basic)
         } else if enemy_spawner.wave_timer < 40.0 {
-            EnemyAI::Sine { 
-                amplitude: 100.0, 
-                frequency: 2.0, 
-                phase: 0.0 
-            }
+            (EnemyAI::Sine { amplitude: 100.0, frequency: 2.0, phase: 0.0 }, EnemyType::Fast)
         } else if enemy_spawner.wave_timer < 60.0 {
             if enemy_spawner.enemies_spawned % 2 == 0 {
-                EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) }
+                (EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) }, EnemyType::Heavy)
             } else {
-                EnemyAI::Sine { amplitude: 150.0, frequency: 3.0, phase: 0.0 }
+                (EnemyAI::Sine { amplitude: 150.0, frequency: 3.0, phase: 0.0 }, EnemyType::Fast)
             }
         } else {
             if enemy_spawner.enemies_spawned % 10 == 0 {
-                EnemyAI::MiniBoss { pattern: 0, timer: 0.0 }
+                (EnemyAI::MiniBoss { pattern: 0, timer: 0.0 }, EnemyType::Boss)
             } else {
-                EnemyAI::Sine { amplitude: 200.0, frequency: 4.0, phase: 0.0 }
+                (EnemyAI::Sine { amplitude: 200.0, frequency: 4.0, phase: 0.0 }, EnemyType::Fast)
             }
         };
         
         spawn_events.write(SpawnEnemy {
             position: Vec3::new(spawn_x, 400.0, 0.0),
             ai_type,
+            enemy_type,
         });
         
         enemy_spawner.enemies_spawned += 1;
         
-        let spawn_rate = (2.0 - (enemy_spawner.wave_timer * 0.02)).max(0.5);
+        let spawn_rate = (2.0 - (enemy_spawner.wave_timer * 0.02)).max(0.3);
         enemy_spawner.spawn_timer = spawn_rate;
     }
 }
@@ -332,11 +362,16 @@ pub fn spawn_projectiles(
     input_state: Res<InputState>,
     mut player_query: Query<&Transform, With<Player>>,
     assets: Option<Res<GameAssets>>,
+    shooting_state: Res<ShootingState>,
+    rapid_fire_query: Query<&RapidFire>,
     time: Res<Time>,
     mut shoot_timer: Local<f32>,
 ) {
     if let Some(assets) = assets {
         *shoot_timer -= time.delta_secs();
+        
+        let rate_multiplier = rapid_fire_query.iter().next().map_or(1.0, |rf| rf.rate_multiplier);
+        let shoot_rate = shooting_state.base_rate / rate_multiplier;
         
         if input_state.shooting && *shoot_timer <= 0.0 {
             if let Ok(player_transform) = player_query.single() {
@@ -397,14 +432,133 @@ pub fn enemy_shooting(
     }
 }
 
+// Particle Systems
+pub fn spawn_engine_particles(
+    mut commands: Commands,
+    mut particle_events: EventWriter<SpawnParticles>,
+    player_query: Query<&Transform, With<EngineTrail>>,
+    input_state: Res<InputState>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    if assets.is_some() {
+        *spawn_timer -= time.delta_secs();
+        
+        if *spawn_timer <= 0.0 {
+            for transform in player_query.iter() {
+                let intensity = input_state.movement.length().max(0.3);
+                
+                particle_events.write(SpawnParticles {
+                    position: transform.translation + Vec3::new(0.0, -20.0, -0.1),
+                    count: (intensity * 8.0) as u32,
+                    config: ParticleConfig {
+                        color_start: Color::srgb(0.2, 0.6, 1.0),
+                        color_end: Color::srgba(0.8, 0.9, 1.0, 0.0),
+                        velocity_range: (
+                            Vec2::new(-30.0, -150.0),
+                            Vec2::new(30.0, -50.0)
+                        ),
+                        lifetime_range: (0.2, 0.6),
+                        size_range: (1.0, 3.0),
+                        gravity: Vec2::ZERO,
+                    },
+                });
+            }
+            
+            *spawn_timer = 0.05;
+        }
+    }
+}
+
+pub fn update_particles(
+    mut commands: Commands,
+    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite)>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut particle, mut sprite) in particle_query.iter_mut() {
+        particle.lifetime += time.delta_secs();
+        
+        if particle.lifetime >= particle.max_lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        
+        // Update position
+        transform.translation += particle.velocity.extend(0.0) * time.delta_secs();
+        
+        // Apply gravity
+        particle.velocity += Vec2::new(0.0, -100.0) * time.delta_secs();
+        
+        // Fade out
+        let progress = particle.lifetime / particle.max_lifetime;
+        let alpha = 1.0 - progress;
+        sprite.color.set_alpha(alpha * particle.fade_rate);
+        
+        // Shrink
+        let scale = particle.size * (1.0 - progress * 0.5);
+        transform.scale = Vec3::splat(scale);
+    }
+}
+
+pub fn update_particle_emitters(
+    mut commands: Commands,
+    mut emitter_query: Query<(&Transform, &mut ParticleEmitter)>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        for (transform, mut emitter) in emitter_query.iter_mut() {
+            if !emitter.active { continue; }
+            
+            emitter.spawn_timer -= time.delta_secs();
+            
+            if emitter.spawn_timer <= 0.0 {
+                let config = &emitter.particle_config;
+                let rand_x = (time.elapsed_secs() * 1234.56).fract();
+                let rand_y = (time.elapsed_secs() * 5678.90).fract();
+                let rand_lifetime = (time.elapsed_secs() * 9012.34).fract();
+                let rand_size = (time.elapsed_secs() * 3456.78).fract();
+                
+                let velocity = Vec2::new(
+                    config.velocity_range.0.x + (config.velocity_range.1.x - config.velocity_range.0.x) * rand_x,
+                    config.velocity_range.0.y + (config.velocity_range.1.y - config.velocity_range.0.y) * rand_y,
+                );
+                let lifetime = config.lifetime_range.0 + (config.lifetime_range.1 - config.lifetime_range.0) * rand_lifetime;
+                let size = config.size_range.0 + (config.size_range.1 - config.size_range.0) * rand_size;
+                
+                commands.spawn((
+                    Sprite {
+                        image: assets.particle_texture.clone(),
+                        color: config.color_start,
+                        ..default()
+                    },
+                    Transform::from_translation(transform.translation).with_scale(Vec3::splat(size)),
+                    Particle {
+                        velocity,
+                        lifetime: 0.0,
+                        max_lifetime: lifetime,
+                        size,
+                        fade_rate: 1.0,
+                    },
+                ));
+                
+                emitter.spawn_timer = 1.0 / emitter.spawn_rate;
+            }
+        }
+    }
+}
+
+// COLLISION SYSTEM
 pub fn handle_collisions(
     mut commands: Commands,
     projectile_query: Query<(Entity, &Transform, &Collider, &Projectile)>,
     mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, &Enemy), (With<Enemy>, Without<Projectile>, Without<Player>)>,
-    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Player>, Without<Enemy>, Without<Projectile>)>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player), (With<Player>, Without<Enemy>, Without<Projectile>)>,
     mut explosion_events: EventWriter<SpawnExplosion>,
+    mut particle_events: EventWriter<SpawnParticles>,
+    mut player_hit_events: EventWriter<PlayerHit>,
     mut game_score: ResMut<GameScore>,
-    mut next_state: ResMut<NextState<GameState>>,
 ) {
     // Projectile vs Enemy collisions
     for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
@@ -416,20 +570,41 @@ pub fn handle_collisions(
                 enemy_health.0 -= projectile.damage;
                 commands.entity(proj_entity).despawn();
                 
+                // Hit sparks
+                particle_events.write(SpawnParticles {
+                    position: proj_transform.translation,
+                    count: 6,
+                    config: ParticleConfig {
+                        color_start: Color::srgb(1.0, 0.8, 0.2),
+                        color_end: Color::srgba(1.0, 0.4, 0.0, 0.0),
+                        velocity_range: (Vec2::new(-80.0, -80.0), Vec2::new(80.0, 80.0)),
+                        lifetime_range: (0.1, 0.3),
+                        size_range: (1.0, 2.0),
+                        gravity: Vec2::ZERO,
+                    },
+                });
+                
                 if enemy_health.0 <= 0 {
                     commands.entity(enemy_entity).despawn();
                     
-                    let points = match enemy.ai_type {
-                        EnemyAI::MiniBoss { .. } => 500,
-                        EnemyAI::Sine { .. } => 150,
-                        EnemyAI::Linear { .. } => 100,
-                        EnemyAI::Static => 50,
+                    let points = match enemy.enemy_type {
+                        EnemyType::Boss => 1000,
+                        EnemyType::Heavy => 300,
+                        EnemyType::Fast => 200,
+                        EnemyType::Basic => 100,
                     };
-                    game_score.current += points;
+                    
+                    let multiplier = game_score.score_multiplier.max(1.0);
+                    game_score.current += (points as f32 * multiplier) as u32;
                     
                     explosion_events.write(SpawnExplosion {
                         position: enemy_transform.translation,
-                        intensity: 1.0,
+                        intensity: match enemy.enemy_type {
+                            EnemyType::Boss => 2.0,
+                            EnemyType::Heavy => 1.5,
+                            _ => 1.0,
+                        },
+                        enemy_type: Some(enemy.enemy_type.clone()),
                     });
                 }
                 break;
@@ -441,31 +616,29 @@ pub fn handle_collisions(
     for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
         if projectile.friendly { continue; }
         
-        if let Ok((_, player_transform, player_collider, mut player_health)) = player_query.single_mut() {
+        if let Ok((_, player_transform, player_collider, _)) = player_query.single() {
             let distance = proj_transform.translation.distance(player_transform.translation);
             if distance < proj_collider.radius + player_collider.radius {
-                player_health.0 -= projectile.damage;
                 commands.entity(proj_entity).despawn();
                 
-                explosion_events.write(SpawnExplosion {
+                player_hit_events.write(PlayerHit {
                     position: player_transform.translation,
-                    intensity: 0.8,
+                    damage: projectile.damage,
                 });
-                
-                if player_health.0 <= 0 {
-                    next_state.set(GameState::GameOver);
-                }
             }
         }
     }
     
     // Enemy vs Player direct collision
-    if let Ok((_, player_transform, player_collider, mut player_health)) = player_query.single_mut() {
+    if let Ok((_, player_transform, player_collider, _)) = player_query.single() {
         for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, _) in enemy_query.iter_mut() {
             let distance = player_transform.translation.distance(enemy_transform.translation);
             if distance < player_collider.radius + enemy_collider.radius {
                 // Player takes damage
-                player_health.0 -= 20;
+                player_hit_events.write(PlayerHit {
+                    position: player_transform.translation,
+                    damage: 25,
+                });
                 
                 // Enemy also takes damage/dies from collision
                 enemy_health.0 -= 50;
@@ -473,14 +646,11 @@ pub fn handle_collisions(
                 explosion_events.write(SpawnExplosion {
                     position: enemy_transform.translation,
                     intensity: 1.2,
+                    enemy_type: None,
                 });
                 
                 if enemy_health.0 <= 0 {
                     commands.entity(enemy_entity).despawn();
-                }
-                
-                if player_health.0 <= 0 {
-                    next_state.set(GameState::GameOver);
                 }
             }
         }
@@ -502,7 +672,7 @@ pub fn update_explosions(
             continue;
         }
         
-        let scale = 1.0 + progress * 2.0;
+        let scale = 1.0 + progress * explosion.intensity * 2.0;
         transform.scale = Vec3::splat(scale);
         sprite.color.set_alpha(1.0 - progress);
     }
@@ -533,12 +703,20 @@ pub fn update_lights(
 
 pub fn cleanup_offscreen(
     mut commands: Commands,
-    query: Query<(Entity, &Transform), (Without<Player>, Without<ParallaxLayer>, Without<HealthBarFill>, Without<ScoreText>, Without<HighScoreText>, Without<HealthBar>)>,
+    query: Query<(Entity, &Transform), (
+        Without<Player>, 
+        Without<ParallaxLayer>, 
+        Without<HealthBarFill>, 
+        Without<ScoreText>, 
+        Without<HighScoreText>, 
+        Without<HealthBar>,
+        Without<LivesText>,
+        Without<MultiplierText>
+    )>,
 ) {
     for (entity, transform) in query.iter() {
-        if transform.translation.y < -400.0 || transform.translation.y > 500.0 ||
-           transform.translation.x < -700.0 || transform.translation.x > 700.0 {
-            // Only log occasionally to avoid spam
+        if transform.translation.y < -450.0 || transform.translation.y > 550.0 ||
+           transform.translation.x < -750.0 || transform.translation.x > 750.0 {
             commands.entity(entity).despawn();
         }
     }
@@ -548,24 +726,45 @@ pub fn cleanup_offscreen(
 pub fn spawn_explosion_system(
     mut commands: Commands,
     mut explosion_events: EventReader<SpawnExplosion>,
+    mut particle_events: EventWriter<SpawnParticles>,
     assets: Option<Res<GameAssets>>,
 ) {
     if let Some(assets) = assets {
         for event in explosion_events.read() {
+            let (color, particle_count, size_mult) = match &event.enemy_type {
+                Some(EnemyType::Boss) => (Color::srgb(1.0, 0.2, 0.2), 30, 1.5),
+                Some(EnemyType::Heavy) => (Color::srgb(1.0, 0.6, 0.2), 20, 1.2),
+                Some(EnemyType::Fast) => (Color::srgb(0.2, 0.8, 1.0), 15, 1.0),
+                _ => (Color::srgb(1.0, 0.8, 0.4), 12, 1.0),
+            };
+
             commands.spawn((
-                Sprite::from_image(assets.explosion_texture.clone()),
+                Sprite {
+                    image: assets.explosion_texture.clone(),
+                    color,
+                    ..default()
+                },
                 Transform::from_translation(event.position),
                 Explosion {
                     timer: 0.0,
-                    max_time: 0.5,
-                    intensity: event.intensity,
-                },
-                Light2D {
-                    color: Color::srgb(1.0, 0.8, 0.4),
-                    intensity: event.intensity,
-                    radius: 100.0,
+                    max_time: 0.6 * size_mult,
+                    intensity: event.intensity * size_mult,
                 },
             ));
+
+            // Explosion particles
+            particle_events.write(SpawnParticles {
+                position: event.position,
+                count: particle_count,
+                config: ParticleConfig {
+                    color_start: color,
+                    color_end: Color::srgba(color.to_srgba().red, color.to_srgba().green * 0.5, 0.0, 0.0),
+                    velocity_range: (Vec2::new(-200.0, -200.0), Vec2::new(200.0, 200.0)),
+                    lifetime_range: (0.3, 1.0),
+                    size_range: (2.0 * size_mult, 8.0 * size_mult),
+                    gravity: Vec2::new(0.0, -50.0),
+                },
+            });
         }
     }
 }
@@ -577,18 +776,25 @@ pub fn spawn_enemy_system(
 ) {
     if let Some(assets) = assets {
         for event in enemy_events.read() {
-            let (health, size) = match &event.ai_type {
-                EnemyAI::MiniBoss { .. } => (50, 25.0),
-                _ => (20, 15.0),
+            let (health, size, color) = match &event.enemy_type {
+                EnemyType::Boss => (100, 30.0, Color::srgb(1.0, 0.3, 0.3)),
+                EnemyType::Heavy => (50, 20.0, Color::srgb(0.8, 0.8, 0.3)),
+                EnemyType::Fast => (15, 12.0, Color::srgb(0.3, 0.8, 1.0)),
+                EnemyType::Basic => (20, 15.0, Color::WHITE),
             };
             
             commands.spawn((
-                Sprite::from_image(assets.enemy_texture.clone()),
+                Sprite {
+                    image: assets.enemy_texture.clone(),
+                    color,
+                    ..default()
+                },
                 Transform::from_translation(event.position),
                 Enemy {
                     ai_type: event.ai_type.clone(),
                     health,
                     speed: 150.0,
+                    enemy_type: event.enemy_type.clone(),
                 },
                 Collider { radius: size },
                 Health(health),
@@ -597,7 +803,6 @@ pub fn spawn_enemy_system(
     }
 }
 
-// UI Systems
 pub fn update_health_bar(
     player_query: Query<&Health, With<Player>>,
     mut health_fill_query: Query<&mut Node, With<HealthBarFill>>,
@@ -608,7 +813,6 @@ pub fn update_health_bar(
             fill_node.width = Val::Px(200.0 * health_percent);
         }
     } else {
-        // No player exists (probably dead), set health bar to 0
         if let Ok(mut fill_node) = health_fill_query.single_mut() {
             fill_node.width = Val::Px(0.0);
         }
@@ -617,8 +821,11 @@ pub fn update_health_bar(
 
 pub fn update_score_display(
     game_score: Res<GameScore>,
-    mut score_query: Query<&mut Text, (With<ScoreText>, Without<HighScoreText>)>,
-    mut high_score_query: Query<&mut Text, (With<HighScoreText>, Without<ScoreText>)>,
+    player_query: Query<&Player>,
+    mut score_query: Query<&mut Text, (With<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
+    mut high_score_query: Query<&mut Text, (With<HighScoreText>, Without<ScoreText>, Without<MultiplierText>, Without<LivesText>)>,
+    mut multiplier_query: Query<&mut Text, (With<MultiplierText>, Without<ScoreText>, Without<HighScoreText>, Without<LivesText>)>,
+    mut lives_query: Query<&mut Text, (With<LivesText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>)>,
 ) {
     // Update current score
     if let Ok(mut score_text) = score_query.single_mut() {
@@ -630,7 +837,26 @@ pub fn update_score_display(
         let high_score = game_score.high_scores.first().unwrap_or(&0);
         **high_score_text = format!("High: {}", high_score);
     }
+
+    // Update multiplier display
+    if let Ok(mut multiplier_text) = multiplier_query.single_mut() {
+        if game_score.score_multiplier > 1.0 {
+            **multiplier_text = format!("{}x ({:.1}s)", game_score.score_multiplier, game_score.multiplier_timer);
+        } else {
+            **multiplier_text = String::new();
+        }
+    }
+
+    // Update lives display
+    if let Ok(mut lives_text) = lives_query.single_mut() {
+        if let Ok(player) = player_query.single() {
+            **lives_text = format!("Lives: {}", player.lives);
+        } else {
+            **lives_text = "Lives: 0".to_string();
+        }
+    }
 }
+
 
 // Score Systems
 pub fn load_high_scores(mut game_score: ResMut<GameScore>) {
@@ -657,6 +883,10 @@ pub fn spawn_powerup_system(
         for event in powerup_events.read() {
             let texture = match &event.power_type {
                 PowerUpType::Health { .. } => assets.health_powerup_texture.clone(),
+                PowerUpType::Shield { .. } => assets.shield_powerup_texture.clone(),
+                PowerUpType::Speed { .. } => assets.speed_powerup_texture.clone(),
+                PowerUpType::Multiplier { .. } => assets.multiplier_powerup_texture.clone(),
+                PowerUpType::RapidFire { .. } => assets.rapidfire_powerup_texture.clone(),
             };
             
             commands.spawn((
@@ -668,6 +898,49 @@ pub fn spawn_powerup_system(
                 },
                 Collider { radius: 12.0 },
             ));
+        }
+    }
+}
+
+pub fn spawn_particles_system(
+    mut commands: Commands,
+    mut particle_events: EventReader<SpawnParticles>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        for event in particle_events.read() {
+            for i in 0..event.count {
+                let config = &event.config;
+                let rand_seed = time.elapsed_secs() * 1000.0 + i as f32;
+                let rand_x = (rand_seed * 12.9898).sin() * 43758.5453;
+                let rand_y = (rand_seed * 78.233).sin() * 43758.5453;
+                let rand_lifetime = (rand_seed * 35.456).sin() * 43758.5453;
+                let rand_size = (rand_seed * 91.123).sin() * 43758.5453;
+                
+                let velocity = Vec2::new(
+                    config.velocity_range.0.x + (config.velocity_range.1.x - config.velocity_range.0.x) * rand_x.fract().abs(),
+                    config.velocity_range.0.y + (config.velocity_range.1.y - config.velocity_range.0.y) * rand_y.fract().abs(),
+                );
+                let lifetime = config.lifetime_range.0 + (config.lifetime_range.1 - config.lifetime_range.0) * rand_lifetime.fract().abs();
+                let size = config.size_range.0 + (config.size_range.1 - config.size_range.0) * rand_size.fract().abs();
+                
+                commands.spawn((
+                    Sprite {
+                        image: assets.particle_texture.clone(),
+                        color: config.color_start,
+                        ..default()
+                    },
+                    Transform::from_translation(event.position).with_scale(Vec3::splat(size)),
+                    Particle {
+                        velocity,
+                        lifetime: 0.0,
+                        max_lifetime: lifetime,
+                        size,
+                        fade_rate: 1.0,
+                    },
+                ));
+            }
         }
     }
 }
@@ -696,16 +969,63 @@ pub fn spawn_powerups(
 ) {
     enemy_spawner.powerup_timer -= time.delta_secs();
     
-    // Spawn power-ups every 15 seconds
     if enemy_spawner.powerup_timer <= 0.0 {
         let x_position = (time.elapsed_secs() * 50.0).sin() * 300.0;
         
+        let power_type = match (time.elapsed_secs() as u32 / 15) % 5 {
+            0 => PowerUpType::Health { amount: 25 },
+            1 => PowerUpType::Shield { duration: 10.0 },
+            2 => PowerUpType::Speed { multiplier: 1.5, duration: 8.0 },
+            3 => PowerUpType::Multiplier { multiplier: 2.0, duration: 15.0 },
+            _ => PowerUpType::RapidFire { rate_multiplier: 2.0, duration: 10.0 },
+        };
+        
         spawn_events.write(SpawnPowerUp {
             position: Vec3::new(x_position, 400.0, 0.0),
-            power_type: PowerUpType::Health { amount: 25 },
+            power_type,
         });
         
-        enemy_spawner.powerup_timer = 15.0;
+        enemy_spawner.powerup_timer = 12.0;
+    }
+}
+
+pub fn handle_player_hit(
+    mut commands: Commands,
+    mut player_hit_events: EventReader<PlayerHit>,
+    mut player_query: Query<(Entity, &mut Health, &mut Player, Option<&Shield>), With<Player>>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    for event in player_hit_events.read() {
+        if let Ok((player_entity, mut health, mut player, shield)) = player_query.single_mut() {
+            // Skip damage if shielded or invincible
+            if shield.is_some() || player.invincible_timer > 0.0 {
+                continue;
+            }
+
+            health.0 -= event.damage;
+            player.invincible_timer = 1.0; // 1 second invincibility
+
+            explosion_events.write(SpawnExplosion {
+                position: event.position,
+                intensity: 0.8,
+                enemy_type: None,
+            });
+
+            if health.0 <= 0 {
+                player.lives -= 1;
+                
+                if player.lives > 0 {
+                    // Respawn with full health
+                    health.0 = 100;
+                    player.invincible_timer = 3.0; // Longer invincibility after respawn
+                } else {
+                    // Game over
+                    commands.entity(player_entity).despawn();
+                    next_state.set(GameState::GameOver);
+                }
+            }
+        }
     }
 }
 
@@ -713,24 +1033,99 @@ pub fn spawn_powerups(
 pub fn handle_powerup_collection(
     mut commands: Commands,
     powerup_query: Query<(Entity, &Transform, &Collider, &PowerUp)>,
-    mut player_query: Query<(&Transform, &Collider, &mut Health), With<Player>>,
+    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health), With<Player>>,
 ) {
-    if let Ok((player_transform, player_collider, mut player_health)) = player_query.single_mut() {
+    if let Ok((player_entity, player_transform, player_collider, mut player_health)) = player_query.single_mut() {
         for (powerup_entity, powerup_transform, powerup_collider, powerup) in powerup_query.iter() {
             let distance = player_transform.translation.distance(powerup_transform.translation);
             if distance < player_collider.radius + powerup_collider.radius {
-                // Apply power-up effect
                 match &powerup.power_type {
                     PowerUpType::Health { amount } => {
-                        player_health.0 = (player_health.0 + amount).min(100); // Cap at 100
+                        player_health.0 = (player_health.0 + amount).min(100);
+                    }
+                    PowerUpType::Shield { duration } => {
+                        commands.entity(player_entity).insert(Shield {
+                            timer: *duration,
+                            alpha_timer: 0.0,
+                        });
+                    }
+                    PowerUpType::Speed { multiplier, duration } => {
+                        commands.entity(player_entity).insert(SpeedBoost {
+                            timer: *duration,
+                            multiplier: *multiplier,
+                        });
+                    }
+                    PowerUpType::Multiplier { multiplier, duration } => {
+                        commands.entity(player_entity).insert(ScoreMultiplier {
+                            timer: *duration,
+                            multiplier: *multiplier,
+                        });
+                    }
+                    PowerUpType::RapidFire { rate_multiplier, duration } => {
+                        commands.entity(player_entity).insert(RapidFire {
+                            timer: *duration,
+                            rate_multiplier: *rate_multiplier,
+                        });
                     }
                 }
                 
-                // Remove power-up
                 commands.entity(powerup_entity).despawn();
-                
-                // TODO: Play power-up sound effect
             }
+        }
+    }
+}
+
+pub fn update_player_effects(
+    mut commands: Commands,
+    mut player_query: Query<(Entity, &mut Player), With<Player>>,
+    mut shield_query: Query<(Entity, &mut Shield)>,
+    mut speed_query: Query<(Entity, &mut SpeedBoost)>,
+    mut multiplier_query: Query<(Entity, &mut ScoreMultiplier)>,
+    mut rapid_fire_query: Query<(Entity, &mut RapidFire)>,
+    mut game_score: ResMut<GameScore>,
+    time: Res<Time>,
+) {
+    if let Ok((_, mut player)) = player_query.single_mut() {
+        player.invincible_timer = (player.invincible_timer - time.delta_secs()).max(0.0);
+    }
+
+    // Update shield
+    for (entity, mut shield) in shield_query.iter_mut() {
+        shield.timer -= time.delta_secs();
+        shield.alpha_timer += time.delta_secs();
+        
+        if shield.timer <= 0.0 {
+            commands.entity(entity).remove::<Shield>();
+        }
+    }
+
+    // Update speed boost
+    for (entity, mut speed) in speed_query.iter_mut() {
+        speed.timer -= time.delta_secs();
+        
+        if speed.timer <= 0.0 {
+            commands.entity(entity).remove::<SpeedBoost>();
+        }
+    }
+
+    // Update score multiplier
+    game_score.score_multiplier = 1.0;
+    for (entity, mut multiplier) in multiplier_query.iter_mut() {
+        multiplier.timer -= time.delta_secs();
+        game_score.score_multiplier = multiplier.multiplier;
+        game_score.multiplier_timer = multiplier.timer;
+        
+        if multiplier.timer <= 0.0 {
+            commands.entity(entity).remove::<ScoreMultiplier>();
+        }
+    }
+
+    // Update rapid fire
+    for (entity, mut rapid_fire) in rapid_fire_query.iter_mut() {
+        rapid_fire.timer -= time.delta_secs();
+        
+        if rapid_fire.timer <= 0.0 {
+            commands.entity(entity).remove::<RapidFire>();
         }
     }
 }
@@ -761,19 +1156,18 @@ pub fn debug_ui_entities(
 // Game Over Systems
 pub fn check_game_over(
     mut commands: Commands,
-    player_query: Query<(Entity, &Health, &Transform), With<Player>>,
+    player_query: Query<(Entity, &Health, &Transform, &Player), With<Player>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
-    if let Ok((player_entity, player_health, player_transform)) = player_query.single() {
-        if player_health.0 <= 0 {
-            // Create a big explosion where the player died
+    if let Ok((player_entity, player_health, player_transform, player)) = player_query.single() {
+        if player_health.0 <= 0 && player.lives <= 0 {
             explosion_events.write(SpawnExplosion {
                 position: player_transform.translation,
-                intensity: 2.0, // Bigger explosion for player death
+                intensity: 2.5,
+                enemy_type: None,
             });
             
-            // Despawn the dead player immediately
             commands.entity(player_entity).despawn();
             next_state.set(GameState::GameOver);
         }
@@ -784,12 +1178,8 @@ pub fn setup_game_over_ui(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
 ) {
-    info!("Setting up game over UI");
-    
-    // Save high score when entering game over
     save_high_score(&mut game_score);
     
-    // Semi-transparent overlay
     commands.spawn((
         Node {
             width: Val::Percent(100.0),
@@ -803,52 +1193,30 @@ pub fn setup_game_over_ui(
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
         GameOverUI,
     )).with_children(|parent| {
-        // "GAME OVER" text
         parent.spawn((
             Text::new("GAME OVER"),
-            TextFont {
-                font_size: 48.0,
-                ..default()
-            },
+            TextFont { font_size: 48.0, ..default() },
             TextColor(Color::srgb(1.0, 0.3, 0.3)),
             GameOverText,
-            Node {
-                margin: UiRect::bottom(Val::Px(20.0)),
-                ..default()
-            },
+            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
         ));
         
-        // Final score
         parent.spawn((
             Text::new(format!("Final Score: {}", game_score.current)),
-            TextFont {
-                font_size: 24.0,
-                ..default()
-            },
+            TextFont { font_size: 24.0, ..default() },
             TextColor(Color::WHITE),
             FinalScoreText,
-            Node {
-                margin: UiRect::bottom(Val::Px(20.0)),
-                ..default()
-            },
+            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
         ));
         
-        // High score
         let high_score = game_score.high_scores.first().unwrap_or(&0);
         parent.spawn((
             Text::new(format!("High Score: {}", high_score)),
-            TextFont {
-                font_size: 20.0,
-                ..default()
-            },
+            TextFont { font_size: 20.0, ..default() },
             TextColor(Color::srgb(0.8, 0.8, 0.8)),
-            Node {
-                margin: UiRect::bottom(Val::Px(30.0)),
-                ..default()
-            },
+            Node { margin: UiRect::bottom(Val::Px(30.0)), ..default() },
         ));
         
-        // Restart button
         parent.spawn((
             Button,
             Node {
@@ -864,21 +1232,14 @@ pub fn setup_game_over_ui(
         )).with_children(|button| {
             button.spawn((
                 Text::new("RESTART"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
+                TextFont { font_size: 20.0, ..default() },
                 TextColor(Color::WHITE),
             ));
         });
         
-        // Instructions
         parent.spawn((
             Text::new("Press R to restart or click button above"),
-            TextFont {
-                font_size: 16.0,
-                ..default()
-            },
+            TextFont { font_size: 16.0, ..default() },
             TextColor(Color::srgb(0.7, 0.7, 0.7)),
         ));
     });
@@ -888,7 +1249,6 @@ pub fn cleanup_game_over_ui(
     mut commands: Commands,
     game_over_query: Query<Entity, With<GameOverUI>>,
 ) {
-    info!("Cleaning up game over UI");
     for entity in game_over_query.iter() {
         commands.entity(entity).despawn_recursive();
     }
@@ -929,48 +1289,42 @@ pub fn reset_game_state_on_restart(
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut input_state: ResMut<InputState>,
     mut game_started: ResMut<GameStarted>,
+    mut shooting_state: ResMut<ShootingState>,
     // Despawn all game entities
     enemy_query: Query<Entity, With<Enemy>>,
     projectile_query: Query<Entity, With<Projectile>>,
     explosion_query: Query<Entity, With<Explosion>>,
     powerup_query: Query<Entity, With<PowerUp>>,
+    particle_query: Query<Entity, With<Particle>>,
+    emitter_query: Query<Entity, With<ParticleEmitter>>,
     player_query: Query<Entity, With<Player>>,
     assets: Option<Res<GameAssets>>,
 ) {
-    // Only reset if this is not the first time (i.e., we're restarting)
     if !game_started.0 {
         game_started.0 = true;
         return;
     }
     
-    info!("Resetting game state for restart");
-    
     // Despawn all game entities
-    for entity in enemy_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    for entity in projectile_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    for entity in explosion_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    for entity in powerup_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    for entity in player_query.iter() {
+    for entity in enemy_query.iter().chain(projectile_query.iter())
+        .chain(explosion_query.iter()).chain(powerup_query.iter())
+        .chain(particle_query.iter()).chain(emitter_query.iter())
+        .chain(player_query.iter()) {
         commands.entity(entity).despawn();
     }
     
     // Reset resources
     game_score.current = 0;
+    game_score.score_multiplier = 1.0;
+    game_score.multiplier_timer = 0.0;
     enemy_spawner.spawn_timer = 2.0;
     enemy_spawner.wave_timer = 0.0;
     enemy_spawner.enemies_spawned = 0;
-    enemy_spawner.powerup_timer = 15.0;
+    enemy_spawner.powerup_timer = 12.0;
     input_state.shoot_timer = 0.0;
+    shooting_state.rate_multiplier = 1.0;
     
-    // Respawn player if assets are available
+    // Respawn player
     if let Some(assets) = assets {
         commands.spawn((
             Sprite {
@@ -982,9 +1336,52 @@ pub fn reset_game_state_on_restart(
             Player {
                 speed: 400.0,
                 roll_factor: 0.3,
+                lives: 3,
+                invincible_timer: 3.0,
             },
             Collider { radius: 16.0 },
             Health(100),
+            EngineTrail,
         ));
     }
 }
+
+// Pause System
+pub fn setup_pause_ui(mut commands: Commands) {
+    commands.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            position_type: PositionType::Absolute,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+        PauseOverlay,
+    )).with_children(|parent| {
+        parent.spawn((
+            Text::new("PAUSED"),
+            TextFont { font_size: 64.0, ..default() },
+            TextColor(Color::WHITE),
+            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
+        ));
+        
+        parent.spawn((
+            Text::new("Press ESC to resume"),
+            TextFont { font_size: 24.0, ..default() },
+            TextColor(Color::srgb(0.8, 0.8, 0.8)),
+        ));
+    });
+}
+
+pub fn cleanup_pause_ui(
+    mut commands: Commands,
+    pause_query: Query<Entity, With<PauseOverlay>>,
+) {
+    for entity in pause_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
