@@ -4,11 +4,13 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 
-// Enhanced enemy movement system
+// Enhanced enemy movement system with biological behaviors
 pub fn move_enemies(
     mut enemy_query: Query<(&mut Transform, &mut Enemy)>,
     player_query: Query<&Transform, (With<Player>, Without<Enemy>)>,
-    formation_leader_query: Query<&Transform, (With<FormationLeader>, Without<Enemy>, Without<Player>)>,
+    colony_leader_query: Query<&Transform, (With<ColonyLeader>, Without<Enemy>, Without<Player>)>,
+    fluid_environment: Res<FluidEnvironment>,
+    chemical_environment: Res<ChemicalEnvironment>,
     time: Res<Time>,
 ) {
     let player_pos = player_query.single().ok().map(|t| t.translation.truncate());
@@ -20,18 +22,46 @@ pub fn move_enemies(
             EnemyAI::Static => {},
             
             EnemyAI::Linear { direction } => {
-                transform.translation += (direction.extend(0.0) * enemy.speed * time.delta_secs());
+                // Enhanced linear movement with organic undulation
+                let undulation = Vec2::new(
+                    (time.elapsed_secs() * 1.8 + transform.translation.y * 0.008).sin() * 8.0,
+                    0.0,
+                );
+                
+                // Apply fluid current influence
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                let movement = direction.extend(0.0) + undulation.extend(0.0) + (current * 0.3).extend(0.0);
+                transform.translation += movement * enemy.speed * time.delta_secs();
             },
             
             EnemyAI::Sine { amplitude, frequency, phase } => {
                 *phase += time.delta_secs() * *frequency;
                 transform.translation.y -= enemy.speed * time.delta_secs();
-                transform.translation.x += *amplitude * phase.sin() * time.delta_secs();
+                
+                // Enhanced sine wave with organic variation
+                let organic_variation = (time.elapsed_secs() * 0.4).sin() * 0.15;
+                let actual_amplitude = *amplitude * (1.0 + organic_variation);
+                
+                // Apply fluid influence to sine movement
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                transform.translation.x += actual_amplitude * phase.sin() * time.delta_secs();
+                transform.translation += (current * 0.2).extend(0.0) * time.delta_secs();
             },
             
             EnemyAI::MiniBoss { pattern: _, timer } => {
                 *timer += time.delta_secs();
-                transform.translation.y -= enemy.speed * 0.5 * time.delta_secs();
+                transform.translation.y -= enemy.speed * 0.6 * time.delta_secs();
+                
+                // Boss movement patterns influenced by chemical environment
+                let pattern_movement = Vec2::new(
+                    (*timer * 0.8).sin() * 100.0,
+                    (*timer * 0.5).cos() * 30.0,
+                );
+                transform.translation += pattern_movement.extend(0.0) * time.delta_secs();
             },
             
             EnemyAI::Kamikaze { target_pos, dive_speed, acquired_target } => {
@@ -44,33 +74,40 @@ pub fn move_enemies(
                     let direction = (*target_pos - transform.translation.truncate()).normalize_or_zero();
                     transform.translation += direction.extend(0.0) * *dive_speed * time.delta_secs();
                     
-                    // Rotate to face movement direction
+                    // Rotate to face movement direction with organic wobble
                     let angle = direction.y.atan2(direction.x) - std::f32::consts::FRAC_PI_2;
-                    transform.rotation = Quat::from_rotation_z(angle);
+                    let wobble = (time.elapsed_secs() * 8.0).sin() * 0.1;
+                    transform.rotation = Quat::from_rotation_z(angle + wobble);
                 } else {
-                    // No player, move down slowly
-                    transform.translation.y -= 50.0 * time.delta_secs();
+                    // No player, drift with current
+                    let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                    let current = sample_current(&fluid_environment, grid_pos);
+                    transform.translation += (current + Vec2::new(0.0, -50.0)).extend(0.0) * time.delta_secs();
                 }
             },
             
             EnemyAI::Turret { rotation, shoot_timer: _, detection_range: _ } => {
-                // Turrets don't move, but rotate to track player
+                // Turrets sway gently with currents but don't move
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                let sway = current.x * 0.001;
+                
                 if let Some(player_position) = player_pos {
                     let direction = player_position - transform.translation.truncate();
                     let target_angle = direction.y.atan2(direction.x) - std::f32::consts::FRAC_PI_2;
                     let angle_diff = (target_angle - *rotation + std::f32::consts::PI) % std::f32::consts::TAU - std::f32::consts::PI;
-                    *rotation += angle_diff.clamp(-2.0 * time.delta_secs(), 2.0 * time.delta_secs());
-                    transform.rotation = Quat::from_rotation_z(*rotation);
+                    *rotation += angle_diff.clamp(-1.8 * time.delta_secs(), 1.8 * time.delta_secs());
+                    transform.rotation = Quat::from_rotation_z(*rotation + sway);
                 }
             },
             
             EnemyAI::Formation { formation_id, position_in_formation, leader_offset, formation_timer } => {
                 *formation_timer += time.delta_secs();
                 
-                // Find formation leader position
-                let leader_pos = formation_leader_query.iter()
+                // Find colony leader position
+                let leader_pos = colony_leader_query.iter()
                     .find(|leader_transform| {
-                        // This is a simplification - in practice you'd track leaders properly
+                        // In a real implementation, you'd match formation_id
                         true
                     })
                     .map(|t| t.translation.truncate())
@@ -78,18 +115,169 @@ pub fn move_enemies(
                 
                 let target_pos = leader_pos + *leader_offset + *position_in_formation;
                 let direction = (target_pos - transform.translation.truncate()).normalize_or_zero();
-                transform.translation += direction.extend(0.0) * enemy.speed * time.delta_secs();
+                
+                // Apply fluid influence to formation movement
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                let movement = direction + current * 0.4;
+                transform.translation += movement.extend(0.0) * enemy.speed * time.delta_secs();
             },
             
             EnemyAI::Spawner { spawn_timer: _, spawn_rate: _, minions_spawned: _, max_minions: _ } => {
-                // Spawners move slowly downward
-                transform.translation.y -= enemy.speed * time.delta_secs();
+                // Spawners move slowly and respond strongly to currents
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                let movement = Vec2::new(0.0, -enemy.speed * 0.7) + current * 0.8;
+                transform.translation += movement.extend(0.0) * time.delta_secs();
             },
+            
+            // New biological AI behaviors
+            EnemyAI::Chemotaxis { target_chemical, sensitivity, current_direction } => {
+                if let Some(player_position) = player_pos {
+                    let player_distance = transform.translation.distance(player_position.extend(0.0));
+                    
+                    if player_distance < 350.0 {
+                        // Follow chemical gradient toward player
+                        let direction_to_player = (player_position - transform.translation.truncate()).normalize_or_zero();
+                        
+                        // Chemical gradient strength (simplified model)
+                        let chemical_strength = match target_chemical {
+                            ChemicalType::PlayerPheromones => 1.0 / (player_distance * 0.01 + 1.0),
+                            ChemicalType::NutrientGradient => 0.5,
+                            ChemicalType::OxygenSeeker => sample_oxygen(&chemical_environment, transform.translation.truncate()),
+                            ChemicalType::ToxinAvoidance => 1.0 - sample_ph_toxicity(&chemical_environment, transform.translation.truncate()),
+                        };
+                        
+                        let influence = chemical_strength * *sensitivity;
+                        *current_direction = current_direction.lerp(direction_to_player, influence * time.delta_secs());
+                        
+                        // Add some organic randomness
+                        let random_influence = Vec2::new(
+                            (time.elapsed_secs() * 3.2 + transform.translation.x * 0.01).sin() * 0.2,
+                            (time.elapsed_secs() * 2.7 + transform.translation.y * 0.01).cos() * 0.2,
+                        );
+                        *current_direction = (*current_direction + random_influence).normalize_or_zero();
+                        
+                        transform.translation += current_direction.extend(0.0) * enemy.speed * time.delta_secs();
+                    } else {
+                        // Random swimming when no strong chemical signal
+                        let random_turn = (time.elapsed_secs() * 2.5 + transform.translation.x * 0.005).sin();
+                        *current_direction = Vec2::from_angle(current_direction.to_angle() + random_turn * 0.8 * time.delta_secs());
+                        transform.translation += current_direction.extend(0.0) * enemy.speed * 0.6 * time.delta_secs();
+                    }
+                } else {
+                    // No player detected, drift with currents
+                    let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                    let current = sample_current(&fluid_environment, grid_pos);
+                    transform.translation += (current + Vec2::new(0.0, -enemy.speed * 0.3)).extend(0.0) * time.delta_secs();
+                }
+            },
+            
+            EnemyAI::CellDivision { division_threshold, division_timer, has_divided } => {
+                // Normal movement until ready to divide
+                transform.translation.y -= enemy.speed * 0.8 * time.delta_secs();
+                
+                if enemy.health as f32 <= *division_threshold && !*has_divided {
+                    *division_timer -= time.delta_secs();
+                    
+                    // Visual indication of impending division
+                    let division_wobble = (*division_timer * 10.0).sin() * 5.0;
+                    transform.translation.x += division_wobble * time.delta_secs();
+                    
+                    if *division_timer <= 0.0 {
+                        *has_divided = true;
+                        // Division would be handled in spawning system
+                    }
+                }
+            },
+            
+            EnemyAI::SymbioticPair { partner_entity, bond_distance, sync_timer } => {
+                *sync_timer += time.delta_secs();
+                
+                // Synchronized swimming pattern
+                let sync_movement = Vec2::new(
+                    (*sync_timer * 1.8).sin() * *bond_distance * 0.3,
+                    (*sync_timer * 1.2).cos() * *bond_distance * 0.2,
+                );
+                
+                // Base downward movement
+                let base_movement = Vec2::new(0.0, -enemy.speed * 0.9);
+                
+                // Apply fluid currents
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                let total_movement = base_movement + sync_movement + current * 0.5;
+                transform.translation += total_movement.extend(0.0) * time.delta_secs();
+                
+                // Partner coordination would be implemented here if partner exists
+                if partner_entity.is_some() {
+                    // In a full implementation, you'd coordinate with the partner's position
+                }
+            },
+            
+            EnemyAI::FluidFlow { flow_sensitivity, base_direction } => {
+                // Strongly follows fluid currents
+                let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+                let current = sample_current(&fluid_environment, grid_pos);
+                
+                // Blend base direction with current flow
+                let flow_influence = current * *flow_sensitivity * time.delta_secs();
+                *base_direction = (*base_direction + flow_influence).normalize_or_zero();
+                
+                // Apply movement with strong current response
+                let movement = *base_direction * enemy.speed + current * 0.8;
+                transform.translation += movement.extend(0.0) * time.delta_secs();
+                
+                // Rotate to face movement direction
+                let angle = base_direction.y.atan2(base_direction.x) - std::f32::consts::FRAC_PI_2;
+                transform.rotation = Quat::from_rotation_z(angle);
+            },
+        }
+        
+        // Apply chemical environment effects to all enemies
+        apply_chemical_effects(&mut transform, &enemy, &chemical_environment, time.delta_secs());
+        
+        // Update the enemy component
+        *enemy = enemy_clone;
+    }
+}
+
+// Apply chemical environment effects to enemies
+fn apply_chemical_effects(
+    transform: &mut Transform,
+    enemy: &Enemy,
+    chemical_env: &ChemicalEnvironment,
+    delta_time: f32,
+) {
+    if enemy.chemical_signature.responds_to_pheromones {
+        let local_ph = sample_ph(&chemical_env, transform.translation.truncate());
+        
+        // Enemies avoid unfavorable pH zones
+        let ph_difference = (local_ph - enemy.chemical_signature.ph_preference).abs();
+        if ph_difference > 1.2 {
+            let avoidance_direction = if local_ph > enemy.chemical_signature.ph_preference {
+                Vec2::new(-0.5, 0.2) // Move away from alkaline zones
+            } else {
+                Vec2::new(0.5, 0.2) // Move away from acidic zones
+            };
+            
+            let avoidance_strength = (ph_difference - 1.2) * 40.0;
+            transform.translation += (avoidance_direction * avoidance_strength).extend(0.0) * delta_time;
+        }
+        
+        // Oxygen level response
+        let oxygen_level = sample_oxygen(&chemical_env, transform.translation.truncate());
+        if oxygen_level < enemy.chemical_signature.oxygen_tolerance {
+            // Move toward higher oxygen areas (simplified - move upward)
+            transform.translation.y += 20.0 * delta_time;
         }
     }
 }
 
-// Spawner enemy behavior
+// Spawner enemy behavior with biological reproduction
 pub fn update_spawner_enemies(
     mut commands: Commands,
     mut spawner_query: Query<(Entity, &Transform, &mut Enemy)>,
@@ -98,28 +286,54 @@ pub fn update_spawner_enemies(
     time: Res<Time>,
 ) {
     for (entity, transform, mut enemy) in spawner_query.iter_mut() {
+
+        let enemy_clone = enemy.clone();
+
         if let EnemyAI::Spawner { spawn_timer, spawn_rate, minions_spawned, max_minions } = &mut enemy.ai_type {
             *spawn_timer -= time.delta_secs();
             
             if *spawn_timer <= 0.0 && *minions_spawned < *max_minions {
-                // Spawn a minion
-                let angle = (*minions_spawned as f32 * 0.8) - 1.6; // Spread out spawn angles
-                let spawn_offset = Vec2::new(angle.cos() * 30.0, angle.sin() * 30.0);
+                // Biological spawning pattern - offspring spread out naturally
+                let spawn_angle = (*minions_spawned as f32 * 1.2) + (time.elapsed_secs() * 0.5).sin();
+                let spawn_distance = 25.0 + (time.elapsed_secs() * 2.0).cos() * 10.0;
+                let spawn_offset = Vec2::from_angle(spawn_angle) * spawn_distance;
+                
+                // Choose AI based on parent type and environment
+                let offspring_ai = match enemy_clone.enemy_type {
+                    EnemyType::ReproductiveVesicle => {
+                        if *minions_spawned % 2 == 0 {
+                            EnemyAI::Chemotaxis {
+                                target_chemical: ChemicalType::PlayerPheromones,
+                                sensitivity: 1.0,
+                                current_direction: Vec2::new(0.0, -1.0),
+                            }
+                        } else {
+                            EnemyAI::FluidFlow {
+                                flow_sensitivity: 1.5,
+                                base_direction: Vec2::new(spawn_angle.cos() * 0.3, -0.9).normalize(),
+                            }
+                        }
+                    }
+                    _ => EnemyAI::Linear { 
+                        direction: Vec2::new(spawn_angle.cos() * 0.4, -0.8).normalize() 
+                    },
+                };
                 
                 spawn_events.write(SpawnEnemy {
                     position: transform.translation + spawn_offset.extend(0.0),
-                    ai_type: EnemyAI::Linear { direction: Vec2::new(angle.cos() * 0.3, -1.0).normalize() },
-                    enemy_type: EnemyType::SpawnerMinion,
+                    ai_type: offspring_ai,
+                    enemy_type: EnemyType::Offspring,
                 });
                 
                 *minions_spawned += 1;
-                *spawn_timer = *spawn_rate;
+                *spawn_timer = *spawn_rate * (0.8 + (time.elapsed_secs() * 0.3).sin() * 0.2); // Organic timing variation
             }
         }
     }
 }
 
-// Turret shooting system
+
+// Enhanced turret shooting with biological projectiles
 pub fn turret_shooting(
     mut commands: Commands,
     mut turret_query: Query<(&Transform, &mut Enemy)>,
@@ -130,6 +344,8 @@ pub fn turret_shooting(
     if let Some(assets) = assets {
         if let Ok(player_transform) = player_query.single() {
             for (turret_transform, mut enemy) in turret_query.iter_mut() {
+                let enemy_clone = enemy.clone();
+
                 if let EnemyAI::Turret { rotation, shoot_timer, detection_range } = &mut enemy.ai_type {
                     *shoot_timer -= time.delta_secs();
                     
@@ -138,20 +354,46 @@ pub fn turret_shooting(
                     if distance <= *detection_range && *shoot_timer <= 0.0 {
                         let direction = (player_transform.translation.truncate() - turret_transform.translation.truncate()).normalize();
                         
-                        // Spawn projectile
-                        commands.spawn((
-                            Sprite::from_image(assets.projectile_texture.clone()),
-                            Transform::from_translation(turret_transform.translation + Vec3::new(0.0, -15.0, 0.0))
-                                .with_rotation(Quat::from_rotation_z(*rotation)),
-                            Projectile {
-                                velocity: direction * 400.0,
-                                damage: 20,
-                                friendly: false,
-                            },
-                            Collider { radius: 4.0 },
-                        ));
+                        // Biological projectile characteristics based on enemy type
+                        let (projectile_color, damage, velocity) = match enemy_clone.enemy_type {
+                            EnemyType::BiofilmColony => (Color::srgb(0.6, 0.8, 0.3), 25, 350.0), // Toxic green
+                            _ => (Color::srgb(0.8, 0.4, 0.4), 20, 400.0), // Standard red
+                        };
                         
-                        *shoot_timer = 1.0; // Shoot every second
+                        // Spawn multiple projectiles for biofilm colonies (represent toxic cloud)
+                        let projectile_count = if matches!(enemy_clone.enemy_type, EnemyType::BiofilmColony) { 3 } else { 1 };
+                        
+                        for i in 0..projectile_count {
+                            let spread_angle = if projectile_count > 1 { 
+                                (i as f32 - 1.0) * 0.3 
+                            } else { 
+                                0.0 
+                            };
+                            
+                            let spread_direction = Vec2::new(
+                                direction.x * spread_angle.cos() - direction.y * spread_angle.sin(),
+                                direction.x * spread_angle.sin() + direction.y * spread_angle.cos(),
+                            );
+                            
+                            commands.spawn((
+                                Sprite {
+                                    image: assets.projectile_texture.clone(),
+                                    color: projectile_color,
+                                    ..default()
+                                },
+                                Transform::from_translation(turret_transform.translation + Vec3::new(0.0, -15.0, 0.0))
+                                    .with_rotation(Quat::from_rotation_z(*rotation)),
+                                Projectile {
+                                    velocity: spread_direction * velocity,
+                                    damage,
+                                    friendly: false,
+                                    organic_trail: enemy_clone.chemical_signature.releases_toxins,
+                                },
+                                Collider { radius: 4.0 },
+                            ));
+                        }
+                        
+                        *shoot_timer = 1.2 + (time.elapsed_secs() * 0.8).sin() * 0.3; // Organic timing variation
                     }
                 }
             }
@@ -159,345 +401,75 @@ pub fn turret_shooting(
     }
 }
 
-// Formation system
-pub fn update_formations(
-    mut formation_leader_query: Query<(&mut Transform, &mut FormationLeader)>,
-    mut formation_member_query: Query<(&mut Enemy, &Transform), Without<FormationLeader>>,
-    time: Res<Time>,
-) {
-    for (mut leader_transform, mut formation) in formation_leader_query.iter_mut() {
-        formation.pattern_timer += time.delta_secs();
-        
-        // Move formation leader
-        leader_transform.translation.y -= 100.0 * time.delta_secs();
-        
-        // Update formation pattern
-        let wave_offset = match formation.pattern_type {
-            FormationPattern::CircleFormation => {
-                Vec2::new((formation.pattern_timer * 0.5).sin() * 50.0, 0.0)
-            },
-            FormationPattern::VFormation => {
-                Vec2::new((formation.pattern_timer * 0.8).sin() * 30.0, 0.0)
-            },
-            _ => Vec2::ZERO,
-        };
-        
-        leader_transform.translation += wave_offset.extend(0.0) * time.delta_secs();
-        
-        // Update member positions
-        for (member_index, member_entity) in formation.members.iter().enumerate() {
-            if let Ok((mut member_enemy, _)) = formation_member_query.get_mut(*member_entity) {
-                if let EnemyAI::Formation { position_in_formation, leader_offset, .. } = &mut member_enemy.ai_type {
-                    let new_pos = formation.pattern_type.get_position(
-                        member_index, 
-                        formation.members.len(), 
-                        formation.pattern_timer
-                    );
-                    *position_in_formation = new_pos;
-                    *leader_offset = wave_offset;
-                }
-            }
-        }
-    }
-}
-
-// Enhanced enemy spawning with variety
-pub fn spawn_enemies_enhanced(
-    mut enemy_spawner: ResMut<EnemySpawner>,
-    mut spawn_events: EventWriter<SpawnEnemy>,
+pub fn formation_coordination_system(
     mut commands: Commands,
-    time: Res<Time>,
-) {
-    enemy_spawner.spawn_timer -= time.delta_secs();
-    enemy_spawner.wave_timer += time.delta_secs();
-    
-    if enemy_spawner.spawn_timer <= 0.0 {
-        let wave_time = enemy_spawner.wave_timer;
-        let spawn_count = (enemy_spawner.enemies_spawned % 20) as usize;
-        
-        match wave_time as u32 / 15 % 6 {
-            0 => spawn_basic_wave(&mut spawn_events, spawn_count),
-            1 => spawn_kamikaze_wave(&mut spawn_events, spawn_count),
-            2 => spawn_turret_wave(&mut spawn_events, spawn_count),
-            3 => spawn_formation_wave(&mut spawn_events, &mut commands, spawn_count),
-            4 => spawn_spawner_wave(&mut spawn_events, spawn_count),
-            _ => spawn_mixed_wave(&mut spawn_events, spawn_count),
-        }
-        
-        enemy_spawner.enemies_spawned += 1;
-        
-        let spawn_rate = (2.5 - (wave_time * 0.02)).max(0.4);
-        enemy_spawner.spawn_timer = spawn_rate;
-    }
-}
-
-fn spawn_basic_wave(spawn_events: &mut EventWriter<SpawnEnemy>, spawn_count: usize) {
-    let x_pos = [-300.0, -150.0, 0.0, 150.0, 300.0][spawn_count % 5];
-    
-    spawn_events.write(SpawnEnemy {
-        position: Vec3::new(x_pos, 400.0, 0.0),
-        ai_type: EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) },
-        enemy_type: EnemyType::Basic,
-    });
-}
-
-fn spawn_kamikaze_wave(spawn_events: &mut EventWriter<SpawnEnemy>, spawn_count: usize) {
-    let x_pos = [-400.0, -200.0, 0.0, 200.0, 400.0][spawn_count % 5];
-    
-    spawn_events.write(SpawnEnemy {
-        position: Vec3::new(x_pos, 450.0, 0.0),
-        ai_type: EnemyAI::Kamikaze { 
-            target_pos: Vec2::ZERO, 
-            dive_speed: 350.0, 
-            acquired_target: false 
-        },
-        enemy_type: EnemyType::Kamikaze,
-    });
-}
-
-fn spawn_turret_wave(spawn_events: &mut EventWriter<SpawnEnemy>, spawn_count: usize) {
-    let x_pos = [-250.0, 0.0, 250.0][spawn_count % 3];
-    
-    spawn_events.write(SpawnEnemy {
-        position: Vec3::new(x_pos, 350.0, 0.0),
-        ai_type: EnemyAI::Turret { 
-            rotation: 0.0, 
-            shoot_timer: 0.0, 
-            detection_range: 300.0 
-        },
-        enemy_type: EnemyType::Turret,
-    });
-}
-
-fn spawn_formation_wave(spawn_events: &mut EventWriter<SpawnEnemy>, commands: &mut Commands, spawn_count: usize) {
-    let formation_id = spawn_count as u32;
-    let pattern = match spawn_count % 4 {
-        0 => FormationPattern::VFormation,
-        1 => FormationPattern::LineFormation,
-        2 => FormationPattern::CircleFormation,
-        _ => FormationPattern::DiamondFormation,
-    };
-    
-    let member_count = match pattern {
-        FormationPattern::VFormation => 5,
-        FormationPattern::LineFormation => 4,
-        FormationPattern::CircleFormation => 6,
-        FormationPattern::DiamondFormation => 4,
-    };
-    
-    // Spawn formation leader (invisible)
-    let leader_entity = commands.spawn((
-        Transform::from_xyz(0.0, 450.0, 0.0),
-        FormationLeader {
-            formation_id,
-            members: Vec::new(),
-            pattern_timer: 0.0,
-            pattern_type: pattern.clone(),
-        },
-    )).id();
-    
-    // Spawn formation members
-    for i in 0..member_count {
-        let pos = pattern.get_position(i, member_count, 0.0);
-        
-        spawn_events.write(SpawnEnemy {
-            position: Vec3::new(pos.x, 450.0 + pos.y, 0.0),
-            ai_type: EnemyAI::Formation {
-                formation_id,
-                position_in_formation: pos,
-                leader_offset: Vec2::ZERO,
-                formation_timer: 0.0,
-            },
-            enemy_type: EnemyType::FormationFighter,
-        });
-    }
-}
-
-fn spawn_spawner_wave(spawn_events: &mut EventWriter<SpawnEnemy>, spawn_count: usize) {
-    let x_pos = [-200.0, 200.0][spawn_count % 2];
-    
-    spawn_events.write(SpawnEnemy {
-        position: Vec3::new(x_pos, 400.0, 0.0),
-        ai_type: EnemyAI::Spawner { 
-            spawn_timer: 2.0, 
-            spawn_rate: 1.5, 
-            minions_spawned: 0, 
-            max_minions: 4 
-        },
-        enemy_type: EnemyType::Spawner,
-    });
-}
-
-fn spawn_mixed_wave(spawn_events: &mut EventWriter<SpawnEnemy>, spawn_count: usize) {
-    match spawn_count % 4 {
-        0 => spawn_basic_wave(spawn_events, spawn_count),
-        1 => spawn_kamikaze_wave(spawn_events, spawn_count),
-        2 => spawn_turret_wave(spawn_events, spawn_count),
-        _ => spawn_spawner_wave(spawn_events, spawn_count),
-    }
-}
-
-// Enhanced formation spawning with coordination
-pub fn spawn_coordinated_formation(
-    mut commands: Commands,
-    mut spawn_events: EventWriter<SpawnEnemy>,
-    mut enemy_spawner: ResMut<EnemySpawner>,
-    time: Res<Time>,
-) {
-    // Spawn coordinated formations every 30 seconds after wave 20
-    if enemy_spawner.wave_timer > 20.0 && enemy_spawner.wave_timer % 30.0 < 0.1 {
-        let formation_id = (enemy_spawner.wave_timer as u32 / 30) + 1000;
-        
-        // Choose formation pattern based on time
-        let (pattern_type, attack_pattern, member_count) = match (formation_id % 4) {
-            0 => (
-                FormationPattern::VFormation,
-                AttackPattern::SynchronizedShoot { interval: 2.0 },
-                5
-            ),
-            1 => (
-                FormationPattern::CircleFormation,
-                AttackPattern::CircularBarrage { projectile_count: 8, rotation_speed: 1.0 },
-                6
-            ),
-            2 => (
-                FormationPattern::LineFormation,
-                AttackPattern::WaveAttack { wave_size: 3, wave_delay: 1.5 },
-                4
-            ),
-            _ => (
-                FormationPattern::DiamondFormation,
-                AttackPattern::FocusedAssault { target_focus: true },
-                4
-            ),
-        };
-        
-        // Spawn formation commander (invisible coordinator)
-        let commander_entity = commands.spawn((
-            Transform::from_xyz(0.0, 450.0, 0.0),
-            FormationCommander {
-                formation_id,
-                members: Vec::new(),
-                attack_pattern,
-                coordination_timer: 0.0,
-            },
-        )).id();
-        
-        // Spawn formation members
-        let mut member_entities = Vec::new();
-        for i in 0..member_count {
-            let position = pattern_type.get_position(i, member_count, 0.0);
-            let role = match i {
-                0 => FormationRole::Leader,
-                1..=2 => FormationRole::Attacker,
-                _ => FormationRole::Support,
-            };
-            
-            let member_entity = commands.spawn((
-                // Placeholder transform, will be set by spawn_enemy_system
-                Transform::from_xyz(position.x, 450.0 + position.y, 0.0),
-                FormationMember {
-                    formation_id,
-                    role,
-                    last_command_time: 0.0,
-                },
-            )).id();
-            
-            member_entities.push(member_entity);
-            
-            // Send spawn event for the actual enemy
-            spawn_events.write(SpawnEnemy {
-                position: Vec3::new(position.x, 450.0 + position.y, 0.0),
-                ai_type: EnemyAI::Formation {
-                    formation_id,
-                    position_in_formation: position,
-                    leader_offset: Vec2::ZERO,
-                    formation_timer: 0.0,
-                },
-                enemy_type: match role {
-                    FormationRole::Leader => EnemyType::Heavy,
-                    FormationRole::Attacker => EnemyType::FormationFighter,
-                    _ => EnemyType::Basic,
-                },
-            });
-        }
-        
-        // Update commander with member list
-        if let Ok(mut commander) = commands.entity(commander_entity).get_mut::<FormationCommander>() {
-            commander.members = member_entities;
-        }
-    }
-}
-
-// Advanced formation coordination with tactical behaviors
-pub fn advanced_formation_coordination(
-    mut commands: Commands,
-    mut formation_query: Query<(Entity, &Transform, &mut FormationCommander)>,
-    mut member_query: Query<(&mut Enemy, &FormationMember, &Transform, Entity), Without<FormationCommander>>,
-    player_query: Query<&Transform, (With<Player>, Without<Enemy>, Without<FormationCommander>)>,
+    mut colony_query: Query<(Entity, &Transform, &mut ColonyCommander)>,
+    mut member_query: Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
+    player_query: Query<&Transform, (With<Player>, Without<Enemy>, Without<ColonyCommander>)>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
     if let Some(assets) = assets {
         if let Ok(player_transform) = player_query.single() {
-            for (commander_entity, commander_transform, mut formation) in formation_query.iter_mut() {
-                formation.coordination_timer += time.delta_secs();
+            for (commander_entity, commander_transform, mut colony) in colony_query.iter_mut() {
+                colony.chemical_timer += time.delta_secs();
                 
                 // Clean up dead members
-                formation.members.retain(|&member_entity| {
+                colony.members.retain(|&member_entity| {
                     member_query.get(member_entity).is_ok()
                 });
                 
-                // Disband formation if too few members
-                if formation.members.len() < 2 {
+                // Disband colony if too few members
+                if colony.members.len() < 2 {
                     commands.entity(commander_entity).despawn();
                     continue;
                 }
                 
-                // Execute formation attack patterns
-                if formation.attack_pattern.execute(formation.coordination_timer) {
-                    match &formation.attack_pattern {
-                        AttackPattern::SynchronizedShoot { interval } => {
-                            execute_synchronized_attack(&mut commands, &assets, &formation, &member_query, player_transform);
+                // Execute coordination patterns
+                if colony.coordination_pattern.execute(colony.chemical_timer) {
+                    match &colony.coordination_pattern {
+                        CoordinationPattern::ChemicalSignaling { interval } => {
+                            execute_chemical_signaling(&mut commands, &assets, &colony, &member_query, player_transform);
                         }
                         
-                        AttackPattern::WaveAttack { wave_size, wave_delay } => {
-                            execute_wave_attack(&mut commands, &assets, &formation, &member_query, player_transform, *wave_size);
+                        CoordinationPattern::SwarmBehavior { swarm_size, swarm_delay } => {
+                            execute_swarm_behavior(&mut commands, &assets, &colony, &member_query, player_transform, *swarm_size);
                         }
                         
-                        AttackPattern::CircularBarrage { projectile_count, rotation_speed } => {
-                            execute_circular_barrage(&mut commands, &assets, commander_transform, *projectile_count, formation.coordination_timer * rotation_speed);
+                        CoordinationPattern::BiofilmFormation { member_count, rotation_speed } => {
+                            execute_biofilm_formation(&mut commands, &assets, commander_transform, *member_count, colony.chemical_timer * rotation_speed);
                         }
                         
-                        AttackPattern::FocusedAssault { target_focus } => {
-                            execute_focused_assault(&mut commands, &assets, &formation, &member_query, player_transform);
+                        CoordinationPattern::PheromoneTrail { target_focus } => {
+                            execute_pheromone_trail(&mut commands, &assets, &colony, &member_query, player_transform);
                         }
                     }
                 }
                 
-                // Formation-specific behaviors
-                execute_formation_maneuvers(&mut commands, &formation, &mut member_query, time.delta_secs());
+                // Biological coordination behaviors
+                execute_biological_maneuvers(&mut commands, &colony, &mut member_query, time.delta_secs());
             }
         }
     }
 }
 
-fn execute_synchronized_attack(
+fn execute_chemical_signaling(
     commands: &mut Commands,
     assets: &GameAssets,
-    formation: &FormationCommander,
-    member_query: &Query<(&mut Enemy, &FormationMember, &Transform, Entity), Without<FormationCommander>>,
+    colony: &ColonyCommander,
+    member_query: &Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
     player_transform: &Transform,
 ) {
-    for &member_entity in &formation.members {
-        if let Ok((_, member, member_transform, _)) = member_query.get(member_entity) {
+    for &member_entity in &colony.members {
+        if let Ok((_, member, member_transform)) = member_query.get(member_entity) {
             let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
             
-            // Enhanced projectiles based on role
+            // Enhanced projectiles based on colony role
             let (velocity, damage, color) = match member.role {
-                FormationRole::Leader => (450.0, 30, Color::srgb(1.0, 0.3, 0.3)),
-                FormationRole::Attacker => (400.0, 25, Color::srgb(1.0, 0.8, 0.2)),
-                _ => (350.0, 20, Color::WHITE),
+                ColonyRole::Queen => (480.0, 35, Color::srgb(1.0, 0.3, 0.8)),
+                ColonyRole::Worker => (420.0, 25, Color::srgb(0.8, 0.9, 0.3)),
+                ColonyRole::Guardian => (380.0, 30, Color::srgb(0.3, 0.8, 0.9)),
+                ColonyRole::Symbiont => (350.0, 20, Color::srgb(0.9, 0.6, 1.0)),
             };
             
             commands.spawn((
@@ -511,33 +483,34 @@ fn execute_synchronized_attack(
                     velocity: direction * velocity,
                     damage,
                     friendly: false,
+                    organic_trail: true,
                 },
-                Collider { radius: 4.0 },
+                Collider { radius: 5.0 },
             ));
         }
     }
 }
 
-fn execute_wave_attack(
+fn execute_swarm_behavior(
     commands: &mut Commands,
     assets: &GameAssets,
-    formation: &FormationCommander,
-    member_query: &Query<(&mut Enemy, &FormationMember, &Transform, Entity), Without<FormationCommander>>,
+    colony: &ColonyCommander,
+    member_query: &Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
     player_transform: &Transform,
-    wave_size: u32,
+    swarm_size: u32,
 ) {
-    let attackers: Vec<_> = formation.members.iter()
+    let workers: Vec<_> = colony.members.iter()
         .filter_map(|&entity| member_query.get(entity).ok())
-        .filter(|(_, member, _, _)| matches!(member.role, FormationRole::Attacker | FormationRole::Leader))
-        .take(wave_size as usize)
+        .filter(|(_, member, _, )| matches!(member.role, ColonyRole::Worker | ColonyRole::Queen))
+        .take(swarm_size as usize)
         .collect();
     
-    for (_, member, member_transform, _) in attackers {
+    for (_, member, member_transform) in workers {
         let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
         
-        // Spawn multiple projectiles per attacker in wave
+        // Spawn multiple projectiles per swarm member
         for i in 0..3 {
-            let spread_angle = (i as f32 - 1.0) * 0.2;
+            let spread_angle = (i as f32 - 1.0) * 0.25;
             let spread_direction = Vec2::new(
                 direction.x * spread_angle.cos() - direction.y * spread_angle.sin(),
                 direction.x * spread_angle.sin() + direction.y * spread_angle.cos(),
@@ -546,14 +519,15 @@ fn execute_wave_attack(
             commands.spawn((
                 Sprite {
                     image: assets.projectile_texture.clone(),
-                    color: Color::srgb(0.8, 0.4, 1.0),
+                    color: Color::srgb(0.7, 0.5, 1.0),
                     ..default()
                 },
                 Transform::from_translation(member_transform.translation),
                 Projectile {
-                    velocity: spread_direction * 380.0,
-                    damage: 22,
+                    velocity: spread_direction * 400.0,
+                    damage: 18,
                     friendly: false,
+                    organic_trail: true,
                 },
                 Collider { radius: 4.0 },
             ));
@@ -561,183 +535,346 @@ fn execute_wave_attack(
     }
 }
 
-fn execute_circular_barrage(
+fn execute_biofilm_formation(
     commands: &mut Commands,
     assets: &GameAssets,
     commander_transform: &Transform,
-    projectile_count: u32,
+    member_count: u32,
     rotation_offset: f32,
 ) {
-    let angle_step = std::f32::consts::TAU / projectile_count as f32;
+    let angle_step = std::f32::consts::TAU / member_count as f32;
     
-    for i in 0..projectile_count {
+    for i in 0..member_count {
         let angle = angle_step * i as f32 + rotation_offset;
         let direction = Vec2::new(angle.cos(), angle.sin());
         
         commands.spawn((
             Sprite {
                 image: assets.projectile_texture.clone(),
-                color: Color::srgb(1.0, 0.5, 0.8),
+                color: Color::srgb(0.6, 0.8, 0.4),
                 ..default()
             },
             Transform::from_translation(commander_transform.translation),
             Projectile {
-                velocity: direction * 320.0,
-                damage: 18,
+                velocity: direction * 340.0,
+                damage: 22,
                 friendly: false,
+                organic_trail: true,
             },
             Collider { radius: 4.0 },
         ));
     }
 }
 
-fn execute_focused_assault(
+fn execute_pheromone_trail(
     commands: &mut Commands,
     assets: &GameAssets,
-    formation: &FormationCommander,
-    member_query: &Query<(&mut Enemy, &FormationMember, &Transform, Entity), Without<FormationCommander>>,
+    colony: &ColonyCommander,
+    member_query: &Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
     player_transform: &Transform,
 ) {
-    // All members focus fire on player with prediction
-    for &member_entity in &formation.members {
-        if let Ok((_, member, member_transform, _)) = member_query.get(member_entity) {
+    // All members follow pheromone trail to player with prediction
+    for &member_entity in &colony.members {
+        if let Ok((_, member, member_transform)) = member_query.get(member_entity) {
             // Predict player position
             let distance = member_transform.translation.distance(player_transform.translation);
-            let time_to_hit = distance / 400.0;
-            let predicted_position = player_transform.translation; // Simplified - could add velocity prediction
+            let time_to_hit = distance / 450.0;
+            let predicted_position = player_transform.translation; // Simplified prediction
             
             let direction = (predicted_position.truncate() - member_transform.translation.truncate()).normalize_or_zero();
             
-            // High damage focused shot
+            // High accuracy pheromone-guided shot
             commands.spawn((
                 Sprite {
                     image: assets.projectile_texture.clone(),
-                    color: Color::srgb(1.0, 0.2, 0.2),
-                    custom_size: Some(Vec2::splat(8.0)),
+                    color: Color::srgb(1.0, 0.7, 0.3),
+                    custom_size: Some(Vec2::splat(6.0)),
                     ..default()
                 },
                 Transform::from_translation(member_transform.translation),
                 Projectile {
-                    velocity: direction * 500.0,
-                    damage: 35,
+                    velocity: direction * 520.0,
+                    damage: 32,
                     friendly: false,
+                    organic_trail: true,
                 },
-                Collider { radius: 6.0 },
+                Collider { radius: 5.0 },
             ));
         }
     }
 }
 
-fn execute_formation_maneuvers(
+fn execute_biological_maneuvers(
     commands: &mut Commands,
-    formation: &FormationCommander,
-    member_query: &mut Query<(&mut Enemy, &FormationMember, &Transform, Entity), Without<FormationCommander>>,
+    colony: &ColonyCommander,
+    member_query: &mut Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
     delta_time: f32,
 ) {
-    // Give special orders to different roles
-    for &member_entity in &formation.members {
-        if let Ok((mut enemy, member, transform, entity)) = member_query.get_mut(member_entity) {
+    // Give special biological behaviors to different roles
+    for &member_entity in &colony.members {
+        if let Ok((mut enemy, member, transform)) = member_query.get_mut(member_entity) {
             match member.role {
-                FormationRole::Leader => {
-                    // Leader moves more aggressively
+                ColonyRole::Queen => {
+                    // Queens coordinate and move more strategically
                     if let EnemyAI::Formation { formation_timer, .. } = &mut enemy.ai_type {
                         *formation_timer += delta_time;
-                        // Leaders can break formation to chase player occasionally
-                        if *formation_timer > 10.0 && (*formation_timer % 15.0) < 3.0 {
-                            // Temporarily increase speed
-                            enemy.speed = 250.0;
+                        // Queens can break formation to avoid danger
+                        if *formation_timer > 8.0 && (*formation_timer % 12.0) < 2.0 {
+                            enemy.speed = 280.0; // Faster evasion
                         } else {
-                            enemy.speed = 180.0;
+                            enemy.speed = 160.0; // Normal coordination speed
                         }
                     }
                 }
                 
-                FormationRole::Attacker => {
-                    // Attackers maintain optimal firing positions
+                ColonyRole::Worker => {
+                    // Workers maintain aggressive positioning
                     if let EnemyAI::Formation { position_in_formation, .. } = &mut enemy.ai_type {
-                        // Adjust position for better line of sight
-                        let adjustment = Vec2::new(
-                            (formation.coordination_timer * 0.5).sin() * 10.0,
-                            (formation.coordination_timer * 0.3).cos() * 5.0,
+                        // Adjust position for optimal attack angles
+                        let tactical_adjustment = Vec2::new(
+                            (colony.chemical_timer * 0.7).sin() * 15.0,
+                            (colony.chemical_timer * 0.4).cos() * 8.0,
                         );
-                        *position_in_formation += adjustment * delta_time;
+                        *position_in_formation += tactical_adjustment * delta_time;
                     }
                 }
                 
-                FormationRole::Support => {
-                    // Support units protect the formation
-                    if formation.members.len() < 4 {
-                        // Become more aggressive when formation is weakened
-                        enemy.speed = 200.0;
+                ColonyRole::Guardian => {
+                    // Guardians protect the colony formation
+                    if colony.members.len() < 4 {
+                        // Become more aggressive when colony is threatened
+                        enemy.speed = 220.0;
+                        
+                        // Release defensive pheromones (could spawn particles here)
                     }
                 }
                 
-                _ => {}
+                ColonyRole::Symbiont => {
+                    // Symbionts provide support and coordination
+                    if let EnemyAI::Formation { formation_timer, .. } = &mut enemy.ai_type {
+                        // Symbionts help maintain formation cohesion
+                        *formation_timer += delta_time * 0.8; // Slower, more deliberate movement
+                        enemy.speed = 140.0; // Supportive, not aggressive
+                    }
+                }
             }
         }
     }
 }
 
-// Formation-based enemy spawning enhancement
-pub fn spawn_elite_formations(
+// Enhanced projectile collision system with biological effects
+pub fn enhanced_projectile_collisions(
     mut commands: Commands,
-    mut spawn_events: EventWriter<SpawnEnemy>,
-    mut enemy_spawner: ResMut<EnemySpawner>,
+    mut projectile_query: Query<(Entity, &Transform, &Collider, &Projectile, Option<&ExplosiveProjectile>, Option<&mut ArmorPiercing>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<Projectile>)>,
+    mut nearby_enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<Projectile>)>,
+    laser_query: Query<(&Transform, &LaserBeam, &Collider)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
     time: Res<Time>,
+    mut last_laser_damage: Local<f32>,
 ) {
-    // Spawn elite formations every 45 seconds in late game
-    if enemy_spawner.wave_timer > 60.0 && enemy_spawner.wave_timer % 45.0 < 0.1 {
-        let formation_id = (enemy_spawner.wave_timer as u32 / 45) + 2000;
-        
-        // Elite formation with mixed enemy types and advanced tactics
-        let commander_entity = commands.spawn((
-            Transform::from_xyz(0.0, 500.0, 0.0),
-            FormationCommander {
-                formation_id,
-                members: Vec::new(),
-                attack_pattern: AttackPattern::FocusedAssault { target_focus: true },
-                coordination_timer: 0.0,
-            },
-        )).id();
-        
-        // Spawn 1 boss, 2 heavies, 3 attackers
-        let elite_composition = [
-            (EnemyType::Boss, FormationRole::Leader, Vec2::new(0.0, 0.0)),
-            (EnemyType::Heavy, FormationRole::Defender, Vec2::new(-60.0, -40.0)),
-            (EnemyType::Heavy, FormationRole::Defender, Vec2::new(60.0, -40.0)),
-            (EnemyType::FormationFighter, FormationRole::Attacker, Vec2::new(-100.0, -80.0)),
-            (EnemyType::FormationFighter, FormationRole::Attacker, Vec2::new(0.0, -80.0)),
-            (EnemyType::FormationFighter, FormationRole::Attacker, Vec2::new(100.0, -80.0)),
-        ];
-        
-        let mut member_entities = Vec::new();
-        for (enemy_type, role, position) in elite_composition {
-            let member_entity = commands.spawn((
-                Transform::from_xyz(position.x, 500.0 + position.y, 0.0),
-                FormationMember {
-                    formation_id,
-                    role,
-                    last_command_time: 0.0,
-                },
-            )).id();
-            
-            member_entities.push(member_entity);
-            
-            spawn_events.write(SpawnEnemy {
-                position: Vec3::new(position.x, 500.0 + position.y, 0.0),
-                ai_type: EnemyAI::Formation {
-                    formation_id,
-                    position_in_formation: position,
-                    leader_offset: Vec2::ZERO,
-                    formation_timer: 0.0,
-                },
-                enemy_type,
-            });
+    *last_laser_damage += time.delta_secs();
+    
+    // Laser collision with enemies
+    if *last_laser_damage >= 0.1 {
+        for (laser_transform, laser_beam, laser_collider) in laser_query.iter() {
+            for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
+                let distance = laser_transform.translation.distance(enemy_transform.translation);
+                if distance < laser_collider.radius + enemy_collider.radius {
+                    let damage = (laser_beam.damage_per_second as f32 * 0.1) as i32;
+                    enemy_health.0 -= damage;
+                    
+                    if enemy_health.0 <= 0 {
+                        explosion_events.send(SpawnExplosion {
+                            position: enemy_transform.translation,
+                            intensity: 1.2,
+                            enemy_type: None,
+                        });
+                        commands.entity(enemy_entity).despawn();
+                    }
+                }
+            }
         }
+        *last_laser_damage = 0.0;
+    }
+    
+    // Regular projectile collisions with explosive and armor piercing
+    for (proj_entity, proj_transform, proj_collider, projectile, explosive, armor_piercing) in projectile_query.iter_mut() {
+        if !projectile.friendly { continue; }
         
-        // Update commander with member list
-        if let Ok(mut commander) = commands.entity(commander_entity).get_mut::<FormationCommander>() {
-            commander.members = member_entities;
+        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
+            let distance = proj_transform.translation.distance(enemy_transform.translation);
+            if distance < proj_collider.radius + enemy_collider.radius {
+                enemy_health.0 -= projectile.damage;
+                
+                // Handle explosive projectiles
+                if let Some(explosive_proj) = explosive {
+                    explosion_events.send(SpawnExplosion {
+                        position: proj_transform.translation,
+                        intensity: 1.5,
+                        enemy_type: None,
+                    });
+                    
+                    // Damage nearby enemies
+                    for (nearby_entity, nearby_transform, _, mut nearby_health) in nearby_enemy_query.iter_mut() {
+                        if nearby_entity != enemy_entity {
+                            let blast_distance = proj_transform.translation.distance(nearby_transform.translation);
+                            if blast_distance <= explosive_proj.blast_radius {
+                                nearby_health.0 -= explosive_proj.blast_damage;
+                            }
+                        }
+                    }
+                }
+                
+                // Handle armor piercing - Mut<ArmorPiercing> can be used directly
+                if let Some(mut piercing) = armor_piercing {
+                    piercing.pierce_count += 1;
+                    if piercing.pierce_count < piercing.max_pierce {
+                        // Don't despawn, continue through enemy
+                        break;
+                    }
+                }
+                
+                commands.entity(proj_entity).despawn();
+                
+                if enemy_health.0 <= 0 {
+                    explosion_events.send(SpawnExplosion {
+                        position: enemy_transform.translation,
+                        intensity: 1.0,
+                        enemy_type: None,
+                    });
+                    commands.entity(enemy_entity).despawn();
+                }
+                break;
+            }
         }
     }
+}
+
+// Enhanced formation system with biological colony behavior
+pub fn update_formations(
+    mut colony_leader_query: Query<(&mut Transform, &mut ColonyLeader)>,
+    mut colony_member_query: Query<(&mut Enemy, &Transform), Without<ColonyLeader>>,
+    fluid_environment: Res<FluidEnvironment>,
+    time: Res<Time>,
+) {
+    for (mut leader_transform, mut colony) in colony_leader_query.iter_mut() {
+        colony.pattern_timer += time.delta_secs();
+        
+        // Colony leaders respond to fluid currents
+        let grid_pos = world_to_grid_pos(leader_transform.translation.truncate(), &fluid_environment);
+        let current = sample_current(&fluid_environment, grid_pos);
+        
+        // Base downward movement with current influence
+        leader_transform.translation.y -= 90.0 * time.delta_secs();
+        leader_transform.translation += (current * 0.6).extend(0.0) * time.delta_secs();
+        
+        // Organic colony movement patterns
+        let colony_movement = match colony.pattern_type {
+            ColonyPattern::BiofilmFormation => {
+                // Slow, spreading movement
+                Vec2::new(
+                    (colony.pattern_timer * 0.4).sin() * 30.0,
+                    (colony.pattern_timer * 0.6).cos() * 15.0,
+                )
+            },
+            ColonyPattern::LinearChain => {
+                // Undulating chain movement
+                Vec2::new(
+                    (colony.pattern_timer * 1.2).sin() * 40.0,
+                    0.0,
+                )
+            },
+            ColonyPattern::CircularCluster => {
+                // Breathing circular motion
+                let radius_pulse = 20.0 + (colony.pattern_timer * 1.5).sin() * 10.0;
+                Vec2::new(
+                    (colony.pattern_timer * 0.8).cos() * radius_pulse,
+                    (colony.pattern_timer * 0.8).sin() * radius_pulse * 0.5,
+                ) * 0.5
+            },
+            ColonyPattern::SymbioticPair => {
+                // Synchronized pair movement
+                Vec2::new(
+                    (colony.pattern_timer * 2.0).sin() * 25.0,
+                    (colony.pattern_timer * 1.5).cos() * 12.0,
+                )
+            },
+        };
+        
+        leader_transform.translation += colony_movement.extend(0.0) * time.delta_secs();
+        
+        // Update member positions based on colony pattern
+        for (member_index, member_entity) in colony.members.iter().enumerate() {
+            if let Ok((mut member_enemy, _)) = colony_member_query.get_mut(*member_entity) {
+                if let EnemyAI::Formation { position_in_formation, leader_offset, .. } = &mut member_enemy.ai_type {
+                    let new_pos = colony.pattern_type.get_position(
+                        member_index, 
+                        colony.members.len(), 
+                        colony.pattern_timer
+                    );
+                    *position_in_formation = new_pos;
+                    *leader_offset = colony_movement * 0.5; // Partial influence from colony movement
+                }
+            }
+        }
+        
+        // Remove dead members from colony
+        colony.members.retain(|&member_entity| {
+            colony_member_query.get(member_entity).is_ok()
+        });
+    }
+}
+
+// Helper functions for biological systems
+fn world_to_grid_pos(world_pos: Vec2, fluid_env: &FluidEnvironment) -> (usize, usize) {
+    let grid_x = ((world_pos.x + 640.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
+    let grid_y = ((world_pos.y + 360.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
+    (grid_x, grid_y)
+}
+
+fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec2 {
+    let index = grid_pos.1 * fluid_env.grid_size + grid_pos.0;
+    if index < fluid_env.current_field.len() {
+        fluid_env.current_field[index]
+    } else {
+        Vec2::ZERO
+    }
+}
+
+fn sample_ph(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32 {
+    let mut ph = chemical_env.base_ph;
+    
+    for zone in &chemical_env.ph_zones {
+        let distance = position.distance(zone.position);
+        if distance < zone.radius {
+            let influence = (1.0 - distance / zone.radius) * zone.intensity;
+            ph = ph * (1.0 - influence) + zone.ph_level * influence;
+        }
+    }
+    
+    ph.clamp(0.0, 14.0)
+}
+
+fn sample_oxygen(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32 {
+    let mut oxygen = chemical_env.base_oxygen;
+    
+    for zone in &chemical_env.oxygen_zones {
+        let distance = position.distance(zone.position);
+        if distance < zone.radius {
+            let influence = 1.0 - distance / zone.radius;
+            oxygen = oxygen * (1.0 - influence) + zone.oxygen_level * influence;
+        }
+    }
+    
+    oxygen.clamp(0.0, 1.0)
+}
+
+fn sample_ph_toxicity(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32 {
+    let ph = sample_ph(chemical_env, position);
+    let optimal_ph = 7.0;
+    let ph_deviation = (ph - optimal_ph).abs();
+    
+    // Return toxicity level (0.0 = safe, 1.0 = highly toxic)
+    (ph_deviation / 7.0).clamp(0.0, 1.0)
 }

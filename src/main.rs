@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
+use bevy::sprite::Anchor;
 
 mod components;
 mod resources;
@@ -9,6 +10,7 @@ mod enemy_types;
 mod enemy_systems;
 mod weapon_systems;
 mod currency_systems;
+mod biological_systems; 
 
 use components::*;
 use resources::*;
@@ -18,24 +20,27 @@ use enemy_types::*;
 use enemy_systems::*;
 use weapon_systems::*;
 use currency_systems::*;
+use biological_systems::*; 
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Enhanced Shmup - Multi-Weapon Edition".into(),
+                title: "Tidal Pool Cosmos - Microscopic Defense".into(),
                 resolution: WindowResolution::new(1280.0, 720.0),
                 resizable: false,
                 ..default()
             }),
             ..default()
         }))
-        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep water blue-black
         .init_resource::<InputState>()
         .init_resource::<EnemySpawner>()
         .init_resource::<GameScore>()
         .init_resource::<GameStarted>()
         .init_resource::<ShootingState>()
+        .init_resource::<FluidEnvironment>() // New: fluid dynamics
+        .init_resource::<ChemicalEnvironment>() // New: chemical simulation
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
         .add_event::<SpawnEnemy>()
@@ -44,22 +49,24 @@ fn main() {
         .add_event::<PlayerHit>()
         .add_systems(Startup, (
             setup_camera, 
-            setup_background, 
-            spawn_enhanced_player, 
-            load_assets, 
-            setup_enhanced_ui.after(load_assets), 
+            setup_biological_background, 
+            spawn_biological_player, 
+            load_biological_assets, 
+            setup_biological_ui.after(load_biological_assets), 
             load_high_scores,
             init_particle_pool,
+            init_fluid_environment, // New
+            init_chemical_zones, // New
         ))
         .add_systems(Update, (
             handle_pause_input,
             handle_input.run_if(in_state(GameState::Playing)),
-            move_player.run_if(in_state(GameState::Playing)),
+            biological_movement_system.run_if(in_state(GameState::Playing)), 
             enhanced_shooting_system.run_if(in_state(GameState::Playing)),
-            spawn_enemies_enhanced.run_if(in_state(GameState::Playing)),
-            spawn_powerups.run_if(in_state(GameState::Playing)),
-            spawn_weapon_powerups.run_if(in_state(GameState::Playing)),
-            spawn_upgrade_stations.run_if(in_state(GameState::Playing)),
+            spawn_enemies.run_if(in_state(GameState::Playing)),
+            spawn_biological_powerups.run_if(in_state(GameState::Playing)), 
+            spawn_evolution_powerups.run_if(in_state(GameState::Playing)), 
+            spawn_evolution_chambers.run_if(in_state(GameState::Playing)), 
             enemy_shooting.run_if(in_state(GameState::Playing)),
             turret_shooting.run_if(in_state(GameState::Playing)),
             move_enemies.run_if(in_state(GameState::Playing)),
@@ -72,40 +79,50 @@ fn main() {
             update_missiles.run_if(in_state(GameState::Playing)),
             update_laser_beams.run_if(in_state(GameState::Playing)),
             update_smart_bombs.run_if(in_state(GameState::Playing)),
-            move_powerups.run_if(in_state(GameState::Playing)),
-            move_currency.run_if(in_state(GameState::Playing)),
+            move_biological_powerups.run_if(in_state(GameState::Playing)), 
+            move_atp.run_if(in_state(GameState::Playing)), 
             enhanced_projectile_collisions.run_if(in_state(GameState::Playing)),
-            currency_pickup_system.run_if(in_state(GameState::Playing)),
-            weapon_powerup_collection.run_if(in_state(GameState::Playing)),
+            atp_pickup_system.run_if(in_state(GameState::Playing)), 
+            evolution_powerup_collection.run_if(in_state(GameState::Playing)),
         ))
         .add_systems(Update, (                
-            upgrade_station_interaction.run_if(in_state(GameState::Playing)),
-            handle_powerup_collection.run_if(in_state(GameState::Playing)),
-            update_player_effects.run_if(in_state(GameState::Playing)),
-            update_temporary_weapon_effects.run_if(in_state(GameState::Playing)),
+            evolution_chamber_interaction.run_if(in_state(GameState::Playing)),
+            handle_biological_powerup_collection.run_if(in_state(GameState::Playing)),
+            update_biological_effects.run_if(in_state(GameState::Playing)),
+            update_temporary_evolution_effects.run_if(in_state(GameState::Playing)),
             update_explosions.run_if(in_state(GameState::Playing)),
-            update_particles.run_if(in_state(GameState::Playing)),
+            update_organic_particles.run_if(in_state(GameState::Playing)),
             update_particle_emitters.run_if(in_state(GameState::Playing)),
             update_parallax.run_if(in_state(GameState::Playing)),
             cleanup_offscreen.run_if(in_state(GameState::Playing)),
-            spawn_engine_particles.run_if(in_state(GameState::Playing)),
+            spawn_bioluminescent_trail.run_if(in_state(GameState::Playing)), 
+        ))
+        .add_systems(Update, (
+            // New biological systems
+            fluid_dynamics_system.run_if(in_state(GameState::Playing)),
+            chemical_environment_system.run_if(in_state(GameState::Playing)),
+            update_current_field.run_if(in_state(GameState::Playing)),
+            bioluminescence_system.run_if(in_state(GameState::Playing)),
+            organic_ai_system.run_if(in_state(GameState::Playing)),
+            generate_procedural_currents.run_if(in_state(GameState::Playing)),
+            spawn_organic_particle_effects.run_if(in_state(GameState::Playing)),
         ))
         .add_systems(Update, (
             spawn_explosion_system,
             spawn_enemy_system,
             spawn_powerup_system,
             spawn_particles_system,
-            spawn_currency_on_death,
+            spawn_atp_on_death,
             handle_player_hit,
             update_health_bar,
-            update_enhanced_ui,
-            update_upgrade_ui,
+            update_biological_ui,
+            update_evolution_ui,
             check_game_over,
             handle_restart_input,
         ).run_if(in_state(GameState::Playing)))
         .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
-        .add_systems(OnEnter(GameState::Playing), reset_enhanced_game_state)
+        .add_systems(OnEnter(GameState::Playing), reset_biological_game_state)
         .add_systems(OnEnter(GameState::Paused), setup_pause_ui)
         .add_systems(OnExit(GameState::Paused), cleanup_pause_ui)
         .add_systems(Update, (
@@ -114,14 +131,15 @@ fn main() {
         .run();
 }
 
-// Enhanced player spawning with weapon system
-pub fn spawn_enhanced_player(mut commands: Commands, asset_server: Res<AssetServer>) {
+// Enhanced player spawning with biological properties
+pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let texture = asset_server.load("textures/player.png");
     
     commands.spawn((
         Sprite {
             image: texture,
             anchor: Anchor::Center,
+            color: Color::srgb(0.8, 1.0, 0.9), // Slightly bioluminescent tint
             ..default()
         },
         Transform::from_xyz(0.0, -250.0, 0.0),
@@ -130,19 +148,32 @@ pub fn spawn_enhanced_player(mut commands: Commands, asset_server: Res<AssetServ
             roll_factor: 0.3,
             lives: 3,
             invincible_timer: 0.0,
+            cell_membrane_thickness: 1.0,
         },
-        WeaponSystem::default(),
-        Currency { amount: 0 },
-        PermanentUpgrades::default(),
+        EvolutionSystem::default(),
+        ATP { amount: 0 },
+        CellularUpgrades::default(),
         Collider { radius: 16.0 },
         Health(100),
         EngineTrail,
+        FluidDynamics {
+            velocity: Vec2::ZERO,
+            viscosity_resistance: 0.8,
+            buoyancy: 20.0,
+            current_influence: 1.0,
+        },
+        ChemicalSensitivity {
+            ph_tolerance_min: 6.5,
+            ph_tolerance_max: 7.5,
+            oxygen_requirement: 0.3,
+            damage_per_second_outside_range: 5,
+        },
     ));
 }
 
-// Enhanced UI setup
-pub fn setup_enhanced_ui(mut commands: Commands) {
-    // Health bar background
+// Biological UI setup with updated terminology
+pub fn setup_biological_ui(mut commands: Commands) {
+    // Cellular integrity bar (health bar)
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -153,12 +184,12 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             border: UiRect::all(Val::Px(2.0)),
             ..default()
         },
-        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-        BorderColor(Color::srgb(0.8, 0.8, 0.8)),
+        BackgroundColor(Color::srgb(0.1, 0.2, 0.3)),
+        BorderColor(Color::srgb(0.4, 0.8, 0.6)),
         HealthBar,
     ));
     
-    // Health bar fill
+    // Cellular integrity fill
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -168,7 +199,7 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             height: Val::Px(20.0),
             ..default()
         },
-        BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
+        BackgroundColor(Color::srgb(0.2, 0.8, 0.4)), // Healthy green
         HealthBarFill,
     ));
 
@@ -182,7 +213,7 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             ..default()
         },
         TextFont { font_size: 20.0, ..default() },
-        TextColor(Color::WHITE),
+        TextColor(Color::srgb(0.8, 1.0, 0.9)),
         LivesText,
     ));
 
@@ -196,7 +227,7 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             ..default()
         },
         TextFont { font_size: 24.0, ..default() },
-        TextColor(Color::WHITE),
+        TextColor(Color::srgb(0.8, 1.0, 0.9)),
         ScoreText,
     ));
     
@@ -210,13 +241,13 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             ..default()
         },
         TextFont { font_size: 16.0, ..default() },
-        TextColor(Color::srgb(0.8, 0.8, 0.8)),
+        TextColor(Color::srgb(0.6, 0.8, 0.7)),
         HighScoreText,
     ));
 
-    // Currency text
+    // ATP text (currency)
     commands.spawn((
-        Text::new("Currency: 0¤"),
+        Text::new("ATP: 0⚡"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
@@ -225,12 +256,12 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
         },
         TextFont { font_size: 18.0, ..default() },
         TextColor(Color::srgb(1.0, 1.0, 0.3)),
-        CurrencyText,
+        ATPText,
     ));
 
-    // Weapon info text
+    // Evolution info text
     commands.spawn((
-        Text::new("Weapon: Basic"),
+        Text::new("Evolution: Cytoplasmic Spray"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
@@ -239,12 +270,12 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
         },
         TextFont { font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.7, 1.0, 0.7)),
-        WeaponText,
+        EvolutionText,
     ));
 
-    // Smart bomb counter
+    // Emergency spore counter
     commands.spawn((
-        Text::new("Smart Bombs: 3"),
+        Text::new("Emergency Spores: 3"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(250.0),
@@ -253,12 +284,12 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
         },
         TextFont { font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.8, 0.8, 1.0)),
-        SmartBombText,
+        SporeText,
     ));
 
     // Controls help
     commands.spawn((
-        Text::new("SPACE: Smart Bomb | Near Station: 1-9 to upgrade"),
+        Text::new("SPACE: Emergency Spore | Near Evolution Chamber: 1-9 to evolve"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
@@ -266,11 +297,11 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
             ..default()
         },
         TextFont { font_size: 12.0, ..default() },
-        TextColor(Color::srgb(0.6, 0.6, 0.6)),
+        TextColor(Color::srgb(0.5, 0.7, 0.6)),
         ControlsText,
     ));
 
-    // Multiplier text
+    // Symbiotic multiplier text
     commands.spawn((
         Text::new(""),
         Node {
@@ -283,41 +314,162 @@ pub fn setup_enhanced_ui(mut commands: Commands) {
         TextColor(Color::srgb(1.0, 0.8, 0.2)),
         MultiplierText,
     ));
+
+    // Environmental status (new)
+    commands.spawn((
+        Text::new("pH: 7.0 | O₂: Normal"),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            top: Val::Px(80.0),
+            ..default()
+        },
+        TextFont { font_size: 14.0, ..default() },
+        TextColor(Color::srgb(0.6, 0.9, 0.8)),
+        EnvironmentText,
+    ));
 }
 
-// Enhanced UI update system
-pub fn update_enhanced_ui(
+// New biological background with organic elements
+pub fn setup_biological_background(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Organic background layers representing different depth levels
+    let layers = vec![
+        ("textures/bg_layer1.png", 0.05, -100.0, Color::srgb(0.2, 0.4, 0.6)), // Deep water
+        ("textures/bg_layer2.png", 0.15, -50.0, Color::srgb(0.3, 0.6, 0.8)),  // Mid water with plankton
+        ("textures/bg_layer3.png", 0.3, -25.0, Color::srgb(0.4, 0.8, 1.0)),   // Surface with debris
+    ];
+    
+    for (path, speed, depth, tint) in layers {
+        let texture = asset_server.load(path);
+        commands.spawn((
+            Sprite {
+                image: texture,
+                color: tint,
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, depth),
+            ParallaxLayer { speed, depth },
+        ));
+    }
+
+    // Add some ambient current indicators
+    for i in 0..5 {
+        let x = (i as f32 - 2.0) * 200.0;
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.3, 0.8, 1.0, 0.1),
+                custom_size: Some(Vec2::new(50.0, 200.0)),
+                ..default()
+            },
+            Transform::from_xyz(x, 0.0, -80.0),
+            CurrentField {
+                direction: Vec2::new(0.0, -1.0),
+                strength: 50.0,
+                turbulence: 0.2,
+            },
+            ParallaxLayer { speed: 0.1, depth: -80.0 },
+        ));
+    }
+}
+
+// Load biological-themed assets
+pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let assets = GameAssets {
+        player_texture: asset_server.load("textures/player.png"),
+        enemy_texture: asset_server.load("textures/enemy.png"),
+        projectile_texture: asset_server.load("textures/bullet.png"),
+        explosion_texture: asset_server.load("textures/explosion.png"),
+        particle_texture: asset_server.load("textures/particle.png"),
+        // Renamed power-up textures for biological theme
+        health_powerup_texture: asset_server.load("textures/cellular_regen.png"),
+        shield_powerup_texture: asset_server.load("textures/cell_wall.png"),
+        speed_powerup_texture: asset_server.load("textures/flagella.png"),
+        multiplier_powerup_texture: asset_server.load("textures/symbiotic.png"),
+        rapidfire_powerup_texture: asset_server.load("textures/mitochondria.png"),
+        background_layers: vec![
+            asset_server.load("textures/bg_layer1.png"),
+            asset_server.load("textures/bg_layer2.png"),
+            asset_server.load("textures/bg_layer3.png"),
+        ],
+        // Biological sound effects
+        sfx_shoot: asset_server.load("audio/organic_pulse.ogg"),
+        sfx_explosion: asset_server.load("audio/cell_burst.ogg"),
+        sfx_powerup: asset_server.load("audio/evolution.ogg"),
+        music: asset_server.load("audio/tidal_pool_ambience.ogg"),
+    };
+    commands.insert_resource(assets);
+}
+
+// Initialize fluid environment
+pub fn init_fluid_environment(mut commands: Commands) {
+    commands.insert_resource(FluidEnvironment {
+        current_field: vec![Vec2::ZERO; 64 * 64],
+        grid_size: 64,
+        cell_size: 20.0,
+        tidal_phase: 0.0,
+        turbulence_intensity: 0.3,
+    });
+}
+
+// Initialize chemical zones
+pub fn init_chemical_zones(mut commands: Commands) {
+    commands.insert_resource(ChemicalEnvironment {
+        ph_zones: vec![
+            resources::ChemicalZone {
+                position: Vec2::new(-200.0, 100.0),
+                radius: 150.0,
+                ph_level: 5.5, // Acidic zone
+                intensity: 0.8,
+            },
+            resources::ChemicalZone {
+                position: Vec2::new(200.0, -100.0),
+                radius: 120.0,
+                ph_level: 8.5, // Alkaline zone
+                intensity: 0.6,
+            },
+        ],
+        oxygen_zones: vec![
+            OxygenZone {
+                position: Vec2::new(0.0, 200.0),
+                radius: 180.0,
+                oxygen_level: 0.9,
+                depletion_rate: 0.1,
+            },
+        ],
+        base_ph: 7.0,
+        base_oxygen: 0.5,
+        diffusion_rate: 0.1,
+    });
+}
+
+// Enhanced UI update system with biological terminology
+pub fn update_biological_ui(
     game_score: Res<GameScore>,
-    player_query: Query<(&Player, &Currency, &WeaponSystem)>,
-    mut currency_query: Query<&mut Text, (With<CurrencyText>, Without<WeaponText>, Without<SmartBombText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-    mut weapon_query: Query<&mut Text, (With<WeaponText>, Without<CurrencyText>, Without<SmartBombText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-    mut smart_bomb_query: Query<&mut Text, (With<SmartBombText>, Without<CurrencyText>, Without<WeaponText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-    mut score_query: Query<&mut Text, (With<ScoreText>, Without<CurrencyText>, Without<WeaponText>, Without<SmartBombText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-    mut high_score_query: Query<&mut Text, (With<HighScoreText>, Without<CurrencyText>, Without<WeaponText>, Without<SmartBombText>, Without<ScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-    mut multiplier_query: Query<&mut Text, (With<MultiplierText>, Without<CurrencyText>, Without<WeaponText>, Without<SmartBombText>, Without<ScoreText>, Without<HighScoreText>, Without<LivesText>)>,
-    mut lives_query: Query<&mut Text, (With<LivesText>, Without<CurrencyText>, Without<WeaponText>, Without<SmartBombText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>)>,
+    player_query: Query<(&Player, &ATP, &EvolutionSystem)>,
+    environment: Res<ChemicalEnvironment>,
+    mut atp_query: Query<&mut Text, (With<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut evolution_query: Query<&mut Text, (With<EvolutionText>, Without<ATPText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut spore_query: Query<&mut Text, (With<SporeText>, Without<ATPText>, Without<EvolutionText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut score_query: Query<&mut Text, (With<ScoreText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut high_score_query: Query<&mut Text, (With<HighScoreText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut multiplier_query: Query<&mut Text, (With<MultiplierText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut lives_query: Query<&mut Text, (With<LivesText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<EnvironmentText>)>,
+    mut environment_query: Query<&mut Text, (With<EnvironmentText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
 ) {
-    if let Ok((player, currency, weapon_system)) = player_query.single() {
-        // Update currency display
-        if let Ok(mut currency_text) = currency_query.single_mut() {
-            **currency_text = format!("Currency: {}¤", currency.amount);
+    if let Ok((player, atp, evolution_system)) = player_query.single() {
+        // Update ATP display
+        if let Ok(mut atp_text) = atp_query.single_mut() {
+            **atp_text = format!("ATP: {}⚡", atp.amount);
         }
         
-        // Update weapon display
-        if let Ok(mut weapon_text) = weapon_query.single_mut() {
-            let weapon_name = match &weapon_system.primary_weapon {
-                WeaponType::Basic { .. } => "Basic",
-                WeaponType::SpreadShot { .. } => "Spread Shot",
-                WeaponType::Laser { .. } => "Laser",
-                WeaponType::Missile { .. } => "Missiles",
-                WeaponType::RapidFire { .. } => "Rapid Fire",
-            };
-            **weapon_text = format!("Weapon: {}", weapon_name);
+        // Update evolution display
+        if let Ok(mut evolution_text) = evolution_query.single_mut() {
+            **evolution_text = format!("Evolution: {}", evolution_system.primary_evolution.get_display_name());
         }
         
-        // Update smart bomb counter
-        if let Ok(mut bomb_text) = smart_bomb_query.single_mut() {
-            **bomb_text = format!("Smart Bombs: {}", weapon_system.smart_bombs);
+        // Update emergency spore counter
+        if let Ok(mut spore_text) = spore_query.single_mut() {
+            **spore_text = format!("Emergency Spores: {}", evolution_system.emergency_spores);
         }
         
         // Update lives
@@ -337,34 +489,42 @@ pub fn update_enhanced_ui(
         **high_score_text = format!("High: {}", high_score);
     }
 
-    // Update multiplier
+    // Update symbiotic multiplier
     if let Ok(mut multiplier_text) = multiplier_query.single_mut() {
         if game_score.score_multiplier > 1.0 {
-            **multiplier_text = format!("{}x ({:.1}s)", game_score.score_multiplier, game_score.multiplier_timer);
+            **multiplier_text = format!("{}x Symbiosis ({:.1}s)", game_score.score_multiplier, game_score.multiplier_timer);
         } else {
             **multiplier_text = String::new();
         }
     }
+
+    // Update environment status
+    if let Ok(mut env_text) = environment_query.single_mut() {
+        **env_text = format!("pH: {:.1} | O₂: {:.0}%", 
+            environment.base_ph, 
+            environment.base_oxygen * 100.0
+        );
+    }
 }
 
-// Enhanced game reset system
-pub fn reset_enhanced_game_state(
+// Enhanced game reset with biological state
+pub fn reset_biological_game_state(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut input_state: ResMut<InputState>,
     mut game_started: ResMut<GameStarted>,
     mut shooting_state: ResMut<ShootingState>,
+    mut fluid_environment: ResMut<FluidEnvironment>,
+    mut chemical_environment: ResMut<ChemicalEnvironment>,
     // Despawn all game entities
-    enemy_query: Query<Entity, With<Enemy>>,
-    projectile_query: Query<Entity, With<Projectile>>,
+    (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, With<Projectile>>),
     explosion_query: Query<Entity, With<Explosion>>,
-    (powerup_query,weapon_powerup_query): (Query<Entity, With<PowerUp>>, Query<Entity, With<WeaponPowerUp>>),
-    currency_entity_query: Query<Entity, (With<Currency>, Without<Player>)>,
-    upgrade_station_query: Query<Entity, With<UpgradeStation>>,
+    (powerup_query,weapon_powerup_query): (Query<Entity, With<PowerUp>>, Query<Entity, With<EvolutionPowerUp>>),
+    (currency_entity_query, upgrade_station_query): (Query<Entity, (With<ATP>, Without<Player>)>, Query<Entity, With<EvolutionChamber>>),
     (particle_query, emitter_query): (Query<Entity, With<Particle>>,Query<Entity, With<ParticleEmitter>>),
-    (laser_query, smart_bomb_query): (Query<Entity, With<LaserBeam>>, Query<Entity, With<SmartBombWave>>),
-    (player_query, upgrade_ui_query) : (Query<Entity, With<Player>>, Query<Entity, With<UpgradeUI>>),
+    (laser_query, smart_bomb_query): (Query<Entity, With<LaserBeam>>, Query<Entity, With<SporeWave>>),
+    (player_query, upgrade_ui_query) : (Query<Entity, With<Player>>, Query<Entity, With<EvolutionUI>>),
     assets: Option<Res<GameAssets>>,
 ) {
     if !game_started.0 {
@@ -386,7 +546,7 @@ pub fn reset_enhanced_game_state(
         .chain(smart_bomb_query.iter())
         .chain(player_query.iter())
         .chain(upgrade_ui_query.iter()) {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     
     // Reset resources
@@ -400,12 +560,21 @@ pub fn reset_enhanced_game_state(
     input_state.shoot_timer = 0.0;
     shooting_state.rate_multiplier = 1.0;
     
-    // Respawn enhanced player
+    // Reset fluid environment
+    fluid_environment.tidal_phase = 0.0;
+    fluid_environment.turbulence_intensity = 0.3;
+    
+    // Reset chemical environment
+    chemical_environment.base_ph = 7.0;
+    chemical_environment.base_oxygen = 0.5;
+    
+    // Respawn biological player
     if let Some(assets) = assets {
         commands.spawn((
             Sprite {
                 image: assets.player_texture.clone(),
                 anchor: Anchor::Center,
+                color: Color::srgb(0.8, 1.0, 0.9),
                 ..default()
             },
             Transform::from_xyz(0.0, -250.0, 0.0),
@@ -414,26 +583,354 @@ pub fn reset_enhanced_game_state(
                 roll_factor: 0.3,
                 lives: 3,
                 invincible_timer: 3.0,
+                cell_membrane_thickness: 1.0,
             },
-            WeaponSystem::default(),
-            Currency { amount: 0 },
-            PermanentUpgrades::default(),
+            EvolutionSystem::default(),
+            ATP { amount: 0 },
+            CellularUpgrades::default(),
             Collider { radius: 16.0 },
             Health(100),
             EngineTrail,
+            FluidDynamics {
+                velocity: Vec2::ZERO,
+                viscosity_resistance: 0.8,
+                buoyancy: 20.0,
+                current_influence: 1.0,
+            },
+            ChemicalSensitivity {
+                ph_tolerance_min: 6.5,
+                ph_tolerance_max: 7.5,
+                oxygen_requirement: 0.3,
+                damage_per_second_outside_range: 5,
+            },
         ));
     }
 }
 
-// Additional UI component markers
+// New biological movement system
+pub fn biological_movement_system(
+    mut player_query: Query<(&mut Transform, &mut FluidDynamics, &Player)>,
+    input_state: Res<InputState>,
+    fluid_environment: Res<FluidEnvironment>,
+    time: Res<Time>,
+) {
+    if let Ok((mut transform, mut fluid, player)) = player_query.single_mut() {
+        // Player input creates thrust against fluid resistance
+        let thrust = input_state.movement * player.speed * 2.0;
+        
+        // Sample current from fluid field
+        let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+        let current = sample_current(&fluid_environment, grid_pos);
+        
+        // Physics integration with biological properties
+        let drag = fluid.velocity * -fluid.viscosity_resistance;
+        let buoyancy = Vec2::new(0.0, fluid.buoyancy);
+        let current_force = current * fluid.current_influence;
+        
+        let acceleration = thrust + current_force + drag + buoyancy;
+        fluid.velocity += acceleration * time.delta_secs();
+        
+        // Apply velocity to position with organic damping
+        transform.translation += fluid.velocity.extend(0.0) * time.delta_secs();
+        
+        // Boundary conditions with surface tension effect
+        transform.translation.x = transform.translation.x.clamp(-600.0, 600.0);
+        transform.translation.y = transform.translation.y.clamp(-350.0, 350.0);
+        
+        // Organic roll motion based on fluid flow
+        let flow_influence = (fluid.velocity.x + current.x) * 0.001;
+        let target_roll = -input_state.movement.x * player.roll_factor + flow_influence;
+        transform.rotation = transform.rotation.lerp(
+            Quat::from_rotation_z(target_roll),
+            time.delta_secs() * 6.0
+        );
+    }
+}
+
+// Enhanced particle system for organic effects
+pub fn update_organic_particles(
+    mut commands: Commands,
+    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite, Option<&BioluminescentParticle>)>,
+    fluid_environment: Res<FluidEnvironment>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut particle, mut sprite, bioluminescent) in particle_query.iter_mut() {
+        particle.lifetime += time.delta_secs();
+        
+        if particle.lifetime >= particle.max_lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+
+        // Organic motion based on drift pattern
+        match particle.drift_pattern {
+            DriftPattern::Floating => {
+                let bob = (time.elapsed_secs() * 2.0 + transform.translation.x * 0.01).sin();
+                transform.translation.y += bob * 15.0 * time.delta_secs();
+                
+                // Gentle rotation
+                transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 0.5);
+            }
+            
+            DriftPattern::Pulsing => {
+                let pulse = (time.elapsed_secs() * 4.0).sin();
+                let scale = particle.size * (0.8 + pulse * 0.2);
+                transform.scale = Vec3::splat(scale);
+            }
+            
+            DriftPattern::Spiraling => {
+                let angle = time.elapsed_secs() * 2.0;
+                let spiral_radius = 10.0;
+                particle.velocity.x += angle.cos() * spiral_radius * time.delta_secs();
+                particle.velocity.y += angle.sin() * spiral_radius * time.delta_secs();
+            }
+            
+            DriftPattern::Brownian => {
+                // Random micro-movements for molecular motion
+                let random_force = Vec2::new(
+                    (time.elapsed_secs() * 123.45).sin() * 50.0,
+                    (time.elapsed_secs() * 678.90).cos() * 50.0,
+                );
+                particle.velocity += random_force * time.delta_secs();
+            }
+        }
+
+        // Apply current influence to organic particles
+        let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
+        let current = sample_current(&fluid_environment, grid_pos);
+        particle.velocity += current * 0.3 * time.delta_secs();
+
+        // Update position
+        transform.translation += particle.velocity.extend(0.0) * time.delta_secs();
+        
+        // Apply fluid drag
+        particle.velocity *= 0.98;
+        
+        // Bioluminescent effects
+        if let Some(bio_particle) = bioluminescent {
+            let pulse = (time.elapsed_secs() * bio_particle.pulse_frequency).sin();
+            let brightness = 0.7 + pulse * bio_particle.pulse_intensity;
+            
+            let mut color = bio_particle.base_color;
+            let alpha = (1.0 - particle.lifetime / particle.max_lifetime) * particle.fade_rate;
+            color.set_alpha(alpha * brightness);
+            sprite.color = color;
+        } else {
+            // Standard particle fade
+            let progress = particle.lifetime / particle.max_lifetime;
+            let alpha = 1.0 - progress;
+            sprite.color.set_alpha(alpha * particle.fade_rate);
+        }
+        
+        // Organic size variation
+        if particle.bioluminescent {
+            let size_pulse = (time.elapsed_secs() * 3.0 + particle.lifetime * 2.0).sin();
+            let scale = particle.size * (0.9 + size_pulse * 0.1);
+            transform.scale = Vec3::splat(scale);
+        }
+    }
+}
+
+// Bioluminescent trail system (replaces engine particles)
+pub fn spawn_bioluminescent_trail(
+    _commands: Commands,
+    mut particle_events: EventWriter<SpawnParticles>,
+    player_query: Query<&Transform, With<EngineTrail>>,
+    input_state: Res<InputState>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    *spawn_timer -= time.delta_secs();
+    
+    if *spawn_timer <= 0.0 {
+        for transform in player_query.iter() {
+            let intensity = input_state.movement.length().max(0.3);
+            
+            particle_events.write(SpawnParticles {
+                position: transform.translation + Vec3::new(0.0, -20.0, -0.1),
+                count: (intensity * 12.0) as u32,
+                config: ParticleConfig {
+                    color_start: Color::srgb(0.3, 0.8, 1.0),
+                    color_end: Color::srgba(0.1, 0.6, 0.9, 0.0),
+                    velocity_range: (
+                        Vec2::new(-40.0, -120.0),
+                        Vec2::new(40.0, -40.0)
+                    ),
+                    lifetime_range: (0.3, 0.8),
+                    size_range: (0.5, 1.5),
+                    gravity: Vec2::new(0.0, -30.0), // Reduced for underwater
+                    organic_motion: true,
+                    bioluminescence: 1.0,
+                },
+            });
+        }
+        
+        *spawn_timer = 0.03; // More frequent for organic trail
+    }
+}
+
+// Update biological effects (replaces update_player_effects)
+pub fn update_biological_effects(
+    mut commands: Commands,
+    mut player_query: Query<(Entity, &mut Player, &Transform), With<Player>>,
+    mut cell_wall_query: Query<(Entity, &mut CellWallReinforcement)>,
+    mut cell_wall_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<CellWallVisual>, Without<Player>)>,
+    mut flagella_query: Query<(Entity, &mut FlagellaBoost)>,
+    mut symbiotic_query: Query<(Entity, &mut SymbioticMultiplier)>,
+    mut mitochondria_query: Query<(Entity, &mut MitochondriaOvercharge)>,
+    mut photosynthesis_query: Query<(Entity, &mut PhotosynthesisActive, &mut Health)>,
+    mut chemotaxis_query: Query<(Entity, &mut ChemotaxisActive)>,
+    mut osmoregulation_query: Query<(Entity, &mut OsmoregulationActive)>,
+    mut binary_fission_query: Query<(Entity, &mut BinaryFissionActive)>,
+    mut game_score: ResMut<GameScore>,
+    time: Res<Time>,
+) {
+    if let Ok((_, mut player, _player_transform)) = player_query.single_mut() {
+        player.invincible_timer = (player.invincible_timer - time.delta_secs()).max(0.0);
+    }
+
+    // Update cell wall reinforcement
+    let mut cell_wall_active = false;
+    for (entity, mut cell_wall) in cell_wall_query.iter_mut() {
+        cell_wall.timer -= time.delta_secs();
+        cell_wall.alpha_timer += time.delta_secs();
+        cell_wall_active = true;
+        
+        if cell_wall.timer <= 0.0 {
+            commands.entity(entity).remove::<CellWallReinforcement>();
+            cell_wall_active = false;
+        }
+    }
+
+    // Update cell wall visual with organic pulsing
+    if let Ok((_player_entity, _, player_transform)) = player_query.single() {
+        if cell_wall_active {
+            if let Ok((_, mut cell_wall_transform, mut cell_wall_sprite)) = cell_wall_visual_query.single_mut() {
+                // Follow player position
+                cell_wall_transform.translation = player_transform.translation;
+                
+                // Organic pulsing effect
+                let pulse = (time.elapsed_secs() * 3.0).sin() * 0.15 + 0.85;
+                cell_wall_transform.scale = Vec3::splat(pulse);
+                
+                // Bioluminescent breathing alpha
+                let alpha = 0.3 + (time.elapsed_secs() * 2.0).sin().abs() * 0.2;
+                cell_wall_sprite.color = Color::srgba(0.4, 1.0, 0.8, alpha);
+                
+                // Organic rotation
+                cell_wall_transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 0.3);
+            } else {
+                // Create new cell wall visual
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgba(0.4, 1.0, 0.8, 0.4),
+                        custom_size: Some(Vec2::splat(70.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(player_transform.translation),
+                    CellWallVisual,
+                ));
+            }
+        } else {
+            // Remove cell wall visual when expired
+            for (cell_wall_visual_entity, _, _) in cell_wall_visual_query.iter() {
+                commands.entity(cell_wall_visual_entity).despawn();
+            }
+        }
+    }
+
+    // Update other biological effects
+    for (entity, mut flagella) in flagella_query.iter_mut() {
+        flagella.timer -= time.delta_secs();
+        if flagella.timer <= 0.0 {
+            commands.entity(entity).remove::<FlagellaBoost>();
+        }
+    }
+
+    for (entity, mut symbiotic) in symbiotic_query.iter_mut() {
+        symbiotic.timer -= time.delta_secs();
+        game_score.score_multiplier = symbiotic.multiplier;
+        game_score.multiplier_timer = symbiotic.timer;
+        
+        if symbiotic.timer <= 0.0 {
+            commands.entity(entity).remove::<SymbioticMultiplier>();
+        }
+    }
+
+    for (entity, mut mitochondria) in mitochondria_query.iter_mut() {
+        mitochondria.timer -= time.delta_secs();
+        if mitochondria.timer <= 0.0 {
+            commands.entity(entity).remove::<MitochondriaOvercharge>();
+        }
+    }
+
+    // New biological effects
+    for (entity, mut photosynthesis, mut health) in photosynthesis_query.iter_mut() {
+        photosynthesis.timer -= time.delta_secs();
+        
+        // Heal over time from photosynthesis
+        health.0 = (health.0 + (photosynthesis.energy_per_second * time.delta_secs()) as i32).min(100);
+        
+        if photosynthesis.timer <= 0.0 {
+            commands.entity(entity).remove::<PhotosynthesisActive>();
+        }
+    }
+
+    for (entity, mut chemotaxis) in chemotaxis_query.iter_mut() {
+        chemotaxis.timer -= time.delta_secs();
+        if chemotaxis.timer <= 0.0 {
+            commands.entity(entity).remove::<ChemotaxisActive>();
+        }
+    }
+
+    for (entity, mut osmoregulation) in osmoregulation_query.iter_mut() {
+        osmoregulation.timer -= time.delta_secs();
+        if osmoregulation.timer <= 0.0 {
+            commands.entity(entity).remove::<OsmoregulationActive>();
+        }
+    }
+
+    for (entity, mut binary_fission) in binary_fission_query.iter_mut() {
+        binary_fission.timer -= time.delta_secs();
+        binary_fission.clone_timer -= time.delta_secs();
+        
+        if binary_fission.clone_timer <= 0.0 {
+            // Spawn clone projectile
+            // This would be implemented in the weapon system
+            binary_fission.clone_timer = 0.5; // Reset clone timer
+        }
+        
+        if binary_fission.timer <= 0.0 {
+            commands.entity(entity).remove::<BinaryFissionActive>();
+        }
+    }
+}
+
+// Helper functions for biological systems
+fn world_to_grid_pos(world_pos: Vec2, fluid_env: &FluidEnvironment) -> (usize, usize) {
+    let grid_x = ((world_pos.x + 640.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
+    let grid_y = ((world_pos.y + 360.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
+    (grid_x, grid_y)
+}
+
+fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec2 {
+    let index = grid_pos.1 * fluid_env.grid_size + grid_pos.0;
+    if index < fluid_env.current_field.len() {
+        fluid_env.current_field[index]
+    } else {
+        Vec2::ZERO
+    }
+}
+
+// New UI component markers
 #[derive(Component)]
-pub struct CurrencyText;
+pub struct ATPText;
 
 #[derive(Component)]
-pub struct WeaponText;
+pub struct EvolutionText;
 
 #[derive(Component)]
-pub struct SmartBombText;
+pub struct SporeText;
 
 #[derive(Component)]
-pub struct ControlsText;
+pub struct EnvironmentText;
