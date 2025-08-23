@@ -749,3 +749,115 @@ pub fn organic_ai_system(
         }
     }
 }
+
+
+pub fn apply_chemical_damage_system(
+    mut player_query: Query<(&Transform, &mut Health, &ChemicalSensitivity, Option<&OsmoregulationActive>), With<Player>>,
+    mut enemy_query: Query<(&Transform, &mut Health, &Enemy), Without<Player>>,
+    chemical_environment: Res<ChemicalEnvironment>,
+    time: Res<Time>,
+) {
+    // Player chemical damage
+    if let Ok((transform, mut health, sensitivity, osmo)) = player_query.single_mut() {
+        if osmo.is_some() { return; } // Immune to chemical damage
+        
+        let ph = sample_ph(&chemical_environment, transform.translation.truncate());
+        let oxygen = sample_oxygen(&chemical_environment, transform.translation.truncate());
+        
+        if ph < sensitivity.ph_tolerance_min || ph > sensitivity.ph_tolerance_max {
+            let damage = (sensitivity.damage_per_second_outside_range as f32 * time.delta_secs()) as i32;
+            health.0 -= damage;
+        }
+        
+        if oxygen < sensitivity.oxygen_requirement {
+            health.0 -= (3.0 * time.delta_secs()) as i32;
+        }
+    }
+    
+    // Enemy chemical effects
+    for (transform, mut health, enemy) in enemy_query.iter_mut() {
+        let ph = sample_ph(&chemical_environment, transform.translation.truncate());
+        let ph_diff = (ph - enemy.chemical_signature.ph_preference).abs();
+        
+        if ph_diff > 1.5 {
+            let damage = ((ph_diff - 1.5) * 8.0 * time.delta_secs()) as i32;
+            health.0 -= damage;
+        }
+    }
+}
+
+
+// Advanced Particle Systems
+pub fn advanced_bioluminescence_system(
+    mut bio_query: Query<(&mut Sprite, &mut BioluminescentParticle, &Transform)>,
+    player_query: Query<&Transform, (With<Player>, Without<BioluminescentParticle>)>,
+    chemical_environment: Res<ChemicalEnvironment>,
+    time: Res<Time>,
+) {
+    if let Ok(player_transform) = player_query.single() {
+        for (mut sprite, mut bio_particle, transform) in bio_query.iter_mut() {
+            // Distance-based intensity
+            let distance_to_player = transform.translation.distance(player_transform.translation);
+            let proximity_boost = (200.0 - distance_to_player.min(200.0)) / 200.0;
+            
+            // Chemical environment affects bioluminescence
+            let ph = sample_ph(&chemical_environment, transform.translation.truncate());
+            let ph_factor = 1.0 - ((ph - 7.0).abs() * 0.1).min(0.5);
+            
+            // Dynamic pulsing
+            let pulse_phase = time.elapsed_secs() * bio_particle.pulse_frequency;
+            let pulse = (pulse_phase.sin() * 0.5 + 0.5) * bio_particle.pulse_intensity;
+            
+            let final_intensity = (0.4 + pulse * 0.6 + proximity_boost * 0.3) * ph_factor;
+            
+            let mut color = bio_particle.base_color;
+            color = Color::srgba(
+                color.to_srgba().red * final_intensity,
+                color.to_srgba().green * final_intensity,
+                color.to_srgba().blue * final_intensity,
+                color.to_srgba().alpha,
+            );
+            sprite.color = color;
+        }
+    }
+}
+
+// Ecosystem State Tracking
+pub fn ecosystem_monitoring_system(
+    mut ecosystem: ResMut<EcosystemState>,
+    enemy_query: Query<&Enemy>,
+    chemical_environment: Res<ChemicalEnvironment>,
+    player_query: Query<&Health, With<Player>>,
+    time: Res<Time>,
+) {
+    // Count organism populations
+    let mut pathogenic = 0;
+    let mut beneficial = 0;
+    
+    for enemy in enemy_query.iter() {
+        match enemy.enemy_type {
+            EnemyType::AggressiveBacteria | EnemyType::ViralParticle => pathogenic += 1,
+            EnemyType::SwarmCell => beneficial += 1,
+            _ => {}
+        }
+    }
+    
+    ecosystem.population_balance.pathogenic_threats = pathogenic;
+    ecosystem.population_balance.beneficial_microbes = beneficial;
+    
+    // Calculate ecosystem health
+    let pathogen_ratio = pathogenic as f32 / (pathogenic + beneficial + 1) as f32;
+    ecosystem.infection_level = pathogen_ratio;
+    ecosystem.health = 1.0 - (pathogen_ratio * 0.8);
+    
+    // pH stability
+    let avg_ph = chemical_environment.ph_zones.iter()
+        .map(|z| z.ph_level)
+        .sum::<f32>() / chemical_environment.ph_zones.len().max(1) as f32;
+    ecosystem.ph_stability = 1.0 - ((avg_ph - 7.0).abs() / 7.0);
+    
+    // Player health affects ecosystem
+    if let Ok(player_health) = player_query.single() {
+        ecosystem.symbiotic_activity = (player_health.0 as f32 / 100.0) * 0.6 + 0.4;
+    }
+}

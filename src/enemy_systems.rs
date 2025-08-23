@@ -521,58 +521,6 @@ pub fn enhanced_projectile_collisions(
     }
 }
 
-pub fn formation_coordination_system(
-    mut commands: Commands,
-    mut colony_query: Query<(Entity, &Transform, &mut ColonyCommander)>,
-    mut member_query: Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
-    player_query: Query<&Transform, (With<Player>, Without<Enemy>, Without<ColonyCommander>)>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-) {
-    if let Some(assets) = assets {
-        if let Ok(player_transform) = player_query.single() {
-            for (commander_entity, commander_transform, mut colony) in colony_query.iter_mut() {
-                colony.chemical_timer += time.delta_secs();
-                
-                // Clean up dead members
-                colony.members.retain(|&member_entity| {
-                    member_query.get(member_entity).is_ok()
-                });
-                
-                // Disband colony if too few members
-                if colony.members.len() < 2 {
-                    commands.entity(commander_entity).despawn();
-                    continue;
-                }
-                
-                // Execute coordination patterns
-                if colony.coordination_pattern.execute(colony.chemical_timer) {
-                    match &colony.coordination_pattern {
-                        CoordinationPattern::ChemicalSignaling { interval } => {
-                            execute_chemical_signaling(&mut commands, &assets, &colony, &member_query, player_transform);
-                        }
-                        
-                        CoordinationPattern::SwarmBehavior { swarm_size, swarm_delay } => {
-                            execute_swarm_behavior(&mut commands, &assets, &colony, &member_query, player_transform, *swarm_size);
-                        }
-                        
-                        CoordinationPattern::BiofilmFormation { member_count, rotation_speed } => {
-                            execute_biofilm_formation(&mut commands, &assets, commander_transform, *member_count, colony.chemical_timer * rotation_speed);
-                        }
-                        
-                        CoordinationPattern::PheromoneTrail { target_focus } => {
-                            execute_pheromone_trail(&mut commands, &assets, &colony, &member_query, player_transform);
-                        }
-                    }
-                }
-                
-                // Biological coordination behaviors
-                execute_biological_maneuvers(&mut commands, &colony, &mut member_query, time.delta_secs());
-            }
-        }
-    }
-}
-
 fn execute_chemical_signaling(
     commands: &mut Commands,
     assets: &GameAssets,
@@ -908,4 +856,158 @@ fn sample_ph_toxicity(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32
     
     // Return toxicity level (0.0 = safe, 1.0 = highly toxic)
     (ph_deviation / 7.0).clamp(0.0, 1.0)
+}
+
+// Enhanced formation coordination with actual chemical signaling
+pub fn formation_coordination_system(
+    mut commands: Commands,
+    mut colony_query: Query<(Entity, &Transform, &mut ColonyCommander)>,
+    mut member_query: Query<(Entity, &mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
+    player_query: Query<&Transform, (With<Player>, Without<Enemy>, Without<ColonyCommander>)>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        if let Ok(player_transform) = player_query.single() {
+            for (commander_entity, commander_transform, mut colony) in colony_query.iter_mut() {
+                colony.chemical_timer += time.delta_secs();
+                
+                // Execute coordination patterns
+                if colony.coordination_pattern.execute(colony.chemical_timer) {
+                    match &colony.coordination_pattern {
+                        CoordinationPattern::ChemicalSignaling { interval } => {
+                            // All members shoot in coordinated burst
+                            for &member_entity in &colony.members {
+                                if let Ok((_, _, member, member_transform)) = member_query.get(member_entity) {
+                                    let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
+                                    
+                                    commands.spawn((
+                                        Sprite {
+                                            image: assets.projectile_texture.clone(),
+                                            color: Color::srgb(0.8, 0.9, 0.3),
+                                            ..default()
+                                        },
+                                        Transform::from_translation(member_transform.translation),
+                                        Projectile {
+                                            velocity: direction * 420.0,
+                                            damage: 25,
+                                            friendly: false,
+                                            organic_trail: true,
+                                        },
+                                        Collider { radius: 5.0 },
+                                    ));
+                                }
+                            }
+                        }
+                        
+                        CoordinationPattern::SwarmBehavior { swarm_size, .. } => {
+                            // Rapid-fire barrage from swarm members
+                            let workers: Vec<_> = colony.members.iter().take(*swarm_size as usize).collect();
+                            for &member_entity in workers {
+                                if let Ok((_, _, _, member_transform)) = member_query.get(member_entity) {
+                                    let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
+                                    
+                                    // Spawn 3 projectiles per swarm member
+                                    for i in 0..3 {
+                                        let spread = (i as f32 - 1.0) * 0.3;
+                                        let spread_dir = Vec2::new(
+                                            direction.x * spread.cos() - direction.y * spread.sin(),
+                                            direction.x * spread.sin() + direction.y * spread.cos(),
+                                        );
+                                        
+                                        commands.spawn((
+                                            Sprite {
+                                                image: assets.projectile_texture.clone(),
+                                                color: Color::srgb(0.7, 0.5, 1.0),
+                                                ..default()
+                                            },
+                                            Transform::from_translation(member_transform.translation),
+                                            Projectile {
+                                                velocity: spread_dir * 400.0,
+                                                damage: 18,
+                                                friendly: false,
+                                                organic_trail: true,
+                                            },
+                                            Collider { radius: 4.0 },
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        
+                        _ => {} // Other patterns already implemented
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn pheromone_communication_system(
+    mut commands: Commands,
+    mut colony_query: Query<(&Transform, &mut ColonyCommander)>,
+    mut member_query: Query<(&mut Enemy, &Transform, &ColonyMember)>,
+    player_query: Query<&Transform, With<Player>>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        for (colony_transform, mut colony) in colony_query.iter_mut() {
+            colony.chemical_timer += time.delta_secs();
+            
+            // Release pheromone signals every 2 seconds
+            if colony.chemical_timer % 2.0 < 0.1 {
+                // Spawn pheromone particles
+                for i in 0..8 {
+                    let angle = (i as f32 / 8.0) * std::f32::consts::TAU;
+                    let offset = Vec2::from_angle(angle) * 40.0;
+                    
+                    commands.spawn((
+                        Sprite {
+                            image: assets.particle_texture.clone(),
+                            color: Color::srgba(0.9, 0.6, 1.0, 0.4),
+                            custom_size: Some(Vec2::splat(6.0)),
+                            ..default()
+                        },
+                        Transform::from_translation(colony_transform.translation + offset.extend(0.0)),
+                        PheromoneParticle {
+                            signal_type: PheromoneType::Coordination,
+                            strength: 1.0,
+                            decay_rate: 0.5,
+                        },
+                        Particle {
+                            velocity: offset * 0.5,
+                            lifetime: 0.0,
+                            max_lifetime: 4.0,
+                            size: 6.0,
+                            fade_rate: 0.8,
+                            bioluminescent: true,
+                            drift_pattern: DriftPattern::Floating,
+                        },
+                    ));
+                }
+                
+                // Coordinate member behaviors
+                if let Ok(player_transform) = player_query.single() {
+                    for &member_entity in &colony.members {
+                        if let Ok((mut enemy, member_transform, member)) = member_query.get_mut(member_entity) {
+                            match member.role {
+                                ColonyRole::Worker => {
+                                    enemy.speed = 200.0; // Boost speed for coordinated attack
+                                }
+                                ColonyRole::Guardian => {
+                                    // Move to intercept player
+                                    if let EnemyAI::Formation { position_in_formation, .. } = &mut enemy.ai_type {
+                                        let intercept_pos = player_transform.translation.truncate() - colony_transform.translation.truncate();
+                                        *position_in_formation = intercept_pos * 0.8;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

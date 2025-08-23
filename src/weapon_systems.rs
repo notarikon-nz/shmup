@@ -685,3 +685,121 @@ pub struct ElectricArc {
     pub max_duration: f32,
     pub target_entity: Option<Entity>,
 }
+
+// Update toxin cloud system
+pub fn update_toxin_clouds(
+    mut commands: Commands,
+    mut cloud_query: Query<(Entity, &mut ToxinCloudEffect, &mut Transform, &mut Sprite)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<ToxinCloudEffect>)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    time: Res<Time>,
+) {
+    for (cloud_entity, mut cloud, mut cloud_transform, mut sprite) in cloud_query.iter_mut() {
+        cloud.timer += time.delta_secs();
+        
+        if cloud.timer >= cloud.max_duration {
+            commands.entity(cloud_entity).despawn();
+            continue;
+        }
+        
+        let progress = cloud.timer / cloud.max_duration;
+        cloud.intensity = 1.0 - progress * 0.3; // Slowly weakens
+        
+        // Organic pulsing effect
+        let pulse = (time.elapsed_secs() * 3.0).sin() * 0.1 + 0.9;
+        cloud_transform.scale = Vec3::splat(pulse);
+        sprite.color.set_alpha(cloud.intensity * 0.6);
+        
+        // Damage enemies in cloud
+        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
+            let distance = cloud_transform.translation.distance(enemy_transform.translation);
+            if distance <= cloud.radius {
+                let damage = (cloud.damage_per_second as f32 * time.delta_secs()) as i32;
+                enemy_health.0 -= damage;
+                
+                if enemy_health.0 <= 0 {
+                    explosion_events.send(SpawnExplosion {
+                        position: enemy_transform.translation,
+                        intensity: 0.8,
+                        enemy_type: None,
+                    });
+                    commands.entity(enemy_entity).despawn();
+                }
+            }
+        }
+    }
+}
+
+// Update electric arc system
+pub fn update_electric_arcs(
+    mut commands: Commands,
+    mut arc_query: Query<(Entity, &mut ElectricArc)>,
+    mut enemy_query: Query<(Entity, &Transform, &mut Health), With<Enemy>>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    for (arc_entity, mut arc) in arc_query.iter_mut() {
+        arc.timer += time.delta_secs();
+        
+        if arc.timer >= arc.max_duration {
+            commands.entity(arc_entity).despawn();
+            continue;
+        }
+        
+        // Apply damage to target
+        if let Some(target_entity) = arc.target_entity {
+            if let Ok((_, target_transform, mut target_health)) = enemy_query.get_mut(target_entity) {
+                target_health.0 -= arc.damage;
+                
+                // Spawn arc visual effect
+                if let Some(assets) = &assets {
+                    let segments = 8;
+                    for i in 0..segments {
+                        let t = i as f32 / segments as f32;
+                        let pos = arc.start_pos.lerp(arc.end_pos, t);
+                        let jitter = Vec2::new(
+                            (time.elapsed_secs() * 20.0 + i as f32).sin() * 5.0,
+                            (time.elapsed_secs() * 25.0 + i as f32).cos() * 5.0,
+                        );
+                        
+                        commands.spawn((
+                            Sprite {
+                                image: assets.particle_texture.clone(),
+                                color: Color::srgb(0.8, 0.9, 1.0),
+                                custom_size: Some(Vec2::splat(3.0)),
+                                ..default()
+                            },
+                            Transform::from_translation((pos + jitter).extend(0.0)),
+                            Particle {
+                                velocity: Vec2::ZERO,
+                                lifetime: 0.0,
+                                max_lifetime: 0.1,
+                                size: 3.0,
+                                fade_rate: 10.0,
+                                bioluminescent: true,
+                                drift_pattern: DriftPattern::Pulsing,
+                            },
+                        ));
+                    }
+                }
+                
+                if target_health.0 <= 0 {
+                    explosion_events.send(SpawnExplosion {
+                        position: target_transform.translation,
+                        intensity: 1.2,
+                        enemy_type: None,
+                    });
+                    commands.entity(target_entity).despawn();
+                }
+            }
+        }
+        
+        // Chain to next enemy if this is part of a chain
+        if arc.chain_index > 0 {
+            // Find next closest enemy for chaining
+            // Implementation would go here
+        }
+    }
+}
+

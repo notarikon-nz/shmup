@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 
 // ===== GENERIC SYSTEMS (unchanged) =====
 
@@ -24,7 +25,7 @@ pub fn handle_pause_input(
     current_state: Res<State<GameState>>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    if keyboard.just_pressed(KeyCode::Escape) {
+    if keyboard.just_pressed(KeyCode::KeyP) {
         match current_state.get() {
             GameState::Playing => next_state.set(GameState::Paused),
             GameState::Paused => next_state.set(GameState::Playing),
@@ -569,7 +570,7 @@ pub fn spawn_explosion_system(
                     color,
                     ..default()
                 },
-                Transform::from_translation(event.position),
+                Transform::from_translation(event.position.with_z(-1.0)), // Behind gameplay
                 Explosion {
                     timer: 0.0,
                     max_time: 0.7 * size_mult,
@@ -859,3 +860,155 @@ pub fn player_enemy_collisions(
     }
 }
 
+
+
+
+pub fn collision_system(
+    mut commands: Commands,
+    mut player_hit_events: EventWriter<PlayerHit>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    mut game_score: ResMut<GameScore>,
+    time: Res<Time>,
+
+    // Projectiles
+    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile)>,
+    // Enemies and player
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), Without<Projectile>>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>)>,
+
+) 
+{
+    if let Ok((player_entity, player_transform, player_collider, player, crit_stats)) = player_query.single() {
+        // Skip if invincible
+        if player.invincible_timer > 0.0 { return; }
+        
+        // Enemy projectiles vs player
+        for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
+            if projectile.friendly { continue; }
+            
+            let distance = player_transform.translation.distance(proj_transform.translation);
+            if distance < player_collider.radius + proj_collider.radius {
+                player_hit_events.write(PlayerHit {
+                    position: proj_transform.translation,
+                    damage: projectile.damage,
+                });
+                commands.entity(proj_entity).despawn();
+            }
+        }
+        
+        // Enemy ships vs player
+        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, enemy_opt) in enemy_query.iter_mut() {
+            if enemy_opt.is_none() { continue; } // Skip non-enemies
+            
+            let distance = player_transform.translation.distance(enemy_transform.translation);
+            if distance < player_collider.radius + enemy_collider.radius {
+                player_hit_events.write(PlayerHit {
+                    position: enemy_transform.translation,
+                    damage: 20,
+                });
+                // Damage enemy too
+                enemy_health.0 -= 30;
+                if enemy_health.0 <= 0 {
+                    game_score.current += 50;
+                    explosion_events.write(SpawnExplosion {
+                        position: enemy_transform.translation,
+                        intensity: 1.0,
+                        enemy_type: None,
+                    });
+                    commands.entity(enemy_entity).despawn();
+                }
+            }
+        }
+        
+        // Player projectiles vs enemies
+        for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
+            if !projectile.friendly { continue; }
+            
+            if let Ok((_, _, _, _, crit_stats)) = player_query.single() {
+                for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, enemy_opt) in enemy_query.iter_mut() {
+                    if enemy_opt.is_none() { continue; }
+                    
+                    let distance = proj_transform.translation.distance(enemy_transform.translation);
+                    if distance < proj_collider.radius + enemy_collider.radius {
+                        // Critical hit calculation
+                        let is_crit = (proj_transform.translation.x * 123.456 + time.elapsed_secs()).sin().abs() < crit_stats.chance;
+                        let final_damage = if is_crit {
+                            (projectile.damage as f32 * crit_stats.damage_multiplier) as i32
+                        } else {
+                            projectile.damage
+                        };
+                        
+                        enemy_health.0 -= final_damage;
+                        
+                        // Spawn damage text
+                        let (text_color, font_size) = if is_crit {
+                            (Color::srgb(1.0, 1.0, 0.3), 16.0) // Yellow crit
+                        } else {
+                            (Color::srgb(1.0, 1.0, 1.0), 12.0) // White normal
+                        };
+                        
+                        commands.spawn((
+                            Text2d::new(format!("{}", final_damage)),
+                            TextFont { font_size, ..default() },
+                            TextColor(text_color),
+                            Transform::from_translation(enemy_transform.translation + Vec3::new(0.0, 25.0, 1.0)),
+                            DamageText {
+                                timer: 1.5,
+                                velocity: Vec2::new(0.0, 80.0),
+                            },
+                        ));
+                        
+                        commands.entity(proj_entity).despawn();
+                        
+                        if enemy_health.0 <= 0 {
+                            game_score.current += enemy_opt.unwrap().enemy_type.get_points();
+                            explosion_events.send(SpawnExplosion {
+                                position: enemy_transform.translation,
+                                intensity: 1.0,
+                                enemy_type: Some(enemy_opt.unwrap().enemy_type.clone()),
+                            });
+                            commands.entity(enemy_entity).despawn();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// BEGIN FPS
+pub fn fps_system(diagnostics: Res<DiagnosticsStore>, mut fps_text: Query<&mut Text, With<FpsText>>) {
+    if let Ok(mut text) = fps_text.single_mut() {
+        if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
+            if let Some(value) = fps.smoothed() {
+                **text = format!("FPS: {:.0}", value);
+            }
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct FpsText;
+
+// END FPS
+
+// floating combat text
+pub fn damage_text_system(
+    mut commands: Commands,
+    mut damage_query: Query<(Entity, &mut Transform, &mut DamageText, &mut TextColor)>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut damage_text, mut text_color) in damage_query.iter_mut() {
+        damage_text.timer -= time.delta_secs();
+        transform.translation += damage_text.velocity.extend(0.0) * time.delta_secs();
+        
+        let alpha = damage_text.timer / 1.5;
+        text_color.0 = Color::srgba(1.0, 0.3, 0.3, alpha);
+        
+        if damage_text.timer <= 0.0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}

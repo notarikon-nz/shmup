@@ -576,3 +576,50 @@ pub struct CurrentField {
     pub strength: f32,
     pub turbulence: f32,
 }
+
+// floating combat text
+#[derive(Component)]
+pub struct DamageText {
+    pub timer: f32,
+    pub velocity: Vec2,
+}
+
+// critical hits
+#[derive(Component)]
+pub struct CriticalHitStats {
+    pub chance: f32,
+    pub damage_multiplier: f32,
+}
+
+impl Default for CriticalHitStats {
+    fn default() -> Self {
+        Self {
+            chance: 0.1, // 10% base crit chance
+            damage_multiplier: 2.0, // 100% bonus damage
+        }
+    }
+}
+
+// Advanced Particle Systems
+#[derive(Component)]
+pub struct PheromoneParticle {
+    pub signal_type: PheromoneType,
+    pub strength: f32,
+    pub decay_rate: f32,
+}
+
+#[derive(Clone)]
+pub enum PheromoneType {
+    Coordination,
+    Alarm,
+    Trail,
+    Aggregation,
+}
+
+#[derive(Component)]
+pub struct MembranePhysics {
+    pub tension: f32,
+    pub permeability: f32,
+    pub elasticity: f32,
+}
+

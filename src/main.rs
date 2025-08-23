@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 
 mod components;
 mod resources;
@@ -22,6 +23,16 @@ use weapon_systems::*;
 use currency_systems::*;
 use biological_systems::*; 
 
+/*
+    // SPRITE LIST
+    Player: Translucent cell with visible nucleus (16x16px, white/cyan)
+    Enemies: Various microorganism shapes (8-32px, different colors)
+    Projectiles: Small dots/vesicles (4x4px, white center with transparent edges)
+    Particles: Single white pixel (1x1px) for maximum flexibility
+    Power-ups: Glowing organic shapes (16x16px, bright colors)
+    Explosions: Wispy organic burst (32x32px, white with transparent falloff)
+*/
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -33,6 +44,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep water blue-black
         .init_resource::<InputState>()
         .init_resource::<EnemySpawner>()
@@ -62,6 +74,7 @@ fn main() {
             init_chemical_zones, // New
             init_current_generator,
         ))
+        .add_systems(Update, fps_system)
         // FIXED: Separate systems into different Update groups to avoid query conflicts
         .add_systems(Update, (
             handle_pause_input,
@@ -75,13 +88,18 @@ fn main() {
         ))
         // Second Update group - projectile and movement systems
         .add_systems(Update, (
-            move_projectiles.run_if(in_state(GameState::Playing)),
-            update_missiles.run_if(in_state(GameState::Playing)), // Fixed in weapon_systems.rs
-            update_laser_beams.run_if(in_state(GameState::Playing)),
-            update_smart_bombs.run_if(in_state(GameState::Playing)), // Fixed in weapon_systems.rs
-            move_biological_powerups.run_if(in_state(GameState::Playing)), 
-            move_atp.run_if(in_state(GameState::Playing)), 
-        ))
+            move_projectiles,
+            update_missiles,
+            update_laser_beams,
+            update_smart_bombs,
+            
+            update_toxin_clouds,
+            update_electric_arcs,
+            
+            move_biological_powerups,
+            move_atp,
+
+        ).run_if(in_state(GameState::Playing)))
         // Third Update group - enemy systems (separate from projectile systems)
         .add_systems(Update, (
             enemy_shooting.run_if(in_state(GameState::Playing)),
@@ -93,8 +111,9 @@ fn main() {
         ))
         // Fourth Update group - collision and interaction systems
         .add_systems(Update, (            
-            enhanced_projectile_collisions.run_if(in_state(GameState::Playing)), // Reads enemy Transform
-            player_projectile_collisions.run_if(in_state(GameState::Playing)), // Add this line            
+            collision_system.run_if(in_state(GameState::Playing)), 
+            // enhanced_projectile_collisions.run_if(in_state(GameState::Playing)), // Reads enemy Transform
+            // player_projectile_collisions.run_if(in_state(GameState::Playing)), // Add this line            
             atp_pickup_system.run_if(in_state(GameState::Playing)), 
             evolution_powerup_collection.run_if(in_state(GameState::Playing)),
             evolution_chamber_interaction.run_if(in_state(GameState::Playing)),
@@ -113,14 +132,26 @@ fn main() {
         ))
         // Sixth Update group - biological environment systems
         .add_systems(Update, (
-            fluid_dynamics_system.run_if(in_state(GameState::Playing)),
-            chemical_environment_system.run_if(in_state(GameState::Playing)),
-            update_current_field.run_if(in_state(GameState::Playing)),
-            bioluminescence_system.run_if(in_state(GameState::Playing)),
-            organic_ai_system.run_if(in_state(GameState::Playing)),
-            generate_procedural_currents.run_if(in_state(GameState::Playing)),
-            spawn_organic_particle_effects.run_if(in_state(GameState::Playing)),
-        ))
+            update_toxin_clouds,
+            update_electric_arcs,
+            damage_text_system,
+            fluid_dynamics_system,
+            chemical_environment_system,
+            update_current_field,
+            bioluminescence_system,
+            organic_ai_system,
+            generate_procedural_currents,
+            spawn_organic_particle_effects,
+        ).run_if(in_state(GameState::Playing)))
+        .add_systems(Update, (
+            // Chemical Environment Effects
+            apply_chemical_damage_system,
+            // Colony Pheromone Communication
+            pheromone_communication_system,
+            advanced_bioluminescence_system.run_if(in_state(GameState::Playing)),
+            ecosystem_monitoring_system.run_if(in_state(GameState::Playing)),
+
+        ).run_if(in_state(GameState::Playing)))
         // Event processing systems
         .add_systems(Update, (
             spawn_explosion_system,
@@ -134,6 +165,9 @@ fn main() {
             update_evolution_ui,
             check_game_over,
             handle_restart_input,
+            // 
+            debug_atp_spawner,
+            fps_system,
         ).run_if(in_state(GameState::Playing)))
         .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
@@ -183,6 +217,7 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
             oxygen_requirement: 0.3,
             damage_per_second_outside_range: 5,
         },
+        CriticalHitStats::default(),
     ));
 }
 
@@ -343,6 +378,19 @@ pub fn setup_biological_ui(mut commands: Commands) {
         TextColor(Color::srgb(0.6, 0.9, 0.8)),
         EnvironmentText,
     ));
+
+    commands.spawn((
+        Text::new("FPS: 0"),
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(20.0),
+            bottom: Val::Px(20.0),
+            ..default()
+        },
+        TextFont { font_size: 14.0, ..default() },
+        TextColor(Color::WHITE),
+        FpsText,
+    ));    
 }
 
 // New biological background with organic elements
@@ -509,7 +557,7 @@ pub fn update_biological_ui(
         if game_score.score_multiplier > 1.0 {
             **multiplier_text = format!("{}x Symbiosis ({:.1}s)", game_score.score_multiplier, game_score.multiplier_timer);
         } else {
-            **multiplier_text = String::new();
+            **multiplier_text = String::new(); // This should clear it
         }
     }
 
@@ -748,39 +796,58 @@ pub fn update_organic_particles(
 
 // Bioluminescent trail system (replaces engine particles)
 pub fn spawn_bioluminescent_trail(
-    _commands: Commands,
-    mut particle_events: EventWriter<SpawnParticles>,
+    mut commands: Commands,
     player_query: Query<&Transform, With<EngineTrail>>,
     input_state: Res<InputState>,
+    assets: Option<Res<GameAssets>>,
     time: Res<Time>,
+    mut trail_segments: Local<Vec<Vec3>>,
     mut spawn_timer: Local<f32>,
 ) {
     *spawn_timer -= time.delta_secs();
     
     if *spawn_timer <= 0.0 {
         for transform in player_query.iter() {
-            let intensity = input_state.movement.length().max(0.3);
+            let intensity = input_state.movement.length().max(0.2);
             
-            particle_events.write(SpawnParticles {
-                position: transform.translation + Vec3::new(0.0, -20.0, -0.1),
-                count: (intensity * 12.0) as u32,
-                config: ParticleConfig {
-                    color_start: Color::srgb(0.3, 0.8, 1.0),
-                    color_end: Color::srgba(0.1, 0.6, 0.9, 0.0),
-                    velocity_range: (
-                        Vec2::new(-40.0, -120.0),
-                        Vec2::new(40.0, -40.0)
-                    ),
-                    lifetime_range: (0.3, 0.8),
-                    size_range: (0.05, 0.15),
-                    gravity: Vec2::new(0.0, -30.0), // Reduced for underwater
-                    organic_motion: true,
-                    bioluminescence: 1.0,
-                },
-            });
+            // Add new trail segment
+            trail_segments.push(transform.translation + Vec3::new(0.0, -18.0, -0.1));
+            
+            // Keep only last 15 segments
+            if trail_segments.len() > 15 {
+                trail_segments.remove(0);
+            }
+            
+            // Spawn connected membrane segments
+            if let Some(assets) = &assets {
+                for (i, &segment_pos) in trail_segments.iter().enumerate() {
+                    let age = i as f32 / trail_segments.len() as f32;
+                    let alpha = age * 0.6 * intensity;
+                    let width = (age * 8.0 + 2.0) * intensity;
+                    
+                    commands.spawn((
+                        Sprite {
+                            image: assets.particle_texture.clone(),
+                            color: Color::srgba(0.3, 0.9, 1.0, alpha),
+                            custom_size: Some(Vec2::splat(width)),
+                            ..default()
+                        },
+                        Transform::from_translation(segment_pos),
+                        Particle {
+                            velocity: Vec2::ZERO,
+                            lifetime: 0.0,
+                            max_lifetime: 0.8,
+                            size: width,
+                            fade_rate: 2.0,
+                            bioluminescent: true,
+                            drift_pattern: DriftPattern::Floating,
+                        },
+                    ));
+                }
+            }
         }
         
-        *spawn_timer = 0.03; // More frequent for organic trail
+        *spawn_timer = 0.05;
     }
 }
 
@@ -868,6 +935,8 @@ pub fn update_biological_effects(
         game_score.multiplier_timer = symbiotic.timer;
         
         if symbiotic.timer <= 0.0 {
+            game_score.score_multiplier = 1.0; // Add this line
+            game_score.multiplier_timer = 0.0;  // Add this line
             commands.entity(entity).remove::<SymbioticMultiplier>();
         }
     }
@@ -953,4 +1022,30 @@ pub struct EnvironmentText;
 // fix for the fluid_dynamics_system panic
 pub fn init_current_generator(mut commands: Commands) {
     commands.insert_resource(CurrentGenerator::default());
+}
+
+
+pub fn debug_atp_spawner(
+    mut commands: Commands,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    player_query: Query<&Transform, With<Player>>,
+    assets: Option<Res<GameAssets>>,
+) {
+    if keyboard.just_pressed(KeyCode::F2) {
+        if let Ok(player_transform) = player_query.single() {
+            if let Some(assets) = assets {
+                commands.spawn((
+                    Sprite {
+                        image: assets.multiplier_powerup_texture.clone(),
+                        color: Color::srgb(1.0, 1.0, 0.3),
+                        custom_size: Some(Vec2::splat(18.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(player_transform.translation + Vec3::new(50.0, 0.0, 0.0)),
+                    ATP { amount: 10 },
+                    Collider { radius: 9.0 },
+                ));
+            }
+        }
+    }
 }
