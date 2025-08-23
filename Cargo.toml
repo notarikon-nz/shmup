@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 bevy = { version = "0.16.1", features = ["bevy_render", "shader_format_wesl"] }
+

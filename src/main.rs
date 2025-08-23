@@ -13,6 +13,7 @@ mod weapon_systems;
 mod currency_systems;
 mod biological_systems; 
 mod audio; 
+mod powerup_systems;
 
 use components::*;
 use resources::*;
@@ -24,6 +25,7 @@ use weapon_systems::*;
 use currency_systems::*;
 use biological_systems::*; 
 use audio::*;
+use powerup_systems::*;
 
 /*
     // SPRITE LIST
@@ -58,6 +60,7 @@ fn main() {
         .init_resource::<TidalPoolPhysics>()
         .init_resource::<BioluminescenceManager>()
         .init_resource::<EcosystemState>()
+        .init_resource::<ScreenShakeResource>()
 
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
@@ -65,6 +68,9 @@ fn main() {
         .add_event::<SpawnPowerUp>()
         .add_event::<SpawnParticles>()
         .add_event::<PlayerHit>()
+        .add_event::<AddScreenShake>()
+        .add_event::<EnemyHit>()
+
         .add_systems(Startup, (
             setup_camera, 
             setup_biological_background, 
@@ -109,6 +115,17 @@ fn main() {
             move_atp,
 
         ).run_if(in_state(GameState::Playing)))
+
+        .add_systems(Update, (
+            update_cell_wall_timer,
+            enemy_flash_system,
+            mini_explosion_system,
+            screen_shake_system,
+            explosion_lighting_system,
+            update_explosion_lights,
+
+        ).run_if(in_state(GameState::Playing)))
+
         // Third Update group - enemy systems (separate from projectile systems)
         .add_systems(Update, (
             enemy_shooting,
@@ -391,6 +408,20 @@ pub fn setup_biological_ui(mut commands: Commands) {
         TextFont { font_size: 14.0, ..default() },
         TextColor(Color::srgb(0.6, 0.9, 0.8)),
         EnvironmentText,
+    ));
+
+    // set up cellwall timer
+    commands.spawn((
+        Text::new(""),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(250.0),
+            bottom: Val::Px(70.0),
+            ..default()
+        },
+        TextFont { font_size: 16.0, ..default() },
+        TextColor(Color::srgb(0.4, 1.0, 0.8)),
+        CellWallTimerText,
     ));
 
     // FPS Text

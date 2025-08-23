@@ -34,3 +34,14 @@ pub struct PlayerHit {
     pub position: Vec3,
     pub damage: i32,
 }
+
+#[derive(Event)]
+pub struct AddScreenShake {
+    pub amount: f32,
+}
+
+#[derive(Event)]
+pub struct EnemyHit {
+    pub entity: Entity,
+    pub position: Vec3,
+}

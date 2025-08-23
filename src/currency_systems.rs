@@ -459,24 +459,30 @@ pub fn spawn_biological_powerups(
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut spawn_events: EventWriter<SpawnPowerUp>,
     time: Res<Time>,
+    mut extra_life_timer: Local<f32>,
 ) {
     enemy_spawner.powerup_timer -= time.delta_secs();
+    *extra_life_timer += time.delta_secs();
     
     if enemy_spawner.powerup_timer <= 0.0 {
         let x_position = (time.elapsed_secs() * 40.0).sin() * 320.0;
         
-        let power_type = match (time.elapsed_secs() as u32 / 18) % 9 {
-            0 => PowerUpType::CellularRegeneration { amount: 30 },
-            1 => PowerUpType::CellWall { duration: 12.0 },
-            2 => PowerUpType::Flagella { multiplier: 1.6, duration: 10.0 },
-            3 => PowerUpType::SymbioticBoost { multiplier: 2.2, duration: 18.0 },
-            4 => PowerUpType::MitochondriaOvercharge { rate_multiplier: 2.5, duration: 12.0 },
-            5 => PowerUpType::Photosynthesis { energy_regen: 8.0, duration: 15.0 },
-            6 => PowerUpType::Chemotaxis { homing_strength: 2.5, duration: 12.0 },
-            7 => PowerUpType::Osmoregulation { immunity_duration: 10.0 },
-            _ => PowerUpType::BinaryFission { clone_duration: 20.0 },
+        let power_type = if (time.elapsed_secs() * 987.654).sin().abs() < 0.05 {
+            PowerUpType::CellularRegeneration { amount: 1 } // Use as extra life marker
+        } else {
+            match (time.elapsed_secs() as u32 / 18) % 9 {
+                0 => PowerUpType::CellularRegeneration { amount: 30 },
+                1 => PowerUpType::CellWall { duration: 12.0 },
+                2 => PowerUpType::Flagella { multiplier: 1.6, duration: 10.0 },
+                3 => PowerUpType::SymbioticBoost { multiplier: 2.2, duration: 18.0 },
+                4 => PowerUpType::MitochondriaOvercharge { rate_multiplier: 2.5, duration: 12.0 },
+                5 => PowerUpType::Photosynthesis { energy_regen: 8.0, duration: 15.0 },
+                6 => PowerUpType::Chemotaxis { homing_strength: 2.5, duration: 12.0 },
+                7 => PowerUpType::Osmoregulation { immunity_duration: 10.0 },
+                _ => PowerUpType::BinaryFission { clone_duration: 20.0 },
+            }
         };
-        
+
         spawn_events.write(SpawnPowerUp {
             position: Vec3::new(x_position, 420.0, 0.0),
             power_type,
@@ -490,11 +496,12 @@ pub fn spawn_biological_powerups(
 pub fn handle_biological_powerup_collection(
     mut commands: Commands,
     powerup_query: Query<(Entity, &Transform, &Collider, &PowerUp)>,
-    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health), With<Player>>,
+    extra_life_query: Query<(Entity, &Transform, &Collider), With<ExtraLifePowerUp>>,
+    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health, &mut Player), With<Player>>,
     mut particle_events: EventWriter<SpawnParticles>,
     assets: Option<Res<GameAssets>>,
 ) {
-    if let Ok((player_entity, player_transform, player_collider, mut player_health)) = player_query.single_mut() {
+    if let Ok((player_entity, player_transform, player_collider, mut player_health, mut player)) = player_query.single_mut() {
         for (powerup_entity, powerup_transform, powerup_collider, powerup) in powerup_query.iter() {
             let distance = player_transform.translation.distance(powerup_transform.translation);
             if distance < player_collider.radius + powerup_collider.radius {
@@ -638,6 +645,15 @@ pub fn handle_biological_powerup_collection(
                 commands.entity(powerup_entity).despawn();
             }
         }
+
+        // Extra life powerups (separate handling)
+        for (life_entity, life_transform, life_collider) in extra_life_query.iter() {
+            let distance = player_transform.translation.distance(life_transform.translation);
+            if distance < player_collider.radius + life_collider.radius {
+                player.lives += 1;
+                commands.entity(life_entity).despawn();
+            }
+        }        
     }
 }
 
@@ -905,3 +921,5 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
         Vec2::ZERO
     }
 }
+
+

@@ -629,3 +629,38 @@ pub struct ThermalParticle {
     pub heat_intensity: f32,
     pub rise_speed: f32,
 }
+
+// better damage
+#[derive(Component)]
+pub struct FlashEffect {
+    pub timer: f32,
+    pub duration: f32,
+    pub original_color: Color,
+}
+
+#[derive(Component)]
+pub struct MiniExplosion {
+    pub timer: f32,
+    pub max_time: f32,
+    pub size: f32,
+}
+
+#[derive(Component)]
+pub struct ScreenShake {
+    pub trauma: f32,
+    pub offset: Vec2,
+}
+
+// powerup
+#[derive(Component)]
+pub struct ExtraLifePowerUp;
+
+#[derive(Component)]
+pub struct CellWallTimerText;
+
+// lighting test
+#[derive(Component)]
+pub struct ExplosionLight {
+    pub timer: f32,
+    pub max_time: f32,
+}

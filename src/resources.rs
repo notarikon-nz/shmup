@@ -613,3 +613,23 @@ impl Default for BiologicalInteractions {
         }
     }
 }
+
+// Screen Shake Effect
+#[derive(Resource)]
+pub struct ScreenShakeResource {
+    pub trauma: f32,
+    pub max_trauma: f32,
+    pub decay_rate: f32,
+    pub shake_intensity: f32,
+}
+
+impl Default for ScreenShakeResource {
+    fn default() -> Self {
+        Self {
+            trauma: 0.0,
+            max_trauma: 1.0,
+            decay_rate: 2.0,
+            shake_intensity: 30.0,
+        }
+    }
+}
