@@ -129,6 +129,9 @@ pub struct HealthBar;
 pub struct HealthBarFill;
 
 #[derive(Component)]
+pub struct HealthNumericText;
+
+#[derive(Component)]
 pub struct LivesText;
 
 #[derive(Component)]

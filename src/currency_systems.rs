@@ -835,13 +835,13 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
             top: Val::Px(120.0),
-            width: Val::Px(350.0),
+            width: Val::Px(420.0), // Wider for descriptions
             padding: UiRect::all(Val::Px(12.0)),
             flex_direction: FlexDirection::Column,
             border: UiRect::all(Val::Px(2.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.05, 0.2, 0.15, 0.9)),
+        BackgroundColor(Color::srgba(0.05, 0.2, 0.15, 0.95)),
         BorderColor(Color::srgb(0.3, 0.8, 0.6)),
         EvolutionUI,
     )).with_children(|parent| {
@@ -856,22 +856,68 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
             Text::new(format!("ATP Available: {}⚡", atp_amount)),
             TextFont { font_size: 16.0, ..default() },
             TextColor(Color::srgb(1.0, 1.0, 0.4)),
-            Node { margin: UiRect::bottom(Val::Px(12.0)), ..default() },
+            Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() },
         ));
         
+        // Evolution upgrades with detailed explanations
         let evolutions = [
-            ("1 - Membrane Reinforcement +20% (10 ATP)", 10, "🧱 Enhanced cellular damage output"),
-            ("2 - Metabolic Enhancement +30% (15 ATP)", 15, "⚡ Faster movement and energy production"),
-            ("3 - Cellular Integrity +25 HP (20 ATP)", 20, "❤️ Increased maximum health capacity"),
-            ("4 - Enzyme Production (25 ATP)", 25, "🧪 Resistance to environmental toxins"),
-            ("5 - Bioluminescence (30 ATP)", 30, "💡 Enhanced visibility and coordination"),
-            ("6 - Emergency Spore +1 (20 ATP)", 20, "💥 Additional emergency reproduction"),
-            ("7 - Pseudopod Network (50 ATP)", 50, "🕷️ Multi-directional organic tendrils"),
-            ("8 - Symbiotic Hunters (75 ATP)", 75, "🎯 Self-guided cooperative organisms"),
-            ("9 - Bioluminescent Beam (100 ATP)", 100, "🌟 Concentrated energy discharge"),
+            (
+                "1 - Membrane Reinforcement (10 ATP)",
+                10,
+                "🧱 Increases projectile damage by 20%",
+                "Strengthens cellular membrane for more effective attacks"
+            ),
+            (
+                "2 - Metabolic Enhancement (15 ATP)", 
+                15,
+                "⚡ +30% movement speed & fire rate",
+                "Optimizes ATP synthesis for faster cellular processes"
+            ),
+            (
+                "3 - Cellular Integrity (20 ATP)", 
+                20,
+                "❤️ +25 Maximum Health Points", 
+                "Reinforces cell structure - increases total health capacity"
+            ),
+            (
+                "4 - Enzyme Production (25 ATP)", 
+                25,
+                "🧪 Immunity to environmental toxins",
+                "Develops extremophile traits for hostile environments"
+            ),
+            (
+                "5 - Bioluminescence (30 ATP)", 
+                30,
+                "💡 Enhanced coordination abilities",
+                "Enables biofilm formation for defensive structures"
+            ),
+            (
+                "6 - Emergency Spore (20 ATP)", 
+                20,
+                "💥 +1 Emergency reproductive blast",
+                "Develops additional spore for area-effect emergency defense"
+            ),
+            (
+                "7 - Pseudopod Network (50 ATP)", 
+                50,
+                "🕷️ Multi-directional tendril weapon",
+                "Evolves spread-shot capability with 5 organic projectiles"
+            ),
+            (
+                "8 - Symbiotic Hunters (75 ATP)", 
+                75,
+                "🎯 Homing cooperative organisms",
+                "Self-guided missiles with blast radius and target tracking"
+            ),
+            (
+                "9 - Bioluminescent Beam (100 ATP)", 
+                100,
+                "🌟 Concentrated energy discharge",
+                "Sustained beam weapon with charging mechanism"
+            ),
         ];
         
-        for (text, cost, description) in evolutions {
+        for (title, cost, effect, description) in evolutions {
             let color = if atp_amount >= cost {
                 Color::srgb(0.9, 1.0, 0.9)
             } else {
@@ -879,26 +925,32 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
             };
             
             parent.spawn((
-                Text::new(text),
+                Text::new(title),
                 TextFont { font_size: 14.0, ..default() },
                 TextColor(color),
-                Node { margin: UiRect::bottom(Val::Px(3.0)), ..default() },
+                Node { margin: UiRect::bottom(Val::Px(2.0)), ..default() },
+            ));
+            
+            parent.spawn((
+                Text::new(effect),
+                TextFont { font_size: 12.0, ..default() },
+                TextColor(Color::srgb(0.8, 0.9, 0.8)),
+                Node { 
+                    margin: UiRect::bottom(Val::Px(1.0)),
+                    ..default() 
+                },
             ));
             
             parent.spawn((
                 Text::new(description),
-                TextFont { font_size: 11.0, ..default() },
-                TextColor(Color::srgb(0.7, 0.8, 0.7)),
-                Node { 
-                    margin: UiRect::bottom(Val::Px(8.0)),
-                    // margin_left: Val::Px(15.0),
-                    ..default() 
-                },
+                TextFont { font_size: 10.0, ..default() },
+                TextColor(Color::srgb(0.6, 0.7, 0.6)),
+                Node { margin: UiRect::bottom(Val::Px(8.0)), ..default() },
             ));
         }
         
         parent.spawn((
-            Text::new("💡 Tip: Adaptations help you survive in different chemical environments"),
+            Text::new("💡 Tip: Stand near chamber and press number keys to evolve"),
             TextFont { font_size: 12.0, ..default() },
             TextColor(Color::srgb(0.6, 0.9, 0.8)),
             Node { margin: UiRect::top(Val::Px(10.0)), ..default() },

@@ -135,17 +135,31 @@ pub fn cleanup_offscreen(
 }
 
 pub fn update_health_bar(
-    player_query: Query<&Health, With<Player>>,
-    mut health_fill_query: Query<&mut Node, With<HealthBarFill>>,
+    player_query: Query<(&Health, &CellularUpgrades), With<Player>>,
+    mut health_fill_query: Query<&mut Node, (With<HealthBarFill>, Without<HealthNumericText>)>,
+    mut health_text_query: Query<&mut Text, (With<HealthNumericText>, Without<HealthBarFill>)>,
 ) {
-    if let Ok(player_health) = player_query.single() {
+    if let Ok((player_health, upgrades)) = player_query.single() {
+        let max_health = upgrades.max_health;
+        let current_health = player_health.0;
+        let health_percent = (current_health as f32 / max_health as f32).clamp(0.0, 1.0);
+        
+        // Update health bar fill
         if let Ok(mut fill_node) = health_fill_query.single_mut() {
-            let health_percent = (player_health.0 as f32 / 100.0).clamp(0.0, 1.0);
             fill_node.width = Val::Px(200.0 * health_percent);
         }
+        
+        // Update numeric display
+        if let Ok(mut health_text) = health_text_query.single_mut() {
+            **health_text = format!("{}/{}", current_health, max_health);
+        }
     } else {
+        // Player dead - show 0
         if let Ok(mut fill_node) = health_fill_query.single_mut() {
             fill_node.width = Val::Px(0.0);
+        }
+        if let Ok(mut health_text) = health_text_query.single_mut() {
+            **health_text = "0/100".to_string();
         }
     }
 }
