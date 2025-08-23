@@ -244,7 +244,7 @@ impl Default for ParticleConfig {
             color_end: Color::srgba(0.2, 1.0, 0.8, 0.0),
             velocity_range: (Vec2::new(-50.0, -50.0), Vec2::new(50.0, 50.0)),
             lifetime_range: (0.5, 1.5),
-            size_range: (2.0, 6.0),
+            size_range: (0.2, 0.6),
             gravity: Vec2::new(0.0, -20.0), // Reduced gravity for underwater feel
             organic_motion: true,
             bioluminescence: 0.8,

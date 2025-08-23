@@ -41,6 +41,9 @@ fn main() {
         .init_resource::<ShootingState>()
         .init_resource::<FluidEnvironment>() // New: fluid dynamics
         .init_resource::<ChemicalEnvironment>() // New: chemical simulation
+        .init_resource::<TidalPoolPhysics>() // New: chemical simulation
+        .init_resource::<BioluminescenceManager>() // New: chemical simulation
+
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
         .add_event::<SpawnEnemy>()
@@ -57,7 +60,9 @@ fn main() {
             init_particle_pool,
             init_fluid_environment, // New
             init_chemical_zones, // New
+            init_current_generator,
         ))
+        // FIXED: Separate systems into different Update groups to avoid query conflicts
         .add_systems(Update, (
             handle_pause_input,
             handle_input.run_if(in_state(GameState::Playing)),
@@ -67,27 +72,36 @@ fn main() {
             spawn_biological_powerups.run_if(in_state(GameState::Playing)), 
             spawn_evolution_powerups.run_if(in_state(GameState::Playing)), 
             spawn_evolution_chambers.run_if(in_state(GameState::Playing)), 
-            enemy_shooting.run_if(in_state(GameState::Playing)),
-            turret_shooting.run_if(in_state(GameState::Playing)),
-            move_enemies.run_if(in_state(GameState::Playing)),
-            update_spawner_enemies.run_if(in_state(GameState::Playing)),
         ))
-        .add_systems(Update, (            
-            update_formations.run_if(in_state(GameState::Playing)),
-            formation_coordination_system.run_if(in_state(GameState::Playing)),
+        // Second Update group - projectile and movement systems
+        .add_systems(Update, (
             move_projectiles.run_if(in_state(GameState::Playing)),
-            update_missiles.run_if(in_state(GameState::Playing)),
+            update_missiles.run_if(in_state(GameState::Playing)), // Fixed in weapon_systems.rs
             update_laser_beams.run_if(in_state(GameState::Playing)),
-            update_smart_bombs.run_if(in_state(GameState::Playing)),
+            update_smart_bombs.run_if(in_state(GameState::Playing)), // Fixed in weapon_systems.rs
             move_biological_powerups.run_if(in_state(GameState::Playing)), 
             move_atp.run_if(in_state(GameState::Playing)), 
-            enhanced_projectile_collisions.run_if(in_state(GameState::Playing)),
+        ))
+        // Third Update group - enemy systems (separate from projectile systems)
+        .add_systems(Update, (
+            enemy_shooting.run_if(in_state(GameState::Playing)),
+            turret_shooting.run_if(in_state(GameState::Playing)),
+            move_enemies.run_if(in_state(GameState::Playing)), // This modifies enemy Transform
+            update_spawner_enemies.run_if(in_state(GameState::Playing)),
+            update_formations.run_if(in_state(GameState::Playing)),
+            formation_coordination_system.run_if(in_state(GameState::Playing)),
+        ))
+        // Fourth Update group - collision and interaction systems
+        .add_systems(Update, (            
+            enhanced_projectile_collisions.run_if(in_state(GameState::Playing)), // Reads enemy Transform
+            player_projectile_collisions.run_if(in_state(GameState::Playing)), // Add this line            
             atp_pickup_system.run_if(in_state(GameState::Playing)), 
             evolution_powerup_collection.run_if(in_state(GameState::Playing)),
-        ))
-        .add_systems(Update, (                
             evolution_chamber_interaction.run_if(in_state(GameState::Playing)),
             handle_biological_powerup_collection.run_if(in_state(GameState::Playing)),
+        ))
+        // Fifth Update group - effect and cleanup systems
+        .add_systems(Update, (                
             update_biological_effects.run_if(in_state(GameState::Playing)),
             update_temporary_evolution_effects.run_if(in_state(GameState::Playing)),
             update_explosions.run_if(in_state(GameState::Playing)),
@@ -97,8 +111,8 @@ fn main() {
             cleanup_offscreen.run_if(in_state(GameState::Playing)),
             spawn_bioluminescent_trail.run_if(in_state(GameState::Playing)), 
         ))
+        // Sixth Update group - biological environment systems
         .add_systems(Update, (
-            // New biological systems
             fluid_dynamics_system.run_if(in_state(GameState::Playing)),
             chemical_environment_system.run_if(in_state(GameState::Playing)),
             update_current_field.run_if(in_state(GameState::Playing)),
@@ -107,6 +121,7 @@ fn main() {
             generate_procedural_currents.run_if(in_state(GameState::Playing)),
             spawn_organic_particle_effects.run_if(in_state(GameState::Playing)),
         ))
+        // Event processing systems
         .add_systems(Update, (
             spawn_explosion_system,
             spawn_enemy_system,
@@ -757,7 +772,7 @@ pub fn spawn_bioluminescent_trail(
                         Vec2::new(40.0, -40.0)
                     ),
                     lifetime_range: (0.3, 0.8),
-                    size_range: (0.5, 1.5),
+                    size_range: (0.05, 0.15),
                     gravity: Vec2::new(0.0, -30.0), // Reduced for underwater
                     organic_motion: true,
                     bioluminescence: 1.0,
@@ -934,3 +949,8 @@ pub struct SporeText;
 
 #[derive(Component)]
 pub struct EnvironmentText;
+
+// fix for the fluid_dynamics_system panic
+pub fn init_current_generator(mut commands: Commands) {
+    commands.insert_resource(CurrentGenerator::default());
+}

@@ -205,7 +205,7 @@ pub fn spawn_organic_particle_effects(
                         color_end: Color::srgba(0.2, 0.7, 0.4, 0.0),
                         velocity_range: (Vec2::new(-15.0, -15.0), Vec2::new(15.0, 15.0)),
                         lifetime_range: (3.0, 6.0),
-                        size_range: (2.0, 4.0),
+                        size_range: (0.2, 0.4), // 2-4
                         gravity: Vec2::new(0.0, -10.0),
                         organic_motion: true,
                         bioluminescence: 0.6,

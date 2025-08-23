@@ -401,6 +401,126 @@ pub fn turret_shooting(
     }
 }
 
+// FIXED: Enhanced projectile collision system - properly resolved borrowing issues
+pub fn enhanced_projectile_collisions(
+    mut commands: Commands,
+    mut projectile_query: Query<(Entity, &Transform, &Collider, &Projectile, Option<&ExplosiveProjectile>, Option<&mut ArmorPiercing>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<Projectile>)>,
+    laser_query: Query<(&Transform, &LaserBeam, &Collider)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    time: Res<Time>,
+    mut last_laser_damage: Local<f32>,
+) {
+    *last_laser_damage += time.delta_secs();
+    
+    // Laser collision with enemies
+    if *last_laser_damage >= 0.1 {
+        for (laser_transform, laser_beam, laser_collider) in laser_query.iter() {
+            for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
+                let distance = laser_transform.translation.distance(enemy_transform.translation);
+                if distance < laser_collider.radius + enemy_collider.radius {
+                    let damage = (laser_beam.damage_per_second as f32 * 0.1) as i32;
+                    enemy_health.0 -= damage;
+                    
+                    if enemy_health.0 <= 0 {
+                        explosion_events.write(SpawnExplosion {
+                            position: enemy_transform.translation,
+                            intensity: 1.2,
+                            enemy_type: None,
+                        });
+                        commands.entity(enemy_entity).despawn();
+                    }
+                }
+            }
+        }
+        *last_laser_damage = 0.0;
+    }
+    
+    // FIXED: Collect all enemy positions first to avoid borrowing conflicts
+    let enemy_positions: Vec<(Entity, Vec3, f32)> = enemy_query.iter()
+        .map(|(entity, transform, collider, _)| (entity, transform.translation, collider.radius))
+        .collect();
+    
+    // Regular projectile collisions
+    for (proj_entity, proj_transform, proj_collider, projectile, explosive, mut armor_piercing) in projectile_query.iter_mut() {
+        if !projectile.friendly { continue; }
+        
+        let mut hit_target = None;
+        let mut blast_targets = Vec::new();
+        
+        // Find collision target using collected positions
+        for &(enemy_entity, enemy_pos, enemy_radius) in &enemy_positions {
+            let distance = proj_transform.translation.distance(enemy_pos);
+            if distance < proj_collider.radius + enemy_radius {
+                hit_target = Some(enemy_entity);
+                
+                // If explosive, find blast targets
+                if let Some(explosive_proj) = explosive {
+                    for &(nearby_entity, nearby_pos, _) in &enemy_positions {
+                        if nearby_entity != enemy_entity {
+                            let blast_distance = proj_transform.translation.distance(nearby_pos);
+                            if blast_distance <= explosive_proj.blast_radius {
+                                blast_targets.push((nearby_entity, explosive_proj.blast_damage));
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        
+        // Apply damage if we hit something
+        if let Some(target_entity) = hit_target {
+            // Apply direct damage
+            if let Ok((_, target_transform, _, mut target_health)) = enemy_query.get_mut(target_entity) {
+                target_health.0 -= projectile.damage;
+                
+                if target_health.0 <= 0 {
+                    explosion_events.write(SpawnExplosion {
+                        position: target_transform.translation,
+                        intensity: 1.0,
+                        enemy_type: None,
+                    });
+                    commands.entity(target_entity).despawn();
+                }
+            }
+            
+            // Handle explosive damage
+            if let Some(explosive_proj) = explosive {
+                explosion_events.write(SpawnExplosion {
+                    position: proj_transform.translation,
+                    intensity: 1.5,
+                    enemy_type: None,
+                });
+                
+                for (blast_entity, blast_damage) in blast_targets {
+                    if let Ok((_, blast_transform, _, mut blast_health)) = enemy_query.get_mut(blast_entity) {
+                        blast_health.0 -= blast_damage;
+                        if blast_health.0 <= 0 {
+                            explosion_events.write(SpawnExplosion {
+                                position: blast_transform.translation,
+                                intensity: 0.8,
+                                enemy_type: None,
+                            });
+                            commands.entity(blast_entity).despawn();
+                        }
+                    }
+                }
+            }
+            
+            // Handle armor piercing
+            if let Some(ref mut piercing) = armor_piercing {
+                piercing.pierce_count += 1;
+                if piercing.pierce_count >= piercing.max_pierce {
+                    commands.entity(proj_entity).despawn();
+                }
+            } else {
+                commands.entity(proj_entity).despawn();
+            }
+        }
+    }
+}
+
 pub fn formation_coordination_system(
     mut commands: Commands,
     mut colony_query: Query<(Entity, &Transform, &mut ColonyCommander)>,
@@ -657,95 +777,6 @@ fn execute_biological_maneuvers(
                         enemy.speed = 140.0; // Supportive, not aggressive
                     }
                 }
-            }
-        }
-    }
-}
-
-// Enhanced projectile collision system with biological effects
-pub fn enhanced_projectile_collisions(
-    mut commands: Commands,
-    mut projectile_query: Query<(Entity, &Transform, &Collider, &Projectile, Option<&ExplosiveProjectile>, Option<&mut ArmorPiercing>)>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<Projectile>)>,
-    mut nearby_enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<Projectile>)>,
-    laser_query: Query<(&Transform, &LaserBeam, &Collider)>,
-    mut explosion_events: EventWriter<SpawnExplosion>,
-    time: Res<Time>,
-    mut last_laser_damage: Local<f32>,
-) {
-    *last_laser_damage += time.delta_secs();
-    
-    // Laser collision with enemies
-    if *last_laser_damage >= 0.1 {
-        for (laser_transform, laser_beam, laser_collider) in laser_query.iter() {
-            for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
-                let distance = laser_transform.translation.distance(enemy_transform.translation);
-                if distance < laser_collider.radius + enemy_collider.radius {
-                    let damage = (laser_beam.damage_per_second as f32 * 0.1) as i32;
-                    enemy_health.0 -= damage;
-                    
-                    if enemy_health.0 <= 0 {
-                        explosion_events.send(SpawnExplosion {
-                            position: enemy_transform.translation,
-                            intensity: 1.2,
-                            enemy_type: None,
-                        });
-                        commands.entity(enemy_entity).despawn();
-                    }
-                }
-            }
-        }
-        *last_laser_damage = 0.0;
-    }
-    
-    // Regular projectile collisions with explosive and armor piercing
-    for (proj_entity, proj_transform, proj_collider, projectile, explosive, armor_piercing) in projectile_query.iter_mut() {
-        if !projectile.friendly { continue; }
-        
-        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
-            let distance = proj_transform.translation.distance(enemy_transform.translation);
-            if distance < proj_collider.radius + enemy_collider.radius {
-                enemy_health.0 -= projectile.damage;
-                
-                // Handle explosive projectiles
-                if let Some(explosive_proj) = explosive {
-                    explosion_events.send(SpawnExplosion {
-                        position: proj_transform.translation,
-                        intensity: 1.5,
-                        enemy_type: None,
-                    });
-                    
-                    // Damage nearby enemies
-                    for (nearby_entity, nearby_transform, _, mut nearby_health) in nearby_enemy_query.iter_mut() {
-                        if nearby_entity != enemy_entity {
-                            let blast_distance = proj_transform.translation.distance(nearby_transform.translation);
-                            if blast_distance <= explosive_proj.blast_radius {
-                                nearby_health.0 -= explosive_proj.blast_damage;
-                            }
-                        }
-                    }
-                }
-                
-                // Handle armor piercing - Mut<ArmorPiercing> can be used directly
-                if let Some(mut piercing) = armor_piercing {
-                    piercing.pierce_count += 1;
-                    if piercing.pierce_count < piercing.max_pierce {
-                        // Don't despawn, continue through enemy
-                        break;
-                    }
-                }
-                
-                commands.entity(proj_entity).despawn();
-                
-                if enemy_health.0 <= 0 {
-                    explosion_events.send(SpawnExplosion {
-                        position: enemy_transform.translation,
-                        intensity: 1.0,
-                        enemy_type: None,
-                    });
-                    commands.entity(enemy_entity).despawn();
-                }
-                break;
             }
         }
     }

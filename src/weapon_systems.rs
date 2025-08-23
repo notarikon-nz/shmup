@@ -10,7 +10,7 @@ pub fn enhanced_shooting_system(
     input_state: Res<InputState>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<(&Transform, &mut EvolutionSystem), With<Player>>,
-    enemy_query: Query<(Entity, &Transform), With<Enemy>>,
+    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>)>,
     assets: Option<Res<GameAssets>>,
     mitochondria_query: Query<&MitochondriaOvercharge>,
     chemotaxis_query: Query<&ChemotaxisActive>,
@@ -116,6 +116,186 @@ pub fn enhanced_shooting_system(
             if keyboard.just_pressed(KeyCode::Space) && evolution_system.emergency_spores > 0 {
                 spawn_emergency_spore(&mut commands, &assets, player_transform.translation);
                 evolution_system.emergency_spores -= 1;
+            }
+        }
+    }
+}
+
+// Enhanced missile homing system with biological tracking - FIXED
+pub fn update_missiles(
+    mut missile_query: Query<(&mut Transform, &mut Projectile, &mut MissileProjectile)>,
+    // Fixed: Add Without<MissileProjectile> to avoid conflict with mutable access above
+    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>)>,
+    time: Res<Time>,
+) {
+    for (mut transform, mut projectile, mut missile) in missile_query.iter_mut() {
+        missile.seek_timer += time.delta_secs();
+        
+        if missile.seek_timer > 0.3 { // Start seeking after brief delay
+            if let Some(target_entity) = missile.target {
+                if let Ok((_, target_transform)) = enemy_query.get(target_entity) {
+                    let direction_to_target = (target_transform.translation.truncate() - transform.translation.truncate()).normalize_or_zero();
+                    let current_direction = projectile.velocity.normalize_or_zero();
+                    
+                    // Enhanced homing with organic smoothness
+                    let homing_rate = if missile.symbiotic { 
+                        missile.homing_strength * 1.5 
+                    } else { 
+                        missile.homing_strength 
+                    };
+                    
+                    let new_direction = (current_direction + direction_to_target * homing_rate * time.delta_secs()).normalize_or_zero();
+                    projectile.velocity = new_direction * projectile.velocity.length();
+                    
+                    // Organic rotation with slight wobble
+                    let angle = new_direction.y.atan2(new_direction.x) - std::f32::consts::FRAC_PI_2;
+                    let wobble = if missile.symbiotic { 
+                        (time.elapsed_secs() * 6.0).sin() * 0.05 
+                    } else { 
+                        0.0 
+                    };
+                    transform.rotation = Quat::from_rotation_z(angle + wobble);
+                } else {
+                    // Target destroyed, find new target
+                    missile.target = find_nearest_enemy(&enemy_query, transform.translation);
+                }
+            } else {
+                // No target, find one
+                missile.target = find_nearest_enemy(&enemy_query, transform.translation);
+            }
+        }
+    }
+}
+
+// Enhanced laser beam system with bioluminescent effects
+pub fn update_laser_beams(
+    mut commands: Commands,
+    mut laser_query: Query<(Entity, &mut LaserBeam, &mut Sprite, &Transform, Option<&BioluminescentParticle>)>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    for (entity, mut laser, mut sprite, transform, bio_particle) in laser_query.iter_mut() {
+        laser.timer += time.delta_secs();
+        
+        if laser.timer >= laser.max_duration {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        
+        // Enhanced fade with bioluminescent pulsing
+        let base_alpha = 1.0 - (laser.timer / laser.max_duration);
+        
+        if laser.bioluminescent {
+            let pulse = (time.elapsed_secs() * 8.0).sin() * 0.3 + 0.7;
+            sprite.color.set_alpha(base_alpha * pulse);
+            
+            // Spawn bioluminescent particles along beam
+            if let Some(assets) = &assets {
+                if (time.elapsed_secs() * 20.0) % 1.0 < 0.1 {
+                    for i in 0..5 {
+                        let y_offset = (i as f32 - 2.0) * laser.length / 5.0;
+                        commands.spawn((
+                            Sprite {
+                                image: assets.particle_texture.clone(),
+                                color: Color::srgba(0.3, 1.0, 0.8, 0.8),
+                                custom_size: Some(Vec2::splat(3.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(transform.translation + Vec3::new(0.0, y_offset, 0.1)),
+                            Particle {
+                                velocity: Vec2::new(
+                                    (time.elapsed_secs() * 234.56).sin() * 20.0,
+                                    (time.elapsed_secs() * 345.67).cos() * 15.0,
+                                ),
+                                lifetime: 0.0,
+                                max_lifetime: 0.8,
+                                size: 3.0,
+                                fade_rate: 1.0,
+                                bioluminescent: true,
+                                drift_pattern: DriftPattern::Floating,
+                            },
+                        ));
+                    }
+                }
+            }
+        } else {
+            sprite.color.set_alpha(base_alpha);
+        }
+    }
+}
+
+// Enhanced smart bomb system (emergency spores)
+pub fn update_smart_bombs(
+    mut commands: Commands,
+    mut spore_query: Query<(Entity, &mut SporeWave, &mut Transform, &mut Sprite)>,
+    // Fixed: Separate enemy query to avoid conflicts
+    mut enemy_query: Query<(Entity, &Transform, &mut Health), (With<Enemy>, Without<SporeWave>)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    for (spore_entity, mut spore, mut spore_transform, mut sprite) in spore_query.iter_mut() {
+        spore.timer += time.delta_secs();
+        
+        if spore.timer >= spore.max_time {
+            commands.entity(spore_entity).despawn();
+            continue;
+        }
+        
+        let progress = spore.timer / spore.max_time;
+        spore.current_radius = spore.max_radius * progress;
+        
+        // Enhanced organic visual effects
+        let scale = progress * 12.0;
+        let pulse = (time.elapsed_secs() * 4.0).sin() * 0.1 + 0.9;
+        spore_transform.scale = Vec3::splat(scale * pulse);
+        
+        // Organic color transition
+        let alpha = (1.0 - progress) * 0.8;
+        let color_shift = progress * 0.3;
+        sprite.color = Color::srgba(1.0 - color_shift, 0.8, 0.3 + color_shift, alpha);
+        
+        // Damage enemies within radius and spawn organic destruction effects
+        for (enemy_entity, enemy_transform, mut enemy_health) in enemy_query.iter_mut() {
+            let distance = spore_transform.translation.distance(enemy_transform.translation);
+            if distance <= spore.current_radius {
+                enemy_health.0 -= spore.damage;
+                
+                // Spawn organic destruction particles
+                if let Some(assets) = &assets {
+                    for i in 0..3 {
+                        let angle = (i as f32 / 3.0) * std::f32::consts::TAU;
+                        let offset = Vec2::from_angle(angle) * 15.0;
+                        
+                        commands.spawn((
+                            Sprite {
+                                image: assets.particle_texture.clone(),
+                                color: Color::srgb(1.0, 0.6, 0.2),
+                                custom_size: Some(Vec2::splat(4.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(enemy_transform.translation + offset.extend(0.0)),
+                            Particle {
+                                velocity: offset * 3.0,
+                                lifetime: 0.0,
+                                max_lifetime: 1.2,
+                                size: 4.0,
+                                fade_rate: 1.0,
+                                bioluminescent: true,
+                                drift_pattern: DriftPattern::Floating,
+                            },
+                        ));
+                    }
+                }
+                
+                if enemy_health.0 <= 0 {
+                    explosion_events.write(SpawnExplosion {
+                        position: enemy_transform.translation,
+                        intensity: 1.8,
+                        enemy_type: None,
+                    });
+                    commands.entity(enemy_entity).despawn();
+                }
             }
         }
     }
@@ -381,7 +561,8 @@ fn spawn_electric_discharge(
     commands: &mut Commands,
     assets: &GameAssets,
     player_transform: &Transform,
-    enemy_query: &Query<(Entity, &Transform), With<Enemy>>,
+    // enemy_query: &Query<(Entity, &Transform), With<Enemy>>,
+    enemy_query: &Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>)>,
     base_damage: i32,
     chain_count: u32,
     range: f32,
@@ -469,187 +650,9 @@ fn spawn_emergency_spore(
     ));
 }
 
-// Enhanced missile homing system with biological tracking
-pub fn update_missiles(
-    mut missile_query: Query<(&mut Transform, &mut Projectile, &mut MissileProjectile)>,
-    enemy_query: Query<(Entity, &Transform), With<Enemy>>,
-    time: Res<Time>,
-) {
-    for (mut transform, mut projectile, mut missile) in missile_query.iter_mut() {
-        missile.seek_timer += time.delta_secs();
-        
-        if missile.seek_timer > 0.3 { // Start seeking after brief delay
-            if let Some(target_entity) = missile.target {
-                if let Ok((_, target_transform)) = enemy_query.get(target_entity) {
-                    let direction_to_target = (target_transform.translation.truncate() - transform.translation.truncate()).normalize_or_zero();
-                    let current_direction = projectile.velocity.normalize_or_zero();
-                    
-                    // Enhanced homing with organic smoothness
-                    let homing_rate = if missile.symbiotic { 
-                        missile.homing_strength * 1.5 
-                    } else { 
-                        missile.homing_strength 
-                    };
-                    
-                    let new_direction = (current_direction + direction_to_target * homing_rate * time.delta_secs()).normalize_or_zero();
-                    projectile.velocity = new_direction * projectile.velocity.length();
-                    
-                    // Organic rotation with slight wobble
-                    let angle = new_direction.y.atan2(new_direction.x) - std::f32::consts::FRAC_PI_2;
-                    let wobble = if missile.symbiotic { 
-                        (time.elapsed_secs() * 6.0).sin() * 0.05 
-                    } else { 
-                        0.0 
-                    };
-                    transform.rotation = Quat::from_rotation_z(angle + wobble);
-                } else {
-                    // Target destroyed, find new target
-                    missile.target = find_nearest_enemy(&enemy_query, transform.translation);
-                }
-            } else {
-                // No target, find one
-                missile.target = find_nearest_enemy(&enemy_query, transform.translation);
-            }
-        }
-    }
-}
-
-// Enhanced laser beam system with bioluminescent effects
-pub fn update_laser_beams(
-    mut commands: Commands,
-    mut laser_query: Query<(Entity, &mut LaserBeam, &mut Sprite, &Transform, Option<&BioluminescentParticle>)>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-) {
-    for (entity, mut laser, mut sprite, transform, bio_particle) in laser_query.iter_mut() {
-        laser.timer += time.delta_secs();
-        
-        if laser.timer >= laser.max_duration {
-            commands.entity(entity).despawn();
-            continue;
-        }
-        
-        // Enhanced fade with bioluminescent pulsing
-        let base_alpha = 1.0 - (laser.timer / laser.max_duration);
-        
-        if laser.bioluminescent {
-            let pulse = (time.elapsed_secs() * 8.0).sin() * 0.3 + 0.7;
-            sprite.color.set_alpha(base_alpha * pulse);
-            
-            // Spawn bioluminescent particles along beam
-            if let Some(assets) = &assets {
-                if (time.elapsed_secs() * 20.0) % 1.0 < 0.1 {
-                    for i in 0..5 {
-                        let y_offset = (i as f32 - 2.0) * laser.length / 5.0;
-                        commands.spawn((
-                            Sprite {
-                                image: assets.particle_texture.clone(),
-                                color: Color::srgba(0.3, 1.0, 0.8, 0.8),
-                                custom_size: Some(Vec2::splat(3.0)),
-                                ..default()
-                            },
-                            Transform::from_translation(transform.translation + Vec3::new(0.0, y_offset, 0.1)),
-                            Particle {
-                                velocity: Vec2::new(
-                                    (time.elapsed_secs() * 234.56).sin() * 20.0,
-                                    (time.elapsed_secs() * 345.67).cos() * 15.0,
-                                ),
-                                lifetime: 0.0,
-                                max_lifetime: 0.8,
-                                size: 3.0,
-                                fade_rate: 1.0,
-                                bioluminescent: true,
-                                drift_pattern: DriftPattern::Floating,
-                            },
-                        ));
-                    }
-                }
-            }
-        } else {
-            sprite.color.set_alpha(base_alpha);
-        }
-    }
-}
-
-// Enhanced smart bomb system (emergency spores)
-pub fn update_smart_bombs(
-    mut commands: Commands,
-    mut spore_query: Query<(Entity, &mut SporeWave, &mut Transform, &mut Sprite)>,
-    mut enemy_query: Query<(Entity, &Transform, &mut Health), (With<Enemy>, Without<SporeWave>)>,
-    mut explosion_events: EventWriter<SpawnExplosion>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-) {
-    for (spore_entity, mut spore, mut spore_transform, mut sprite) in spore_query.iter_mut() {
-        spore.timer += time.delta_secs();
-        
-        if spore.timer >= spore.max_time {
-            commands.entity(spore_entity).despawn();
-            continue;
-        }
-        
-        let progress = spore.timer / spore.max_time;
-        spore.current_radius = spore.max_radius * progress;
-        
-        // Enhanced organic visual effects
-        let scale = progress * 12.0;
-        let pulse = (time.elapsed_secs() * 4.0).sin() * 0.1 + 0.9;
-        spore_transform.scale = Vec3::splat(scale * pulse);
-        
-        // Organic color transition
-        let alpha = (1.0 - progress) * 0.8;
-        let color_shift = progress * 0.3;
-        sprite.color = Color::srgba(1.0 - color_shift, 0.8, 0.3 + color_shift, alpha);
-        
-        // Damage enemies within radius and spawn organic destruction effects
-        for (enemy_entity, enemy_transform, mut enemy_health) in enemy_query.iter_mut() {
-            let distance = spore_transform.translation.distance(enemy_transform.translation);
-            if distance <= spore.current_radius {
-                enemy_health.0 -= spore.damage;
-                
-                // Spawn organic destruction particles
-                if let Some(assets) = &assets {
-                    for i in 0..3 {
-                        let angle = (i as f32 / 3.0) * std::f32::consts::TAU;
-                        let offset = Vec2::from_angle(angle) * 15.0;
-                        
-                        commands.spawn((
-                            Sprite {
-                                image: assets.particle_texture.clone(),
-                                color: Color::srgb(1.0, 0.6, 0.2),
-                                custom_size: Some(Vec2::splat(4.0)),
-                                ..default()
-                            },
-                            Transform::from_translation(enemy_transform.translation + offset.extend(0.0)),
-                            Particle {
-                                velocity: offset * 3.0,
-                                lifetime: 0.0,
-                                max_lifetime: 1.2,
-                                size: 4.0,
-                                fade_rate: 1.0,
-                                bioluminescent: true,
-                                drift_pattern: DriftPattern::Floating,
-                            },
-                        ));
-                    }
-                }
-                
-                if enemy_health.0 <= 0 {
-                    explosion_events.write(SpawnExplosion {
-                        position: enemy_transform.translation,
-                        intensity: 1.8,
-                        enemy_type: None,
-                    });
-                    commands.entity(enemy_entity).despawn();
-                }
-            }
-        }
-    }
-}
-
-// Helper function to find nearest enemy
+// Helper function to find nearest enemy - FIXED
 fn find_nearest_enemy(
-    enemy_query: &Query<(Entity, &Transform), With<Enemy>>,
+    enemy_query: &Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>)>,
     player_pos: Vec3,
 ) -> Option<Entity> {
     enemy_query

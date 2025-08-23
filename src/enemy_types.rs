@@ -281,6 +281,3 @@ impl Default for Enemy {
     }
 }
 
-// Compatibility aliases for existing code
-pub type FormationLeader = ColonyLeader;
-pub type FormationPattern = ColonyPattern;

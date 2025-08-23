@@ -4,10 +4,11 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 
-// ATP pickup system (renamed from currency_pickup_system)
+// FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
     mut commands: Commands,
-    atp_query: Query<(Entity, &Transform, &Collider, &ATP), With<ATP>>, // Add &ATP here
+    // FIXED: Separate the ATP pickup query from player query
+    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>)>,
     mut player_query: Query<(&Transform, &Collider, &mut ATP), With<Player>>,
     mut game_score: ResMut<GameScore>,
 ) {
@@ -507,7 +508,7 @@ pub fn handle_biological_powerup_collection(
                         color_end: Color::srgba(0.2, 0.8, 1.0, 0.0),
                         velocity_range: (Vec2::new(-60.0, -60.0), Vec2::new(60.0, 60.0)),
                         lifetime_range: (0.5, 1.2),
-                        size_range: (3.0, 8.0),
+                        size_range: (0.30, 0.80),
                         gravity: Vec2::new(0.0, -20.0),
                         organic_motion: true,
                         bioluminescence: 1.0,
@@ -697,7 +698,7 @@ pub fn collect_atp_with_energy_transfer(
                             (player_transform.translation.truncate() - atp_transform.translation.truncate()) * 3.0
                         ),
                         lifetime_range: (0.3, 0.8),
-                        size_range: (2.0, 5.0),
+                        size_range: (0.20, 0.50),
                         gravity: Vec2::ZERO,
                         organic_motion: true,
                         bioluminescence: 1.0,
@@ -901,12 +902,3 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
         Vec2::ZERO
     }
 }
-
-// Compatibility aliases to maintain existing code
-pub type Currency = ATP;
-pub type WeaponPowerUp = EvolutionPowerUp;
-pub type WeaponUpgradeType = AdaptationType;
-pub type UpgradeStation = EvolutionChamber;
-pub type UpgradeUI = EvolutionUI;
-pub type CurrencyText = ATPText;
-
