@@ -877,50 +877,6 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
     }
 }
 
-// Player collision with enemy projectiles
-pub fn player_projectile_collisions(
-    mut commands: Commands,
-    mut projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<Player>>,
-    player_query: Query<(&Transform, &Collider), With<Player>>,
-    mut player_hit_events: EventWriter<PlayerHit>,
-) {
-    if let Ok((player_transform, player_collider)) = player_query.single() {
-        for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter_mut() {
-            if projectile.friendly { continue; } // Skip friendly projectiles
-            
-            let distance = player_transform.translation.distance(proj_transform.translation);
-            if distance < player_collider.radius + proj_collider.radius {
-                player_hit_events.write(PlayerHit {
-                    position: proj_transform.translation,
-                    damage: projectile.damage,
-                });
-                commands.entity(proj_entity).despawn();
-            }
-        }
-    }
-}
-
-pub fn player_enemy_collisions(
-    mut player_hit_events: EventWriter<PlayerHit>,
-    player_query: Query<(&Transform, &Collider), With<Player>>,
-    enemy_query: Query<(&Transform, &Collider, &Enemy)>,
-) {
-    if let Ok((player_transform, player_collider)) = player_query.single() {
-        for (enemy_transform, enemy_collider, enemy) in enemy_query.iter() {
-            let distance = player_transform.translation.distance(enemy_transform.translation);
-            if distance < player_collider.radius + enemy_collider.radius {
-                player_hit_events.write(PlayerHit {
-                    position: enemy_transform.translation,
-                    damage: 15,
-                });
-            }
-        }
-    }
-}
-
-
-
-
 pub fn collision_system(
     mut commands: Commands,
     mut player_hit_events: EventWriter<PlayerHit>,

@@ -967,6 +967,23 @@ pub fn thermal_vent_effects_system(
     }
 }
 
+pub fn scroll_thermal_vents(
+    mut current_generator: ResMut<CurrentGenerator>,
+    time: Res<Time>,
+) {
+    for vent in &mut current_generator.thermal_vents {
+        // Scroll vents downward like everything else
+        vent.position.y -= 50.0 * time.delta_secs();
+        
+        // Reset position when off-screen
+        if vent.position.y < -400.0 {
+            vent.position.y = 450.0;
+            vent.position.x = (time.elapsed_secs() * 123.45).sin() * 500.0; // Random X
+            vent.active = (time.elapsed_secs() * 67.89).sin() > 0.0; // Random activation
+        }
+    }
+}
+
 pub fn update_thermal_particles(
     mut commands: Commands,
     mut thermal_query: Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite)>,
@@ -989,5 +1006,102 @@ pub fn update_thermal_particles(
             commands.entity(entity).despawn();
         }
     }
+}
+
+pub fn dynamic_chemical_zone_system(
+    mut chemical_environment: ResMut<ChemicalEnvironment>,
+    enemy_query: Query<(&Transform, &Enemy)>,
+    player_query: Query<&Transform, With<Player>>,
+    ecosystem: Res<EcosystemState>,
+    time: Res<Time>,
+    mut zone_timer: Local<f32>,
+) {
+    *zone_timer += time.delta_secs();
+    
+    // Generate new zones every 8 seconds
+    if *zone_timer >= 8.0 {
+        *zone_timer = 0.0;
+        
+        // Spawn acidic zones near aggressive bacteria clusters
+        let bacteria_positions: Vec<Vec2> = enemy_query.iter()
+            .filter(|(_, enemy)| matches!(enemy.enemy_type, EnemyType::AggressiveBacteria))
+            .map(|(transform, _)| transform.translation.truncate())
+            .collect();
+        
+        for cluster_center in cluster_positions(&bacteria_positions, 80.0) {
+            chemical_environment.ph_zones.push(crate::resources::ChemicalZone {
+                position: cluster_center,
+                radius: 100.0,
+                ph_level: 5.0 + (ecosystem.infection_level * -1.5), // More acidic with higher infection
+                intensity: 0.7,
+            });
+        }
+        
+        // Spawn oxygen depletion zones in dense areas
+        let all_positions: Vec<Vec2> = enemy_query.iter()
+            .map(|(transform, _)| transform.translation.truncate())
+            .collect();
+        
+        for cluster_center in cluster_positions(&all_positions, 120.0) {
+            chemical_environment.oxygen_zones.push(OxygenZone {
+                position: cluster_center,
+                radius: 90.0,
+                oxygen_level: 0.2, // Low oxygen
+                depletion_rate: 0.05,
+            });
+        }
+        
+        // Generate beneficial zones near player
+        if let Ok(player_transform) = player_query.single() {
+            let player_pos = player_transform.translation.truncate();
+            chemical_environment.ph_zones.push(crate::resources::ChemicalZone {
+                position: player_pos + Vec2::new(
+                    (time.elapsed_secs() * 50.0).sin() * 150.0,
+                    (time.elapsed_secs() * 30.0).cos() * 100.0,
+                ),
+                radius: 80.0,
+                ph_level: 7.2, // Slightly alkaline, beneficial
+                intensity: 0.5,
+            });
+        }
+        
+        let chem_env_clone = chemical_environment.clone();
+        // Remove old zones (keep only last 6)
+        if chemical_environment.ph_zones.len() > 6 {
+            chemical_environment.ph_zones.drain(0..chem_env_clone.ph_zones.len()-6);
+        }
+        if chemical_environment.oxygen_zones.len() > 4 {
+            chemical_environment.oxygen_zones.drain(0..chem_env_clone.oxygen_zones.len()-4);
+        }
+    }
+}
+
+// Helper function to find cluster centers
+fn cluster_positions(positions: &[Vec2], cluster_radius: f32) -> Vec<Vec2> {
+    let mut clusters = Vec::new();
+    let mut used = vec![false; positions.len()];
+    
+    for (i, &pos) in positions.iter().enumerate() {
+        if used[i] { continue; }
+        
+        let mut cluster_center = pos;
+        let mut cluster_size = 1;
+        used[i] = true;
+        
+        // Find nearby positions
+        for (j, &other_pos) in positions.iter().enumerate() {
+            if i != j && !used[j] && pos.distance(other_pos) < cluster_radius {
+                cluster_center = (cluster_center * cluster_size as f32 + other_pos) / (cluster_size + 1) as f32;
+                cluster_size += 1;
+                used[j] = true;
+            }
+        }
+        
+        if cluster_size >= 3 { // Only create zones for significant clusters
+            clusters.push(cluster_center);
+        }
+    }
+    
+    clusters
 }
 

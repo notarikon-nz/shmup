@@ -95,7 +95,7 @@ impl Default for FluidEnvironment {
 }
 
 // New: Chemical Environment for pH and oxygen simulation
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct ChemicalEnvironment {
     pub ph_zones: Vec<ChemicalZone>,
     pub oxygen_zones: Vec<OxygenZone>,

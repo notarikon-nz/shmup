@@ -111,34 +111,32 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
         // Third Update group - enemy systems (separate from projectile systems)
         .add_systems(Update, (
-            enemy_shooting.run_if(in_state(GameState::Playing)),
-            turret_shooting.run_if(in_state(GameState::Playing)),
-            move_enemies.run_if(in_state(GameState::Playing)), // This modifies enemy Transform
-            update_spawner_enemies.run_if(in_state(GameState::Playing)),
-            update_formations.run_if(in_state(GameState::Playing)),
-            formation_coordination_system.run_if(in_state(GameState::Playing)),
-        ))
+            enemy_shooting,
+            turret_shooting,
+            move_enemies,
+            update_spawner_enemies,
+            update_formations,
+            formation_coordination_system,
+        ).run_if(in_state(GameState::Playing)))
         // Fourth Update group - collision and interaction systems
         .add_systems(Update, (            
-            collision_system.run_if(in_state(GameState::Playing)), 
-            // enhanced_projectile_collisions.run_if(in_state(GameState::Playing)), // Reads enemy Transform
-            // player_projectile_collisions.run_if(in_state(GameState::Playing)), // Add this line            
-            atp_pickup_system.run_if(in_state(GameState::Playing)), 
-            evolution_powerup_collection.run_if(in_state(GameState::Playing)),
-            evolution_chamber_interaction.run_if(in_state(GameState::Playing)),
-            handle_biological_powerup_collection.run_if(in_state(GameState::Playing)),
-        ))
+            collision_system, 
+            atp_pickup_system, 
+            evolution_powerup_collection,
+            evolution_chamber_interaction,
+            handle_biological_powerup_collection,
+        ).run_if(in_state(GameState::Playing)))
         // Fifth Update group - effect and cleanup systems
         .add_systems(Update, (                
-            update_biological_effects.run_if(in_state(GameState::Playing)),
-            update_temporary_evolution_effects.run_if(in_state(GameState::Playing)),
-            update_explosions.run_if(in_state(GameState::Playing)),
-            update_organic_particles.run_if(in_state(GameState::Playing)),
-            update_particle_emitters.run_if(in_state(GameState::Playing)),
-            update_parallax.run_if(in_state(GameState::Playing)),
-            cleanup_offscreen.run_if(in_state(GameState::Playing)),
-            spawn_bioluminescent_trail.run_if(in_state(GameState::Playing)), 
-        ))
+            update_biological_effects,
+            update_temporary_evolution_effects,
+            update_explosions,
+            update_organic_particles,
+            update_particle_emitters,
+            update_parallax,
+            cleanup_offscreen,
+            spawn_bioluminescent_trail,
+        ).run_if(in_state(GameState::Playing)))
         // Sixth Update group - biological environment systems
         .add_systems(Update, (
             update_toxin_clouds,
@@ -155,6 +153,8 @@ fn main() {
             symbiotic_pair_system,
             thermal_vent_effects_system,
             update_thermal_particles,
+            dynamic_chemical_zone_system,
+            scroll_thermal_vents,
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (
