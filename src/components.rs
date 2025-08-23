@@ -623,3 +623,9 @@ pub struct MembranePhysics {
     pub elasticity: f32,
 }
 
+// see thermal_vent_effects_system
+#[derive(Component)]
+pub struct ThermalParticle {
+    pub heat_intensity: f32,
+    pub rise_speed: f32,
+}

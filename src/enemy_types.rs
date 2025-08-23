@@ -112,8 +112,10 @@ pub struct ToxinProducer {
 impl EnemyType {
     pub fn get_stats(&self) -> (i32, f32, f32, Color) {
         match self {
-            EnemyType::ViralParticle => (20, 15.0, 150.0, Color::srgb(0.8, 0.9, 1.0)),
-            EnemyType::AggressiveBacteria => (15, 12.0, 250.0, Color::srgb(0.9, 0.3, 0.3)),
+            EnemyType::ViralParticle => (20, 15.0, 50.0, Color::srgb(0.8, 0.9, 1.0)), // Reduced from 150.0
+            EnemyType::AggressiveBacteria => (15, 12.0, 80.0, Color::srgb(0.9, 0.3, 0.3)), // Reduced from 250.0
+            //EnemyType::ViralParticle => (20, 15.0, 150.0, Color::srgb(0.8, 0.9, 1.0)),
+            //EnemyType::AggressiveBacteria => (15, 12.0, 250.0, Color::srgb(0.9, 0.3, 0.3)),
             EnemyType::ParasiticProtozoa => (50, 20.0, 100.0, Color::srgb(0.6, 0.8, 0.3)),
             EnemyType::InfectedMacrophage => (100, 30.0, 120.0, Color::srgb(1.0, 0.2, 0.8)),
             EnemyType::SuicidalSpore => (10, 12.0, 200.0, Color::srgb(1.0, 0.7, 0.2)),

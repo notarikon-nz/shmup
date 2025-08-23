@@ -718,7 +718,7 @@ pub fn update_toxin_clouds(
                 enemy_health.0 -= damage;
                 
                 if enemy_health.0 <= 0 {
-                    explosion_events.send(SpawnExplosion {
+                    explosion_events.write(SpawnExplosion {
                         position: enemy_transform.translation,
                         intensity: 0.8,
                         enemy_type: None,
@@ -785,7 +785,7 @@ pub fn update_electric_arcs(
                 }
                 
                 if target_health.0 <= 0 {
-                    explosion_events.send(SpawnExplosion {
+                    explosion_events.write(SpawnExplosion {
                         position: target_transform.translation,
                         intensity: 1.2,
                         enemy_type: None,

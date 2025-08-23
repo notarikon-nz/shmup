@@ -223,16 +223,16 @@ pub fn move_enemies(
                 let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
                 let current = sample_current(&fluid_environment, grid_pos);
                 
-                // Blend base direction with current flow
-                let flow_influence = current * *flow_sensitivity * time.delta_secs();
+                // Blend base direction with current flow (stronger influence)
+                let flow_influence = current * *flow_sensitivity * time.delta_secs() * 3.0; // Increased multiplier
                 *base_direction = (*base_direction + flow_influence).normalize_or_zero();
                 
-                // Apply movement with strong current response
-                let movement = *base_direction * enemy.speed + current * 0.8;
+                // Apply movement with very strong current response
+                let movement = *base_direction * enemy.speed * 0.3 + current * 1.5; // Follow current strongly
                 transform.translation += movement.extend(0.0) * time.delta_secs();
                 
-                // Rotate to face movement direction
-                let angle = base_direction.y.atan2(base_direction.x) - std::f32::consts::FRAC_PI_2;
+                // Rotate to face movement direction with current influence
+                let angle = (current.x * 0.7 + base_direction.x * 0.3).atan2(current.y * 0.7 + base_direction.y * 0.3) - std::f32::consts::FRAC_PI_2;
                 transform.rotation = Quat::from_rotation_z(angle);
             },
         }
@@ -1006,6 +1006,138 @@ pub fn pheromone_communication_system(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+pub fn cell_division_system(
+    mut commands: Commands,
+    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &Health)>,
+    mut spawn_events: EventWriter<SpawnEnemy>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    for (enemy_entity, transform, mut enemy, health) in enemy_query.iter_mut() {
+        if let EnemyAI::CellDivision { division_threshold, division_timer, has_divided } = &mut enemy.ai_type {
+            if health.0 as f32 <= *division_threshold && !*has_divided {
+                *division_timer -= time.delta_secs();
+                
+                if *division_timer <= 0.0 {
+                    *has_divided = true;
+                    
+                    // Spawn two offspring at split positions
+                    let split_distance = 30.0;
+                    let split_positions = [
+                        transform.translation + Vec3::new(-split_distance, 0.0, 0.0),
+                        transform.translation + Vec3::new(split_distance, 0.0, 0.0),
+                    ];
+                    
+                    for split_pos in split_positions {
+                        spawn_events.write(SpawnEnemy {
+                            position: split_pos,
+                            ai_type: EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) },
+                            enemy_type: EnemyType::Offspring,
+                        });
+                    }
+                    
+                    // Spawn division particles
+                    if let Some(assets) = &assets {
+                        for i in 0..12 {
+                            let angle = (i as f32 / 12.0) * std::f32::consts::TAU;
+                            let offset = Vec2::from_angle(angle) * 20.0;
+                            
+                            commands.spawn((
+                                Sprite {
+                                    image: assets.particle_texture.clone(),
+                                    color: Color::srgb(0.8, 0.9, 0.6),
+                                    custom_size: Some(Vec2::splat(3.0)),
+                                    ..default()
+                                },
+                                Transform::from_translation(transform.translation + offset.extend(0.0)),
+                                Particle {
+                                    velocity: offset * 2.0,
+                                    lifetime: 0.0,
+                                    max_lifetime: 1.0,
+                                    size: 3.0,
+                                    fade_rate: 1.0,
+                                    bioluminescent: true,
+                                    drift_pattern: DriftPattern::Floating,
+                                },
+                            ));
+                        }
+                    }
+                    
+                    // Original cell dies after division
+                    commands.entity(enemy_entity).despawn();
+                }
+            }
+        }
+    }
+}
+
+pub fn symbiotic_pair_system(
+    mut commands: Commands,
+    pair_query: Query<(Entity, &Transform, &Enemy, &Health)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+) {
+    // Collect all symbiotic pair data
+    let pair_data: Vec<(Entity, Vec3, Option<Entity>)> = pair_query.iter()
+        .filter_map(|(entity, transform, enemy, _)| {
+            if let EnemyAI::SymbioticPair { partner_entity, .. } = &enemy.ai_type {
+                Some((entity, transform.translation, *partner_entity))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    // Check for broken pairs
+    for (entity, position, partner_entity) in pair_data {
+        if let Some(partner) = partner_entity {
+            if pair_query.get(partner).is_err() {
+                // Partner died - this one dies too
+                explosion_events.write(SpawnExplosion {
+                    position,
+                    intensity: 1.2,
+                    enemy_type: None,
+                });
+                commands.entity(entity).despawn();
+            }
+        }
+    }
+}
+
+pub fn link_symbiotic_pairs(
+    mut pair_query: Query<(Entity, &Transform, &mut Enemy)>,
+) {
+    // Collect unlinked pairs
+    let unlinked: Vec<(Entity, Vec3)> = pair_query.iter()
+        .filter_map(|(entity, transform, enemy)| {
+            if let EnemyAI::SymbioticPair { partner_entity: None, .. } = &enemy.ai_type {
+                Some((entity, transform.translation))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    // Link pairs in groups of 2
+    for chunk in unlinked.chunks(2) {
+        if chunk.len() == 2 {
+            let (entity1, _) = chunk[0];
+            let (entity2, _) = chunk[1];
+            
+            // Set partners using get_mut to avoid conflicts
+            if let Ok((_, _, mut enemy1)) = pair_query.get_mut(entity1) {
+                if let EnemyAI::SymbioticPair { partner_entity, .. } = &mut enemy1.ai_type {
+                    *partner_entity = Some(entity2);
+                }
+            }
+            if let Ok((_, _, mut enemy2)) = pair_query.get_mut(entity2) {
+                if let EnemyAI::SymbioticPair { partner_entity, .. } = &mut enemy2.ai_type {
+                    *partner_entity = Some(entity1);
                 }
             }
         }

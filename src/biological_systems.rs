@@ -39,11 +39,16 @@ pub fn fluid_dynamics_system(
                 for vent in &current_generator.thermal_vents {
                     if vent.active {
                         let distance = world_pos.distance(vent.position);
-                        if distance < 200.0 {
+                        if distance < 250.0 { // Increased range
                             let direction = (world_pos - vent.position).normalize_or_zero();
-                            let strength = vent.strength * (1.0 - distance / 200.0).powi(2);
-                            // Thermal vents create rising currents
-                            flow += direction * strength + Vec2::new(0.0, strength * 0.5);
+                            let strength = vent.strength * (1.0 - distance / 250.0).powi(2);
+                            
+                            // Thermal vents create strong rising currents with swirl
+                            let swirl_angle = (distance * 0.02) + (time.elapsed_secs() * 0.8);
+                            let swirl_direction = Vec2::new(swirl_angle.cos(), swirl_angle.sin());
+                            
+                            flow += direction * strength * 0.7 + Vec2::new(0.0, strength * 1.2); // Stronger upward
+                            flow += swirl_direction * strength * 0.4; // Add swirl component
                         }
                     }
                 }
@@ -861,3 +866,128 @@ pub fn ecosystem_monitoring_system(
         ecosystem.symbiotic_activity = (player_health.0 as f32 / 100.0) * 0.6 + 0.4;
     }
 }
+
+pub fn thermal_vent_effects_system(
+    mut commands: Commands,
+    current_generator: Res<CurrentGenerator>,
+    mut player_query: Query<(&Transform, &mut Health), With<Player>>,
+    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &mut Health), Without<Player>>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut vent_timer: Local<f32>,
+) {
+    *vent_timer += time.delta_secs();
+    
+    for vent in &current_generator.thermal_vents {
+        if !vent.active { continue; }
+        
+        // Spawn thermal particles
+        if *vent_timer % 0.3 < 0.1 {
+            if let Some(assets) = &assets {
+                for i in 0..5 {
+                    let angle = (i as f32 / 5.0) * std::f32::consts::TAU + *vent_timer;
+                    let offset = Vec2::from_angle(angle) * (20.0 + (*vent_timer * 2.0).sin() * 10.0);
+                    
+                    commands.spawn((
+                        Sprite {
+                            image: assets.particle_texture.clone(),
+                            color: Color::srgb(1.0, 0.6, 0.2), // Orange thermal glow
+                            custom_size: Some(Vec2::splat(4.0)),
+                            ..default()
+                        },
+                        Transform::from_translation(vent.position.extend(0.0) + offset.extend(0.0)),
+                        ThermalParticle {
+                            heat_intensity: vent.strength / 200.0,
+                            rise_speed: 60.0,
+                        },
+                        Particle {
+                            velocity: Vec2::new(0.0, 80.0) + offset.normalize() * 20.0,
+                            lifetime: 0.0,
+                            max_lifetime: 3.0,
+                            size: 4.0,
+                            fade_rate: 0.8,
+                            bioluminescent: true,
+                            drift_pattern: DriftPattern::Floating,
+                        },
+                    ));
+                }
+            }
+        }
+        
+        // Player thermal effects
+        if let Ok((player_transform, mut player_health)) = player_query.single_mut() {
+            let distance = player_transform.translation.distance(vent.position.extend(0.0));
+            
+            if distance < 120.0 {
+                let heat_intensity = (120.0 - distance) / 120.0;
+                
+                if heat_intensity > 0.7 {
+                    // Damage from extreme heat
+                    player_health.0 -= (heat_intensity * 15.0 * time.delta_secs()) as i32;
+                } else if heat_intensity > 0.3 {
+                    // Beneficial warmth - slight healing
+                    player_health.0 = (player_health.0 + (2.0 * time.delta_secs()) as i32).min(100);
+                }
+            }
+        }
+        
+        // Enemy thermal effects
+        for (enemy_entity, enemy_transform, mut enemy, mut enemy_health) in enemy_query.iter_mut() {
+            let distance = enemy_transform.translation.distance(vent.position.extend(0.0));
+            
+            if distance < 150.0 {
+                let heat_factor = (150.0 - distance) / 150.0;
+                
+                // Heat affects different enemy types differently
+                match enemy.enemy_type {
+                    EnemyType::ViralParticle => {
+                        // Viruses are destroyed by heat
+                        if heat_factor > 0.5 {
+                            enemy_health.0 -= (heat_factor * 20.0 * time.delta_secs()) as i32;
+                        }
+                    }
+                    EnemyType::AggressiveBacteria => {
+                        // Some bacteria thrive in heat
+                        if heat_factor > 0.3 && heat_factor < 0.8 {
+                            enemy.speed = 180.0 * (1.0 + heat_factor * 0.5); // Speed boost
+                        }
+                    }
+                    EnemyType::ParasiticProtozoa => {
+                        // Protozoa seek thermal vents
+                        if distance < 100.0 {
+                            // Attracted to thermal vents - move towards them
+                            let direction = (vent.position - enemy_transform.translation.truncate()).normalize();
+                            enemy.speed = 120.0; // Slower but persistent
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+pub fn update_thermal_particles(
+    mut commands: Commands,
+    mut thermal_query: Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite)>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut thermal, mut sprite) in thermal_query.iter_mut() {
+        // Rise and dissipate
+        transform.translation.y += thermal.rise_speed * time.delta_secs();
+        
+        // Heat shimmer effect
+        let shimmer = (time.elapsed_secs() * 8.0 + transform.translation.x * 0.1).sin() * 3.0;
+        transform.translation.x += shimmer * time.delta_secs();
+        
+        // Fade with height
+        thermal.heat_intensity -= time.delta_secs() * 0.4;
+        let alpha = thermal.heat_intensity.clamp(0.0, 1.0);
+        sprite.color = Color::srgba(1.0, 0.6 + alpha * 0.4, 0.2, alpha * 0.8);
+        
+        if thermal.heat_intensity <= 0.0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+

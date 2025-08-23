@@ -600,6 +600,7 @@ pub fn spawn_explosion_system(
 
 // Spawning Systems
 pub fn spawn_enemies(
+    mut commands: Commands,
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut spawn_events: EventWriter<SpawnEnemy>,
     time: Res<Time>,
@@ -608,6 +609,7 @@ pub fn spawn_enemies(
     enemy_spawner.wave_timer += time.delta_secs();
     
     if enemy_spawner.spawn_timer <= 0.0 {
+
         let x_positions = [-400.0, -200.0, 0.0, 200.0, 400.0];
         let spawn_x = x_positions[enemy_spawner.enemies_spawned as usize % x_positions.len()];
         
@@ -641,7 +643,63 @@ pub fn spawn_enemies(
             ai_type,
             enemy_type,
         });
+
+        // Symbiotic pair spawning (separate from main logic)
+        if enemy_spawner.wave_timer > 40.0 && enemy_spawner.enemies_spawned % 8 == 0 {
+            let pair_x = x_positions[2]; // Use center position
+            
+            // Spawn first pair member
+            spawn_events.write(SpawnEnemy {
+                position: Vec3::new(pair_x - 25.0, 400.0, 0.0),
+                ai_type: EnemyAI::SymbioticPair {
+                    partner_entity: None, // Will be set by pair coordination system
+                    bond_distance: 50.0,
+                    sync_timer: 0.0,
+                },
+                enemy_type: EnemyType::SwarmCell,
+            });
+            
+            // Spawn second pair member
+            spawn_events.write(SpawnEnemy {
+                position: Vec3::new(pair_x + 25.0, 400.0, 0.0),
+                ai_type: EnemyAI::SymbioticPair {
+                    partner_entity: None, // Will be set by pair coordination system
+                    bond_distance: 50.0,
+                    sync_timer: 0.0,
+                },
+                enemy_type: EnemyType::SwarmCell,
+            });
+            
+            enemy_spawner.enemies_spawned += 2;
+        }
         
+        // Cell division enemies
+        if enemy_spawner.wave_timer > 30.0 && enemy_spawner.enemies_spawned % 5 == 0 {
+            spawn_events.write(SpawnEnemy {
+                position: Vec3::new(spawn_x, 400.0, 0.0),
+                ai_type: EnemyAI::CellDivision {
+                    division_threshold: 10.0,
+                    division_timer: 2.0,
+                    has_divided: false,
+                },
+                enemy_type: EnemyType::AggressiveBacteria,
+            });
+            
+            enemy_spawner.enemies_spawned += 1;
+        }
+
+        if enemy_spawner.wave_timer > 50.0 && enemy_spawner.enemies_spawned % 7 == 0 {
+            spawn_events.write(SpawnEnemy {
+                position: Vec3::new(spawn_x, 400.0, 0.0),
+                ai_type: EnemyAI::FluidFlow {
+                    flow_sensitivity: 2.5,
+                    base_direction: Vec2::new(0.0, -1.0),
+                },
+                enemy_type: EnemyType::SwarmCell,
+            });
+            enemy_spawner.enemies_spawned += 1;
+        }        
+
         enemy_spawner.enemies_spawned += 1;
         
         let spawn_rate = (2.0 - (enemy_spawner.wave_timer * 0.02)).max(0.3);
@@ -930,44 +988,46 @@ pub fn collision_system(
                     
                     let distance = proj_transform.translation.distance(enemy_transform.translation);
                     if distance < proj_collider.radius + enemy_collider.radius {
-                        // Critical hit calculation
-                        let is_crit = (proj_transform.translation.x * 123.456 + time.elapsed_secs()).sin().abs() < crit_stats.chance;
-                        let final_damage = if is_crit {
-                            (projectile.damage as f32 * crit_stats.damage_multiplier) as i32
-                        } else {
-                            projectile.damage
-                        };
-                        
-                        enemy_health.0 -= final_damage;
-                        
-                        // Spawn damage text
-                        let (text_color, font_size) = if is_crit {
-                            (Color::srgb(1.0, 1.0, 0.3), 16.0) // Yellow crit
-                        } else {
-                            (Color::srgb(1.0, 1.0, 1.0), 12.0) // White normal
-                        };
-                        
-                        commands.spawn((
-                            Text2d::new(format!("{}", final_damage)),
-                            TextFont { font_size, ..default() },
-                            TextColor(text_color),
-                            Transform::from_translation(enemy_transform.translation + Vec3::new(0.0, 25.0, 1.0)),
-                            DamageText {
-                                timer: 1.5,
-                                velocity: Vec2::new(0.0, 80.0),
-                            },
-                        ));
-                        
-                        commands.entity(proj_entity).despawn();
-                        
-                        if enemy_health.0 <= 0 {
-                            game_score.current += enemy_opt.unwrap().enemy_type.get_points();
-                            explosion_events.send(SpawnExplosion {
-                                position: enemy_transform.translation,
-                                intensity: 1.0,
-                                enemy_type: Some(enemy_opt.unwrap().enemy_type.clone()),
-                            });
-                            commands.entity(enemy_entity).despawn();
+                        if enemy_opt.is_some() {
+                            // Critical hit calculation
+                            let is_crit = (proj_transform.translation.x * 123.456 + time.elapsed_secs()).sin().abs() < crit_stats.chance;
+                            let final_damage = if is_crit {
+                                (projectile.damage as f32 * crit_stats.damage_multiplier) as i32
+                            } else {
+                                projectile.damage
+                            };
+                            
+                            enemy_health.0 -= final_damage;
+                            
+                            // Spawn damage text
+                            let (text_color, font_size) = if is_crit {
+                                (Color::srgb(1.0, 1.0, 0.3), 16.0) // Yellow crit
+                            } else {
+                                (Color::srgb(1.0, 1.0, 1.0), 12.0) // White normal
+                            };
+                            
+                            commands.spawn((
+                                Text2d::new(format!("{}", final_damage)),
+                                TextFont { font_size, ..default() },
+                                TextColor(text_color),
+                                Transform::from_translation(enemy_transform.translation + Vec3::new(0.0, 25.0, 1.0)),
+                                DamageText {
+                                    timer: 1.5,
+                                    velocity: Vec2::new(0.0, 80.0),
+                                },
+                            ));
+                            
+                            commands.entity(proj_entity).despawn();
+                            
+                            if enemy_health.0 <= 0 {
+                                game_score.current += enemy_opt.unwrap().enemy_type.get_points();
+                                explosion_events.write(SpawnExplosion {
+                                    position: enemy_transform.translation,
+                                    intensity: 1.0,
+                                    enemy_type: Some(enemy_opt.unwrap().enemy_type.clone()),
+                                });
+                                commands.entity(enemy_entity).despawn();
+                            }
                         }
                         break;
                     }

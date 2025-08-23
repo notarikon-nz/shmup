@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
-use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin};
 
 mod components;
 mod resources;
@@ -12,6 +12,7 @@ mod enemy_systems;
 mod weapon_systems;
 mod currency_systems;
 mod biological_systems; 
+mod audio; 
 
 use components::*;
 use resources::*;
@@ -22,6 +23,7 @@ use enemy_systems::*;
 use weapon_systems::*;
 use currency_systems::*;
 use biological_systems::*; 
+use audio::*;
 
 /*
     // SPRITE LIST
@@ -51,10 +53,11 @@ fn main() {
         .init_resource::<GameScore>()
         .init_resource::<GameStarted>()
         .init_resource::<ShootingState>()
-        .init_resource::<FluidEnvironment>() // New: fluid dynamics
-        .init_resource::<ChemicalEnvironment>() // New: chemical simulation
-        .init_resource::<TidalPoolPhysics>() // New: chemical simulation
-        .init_resource::<BioluminescenceManager>() // New: chemical simulation
+        .init_resource::<FluidEnvironment>()
+        .init_resource::<ChemicalEnvironment>()
+        .init_resource::<TidalPoolPhysics>()
+        .init_resource::<BioluminescenceManager>()
+        .init_resource::<EcosystemState>()
 
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
@@ -73,19 +76,25 @@ fn main() {
             init_fluid_environment, // New
             init_chemical_zones, // New
             init_current_generator,
+            start_ambient_music.after(load_biological_assets),
         ))
         .add_systems(Update, fps_system)
         // FIXED: Separate systems into different Update groups to avoid query conflicts
         .add_systems(Update, (
+            audio_system,
             handle_pause_input,
-            handle_input.run_if(in_state(GameState::Playing)),
-            biological_movement_system.run_if(in_state(GameState::Playing)), 
-            enhanced_shooting_system.run_if(in_state(GameState::Playing)),
-            spawn_enemies.run_if(in_state(GameState::Playing)),
-            spawn_biological_powerups.run_if(in_state(GameState::Playing)), 
-            spawn_evolution_powerups.run_if(in_state(GameState::Playing)), 
-            spawn_evolution_chambers.run_if(in_state(GameState::Playing)), 
         ))
+        .add_systems(Update, (
+            handle_input,
+            biological_movement_system, 
+            enhanced_shooting_system,
+            spawn_enemies,
+            spawn_biological_powerups, 
+            spawn_evolution_powerups, 
+
+            link_symbiotic_pairs,
+            spawn_evolution_chambers, 
+        ).run_if(in_state(GameState::Playing)))
         // Second Update group - projectile and movement systems
         .add_systems(Update, (
             move_projectiles,
@@ -142,7 +151,12 @@ fn main() {
             organic_ai_system,
             generate_procedural_currents,
             spawn_organic_particle_effects,
+            cell_division_system,
+            symbiotic_pair_system,
+            thermal_vent_effects_system,
+            update_thermal_particles,
         ).run_if(in_state(GameState::Playing)))
+
         .add_systems(Update, (
             // Chemical Environment Effects
             apply_chemical_damage_system,
