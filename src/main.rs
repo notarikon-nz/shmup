@@ -39,7 +39,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Tidal Pool Cosmos - Microscopic Defense".into(),
+                title: "Cosmic Tidal Pool".into(),
                 resolution: WindowResolution::new(1280.0, 720.0),
                 resizable: false,
                 ..default()
@@ -182,7 +182,6 @@ fn main() {
             handle_restart_input,
             // 
             debug_atp_spawner,
-            fps_system,
         ).run_if(in_state(GameState::Playing)))
         .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
@@ -394,12 +393,13 @@ pub fn setup_biological_ui(mut commands: Commands) {
         EnvironmentText,
     ));
 
+    // FPS Text
     commands.spawn((
         Text::new("FPS: 0"),
         Node {
             position_type: PositionType::Absolute,
             right: Val::Px(20.0),
-            bottom: Val::Px(20.0),
+            bottom: Val::Px(40.0),
             ..default()
         },
         TextFont { font_size: 14.0, ..default() },
@@ -458,12 +458,13 @@ pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetSer
         projectile_texture: asset_server.load("textures/bullet.png"),
         explosion_texture: asset_server.load("textures/explosion.png"),
         particle_texture: asset_server.load("textures/particle.png"),
+        barrier_texture: asset_server.load("textures/shield_barrier.png"),
         // Renamed power-up textures for biological theme
-        health_powerup_texture: asset_server.load("textures/cellular_regen.png"),
-        shield_powerup_texture: asset_server.load("textures/cell_wall.png"),
-        speed_powerup_texture: asset_server.load("textures/flagella.png"),
+        health_powerup_texture: asset_server.load("textures/health_powerup.png"),
+        shield_powerup_texture: asset_server.load("textures/shield_powerup.png"),
+        speed_powerup_texture: asset_server.load("textures/speed_powerup.png"),
         multiplier_powerup_texture: asset_server.load("textures/symbiotic.png"),
-        rapidfire_powerup_texture: asset_server.load("textures/mitochondria.png"),
+        rapidfire_powerup_texture: asset_server.load("textures/weapon_powerup.png"),
         background_layers: vec![
             asset_server.load("textures/bg_layer1.png"),
             asset_server.load("textures/bg_layer2.png"),

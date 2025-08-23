@@ -7,6 +7,7 @@ pub struct GameAssets {
     pub projectile_texture: Handle<Image>,
     pub explosion_texture: Handle<Image>,
     pub particle_texture: Handle<Image>,
+    pub barrier_texture: Handle<Image>,
     pub health_powerup_texture: Handle<Image>,
     pub shield_powerup_texture: Handle<Image>,
     pub speed_powerup_texture: Handle<Image>,

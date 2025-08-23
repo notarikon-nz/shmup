@@ -562,25 +562,28 @@ pub fn handle_biological_powerup_collection(
                             alpha_timer: 0.0,
                         });
                         
-                        // Spawn cell wall visual effect
-                        commands.spawn((
-                            Sprite {
-                                color: Color::srgba(0.4, 1.0, 0.8, 0.4),
-                                custom_size: Some(Vec2::splat(70.0)),
-                                ..default()
-                            },
-                            Transform::from_translation(player_transform.translation),
-                            CellWallVisual,
-                            BioluminescentParticle {
-                                base_color: Color::srgb(0.4, 1.0, 0.8),
-                                pulse_frequency: 2.0,
-                                pulse_intensity: 0.5,
-                                organic_motion: OrganicMotion {
-                                    undulation_speed: 1.0,
-                                    response_to_current: 0.1,
+                        if let Some(assets) = &assets {
+                            // Spawn cell wall visual effect
+                            commands.spawn((
+                                Sprite {
+                                    image: assets.barrier_texture.clone(),
+                                    color: Color::srgba(0.4, 1.0, 0.8, 0.4),
+                                    custom_size: Some(Vec2::splat(70.0)),
+                                    ..default()
                                 },
-                            },
-                        ));
+                                Transform::from_translation(player_transform.translation),
+                                CellWallVisual,
+                                BioluminescentParticle {
+                                    base_color: Color::srgb(0.4, 1.0, 0.8),
+                                    pulse_frequency: 2.0,
+                                    pulse_intensity: 0.5,
+                                    organic_motion: OrganicMotion {
+                                        undulation_speed: 1.0,
+                                        response_to_current: 0.1,
+                                    },
+                                },
+                            ));
+                        }
                     }
                     
                     PowerUpType::Flagella { multiplier, duration } => {
