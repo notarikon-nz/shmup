@@ -1,7 +1,3 @@
-Of course. Based on the provided `design_doc.md` and `steam.md` files, here is a comprehensive Game Design Document (GDD) with an integrated feature checklist.
-
----
-
 # **Game Design Document: Tidal Pool Cosmos**
 
 **Version:** 1.0
@@ -176,8 +172,3 @@ The player starts as a basic, customizable microbe. Progression is achieved by p
 | | P1 | Performance Optimization | ⏳ Pending |
 | **Post-Launch** | P2 | Additional Challenge Levels | ⏳ Pending |
 | | P2 | New Evolutionary Paths | ⏳ Pending |
-
----
-**Document History:**
--   v1.0: Initial GDD created from design_doc.md and steam.md sources.
----
