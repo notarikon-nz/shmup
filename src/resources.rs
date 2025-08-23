@@ -1,18 +1,34 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Resource)]
 pub struct GameAssets {
+    // Player & General
     pub player_texture: Handle<Image>,
-    pub enemy_texture: Handle<Image>,
     pub projectile_texture: Handle<Image>,
     pub explosion_texture: Handle<Image>,
     pub particle_texture: Handle<Image>,
     pub barrier_texture: Handle<Image>,
+
+    // Enemy Textures -> Unique Sprites
+    pub enemy_texture: Handle<Image>,
+    pub viral_particle_texture: Handle<Image>,        // Small, spiky virus
+    pub aggressive_bacteria_texture: Handle<Image>,   // Rod-shaped with flagella
+    pub parasitic_protozoa_texture: Handle<Image>,    // Amoeba-like with pseudopods
+    pub infected_macrophage_texture: Handle<Image>,   // Large corrupted cell
+    pub suicidal_spore_texture: Handle<Image>,        // Explosive spore with warning patterns
+    pub biofilm_colony_texture: Handle<Image>,        // Clustered bacterial mat
+    pub swarm_cell_texture: Handle<Image>,            // Coordinated cell with communication tendrils
+    pub reproductive_vesicle_texture: Handle<Image>,  // Egg-like spawning structure
+    pub offspring_texture: Handle<Image>,             // Small, newly spawned cell
+
+    // PowerUp Textirse
     pub health_powerup_texture: Handle<Image>,
     pub shield_powerup_texture: Handle<Image>,
     pub speed_powerup_texture: Handle<Image>,
     pub multiplier_powerup_texture: Handle<Image>,
     pub rapidfire_powerup_texture: Handle<Image>,
+
     pub background_layers: Vec<Handle<Image>>,
     pub sfx_shoot: Handle<AudioSource>,
     pub sfx_explosion: Handle<AudioSource>,
@@ -40,14 +56,6 @@ pub struct EnemySpawner {
     pub wave_timer: f32,
     pub enemies_spawned: u32,
     pub powerup_timer: f32,
-}
-
-#[derive(Resource, Default)]
-pub struct GameScore {
-    pub current: u32,
-    pub high_scores: Vec<u32>,
-    pub score_multiplier: f32,
-    pub multiplier_timer: f32,    
 }
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -342,22 +350,11 @@ pub struct TidalPoolPhysics {
     pub water_viscosity: f32,
     pub temperature: f32,
     pub salinity: f32,
+    pub king_tide_active: bool,
+    pub king_tide_timer: f32,
+    pub king_tide_intensity: f32,
 }
 
-impl Default for TidalPoolPhysics {
-    fn default() -> Self {
-        Self {
-            tide_level: 0.0,
-            tide_cycle_speed: 0.1,
-            wave_intensity: 0.5,
-            current_strength: 1.0,
-            surface_tension: 0.8,
-            water_viscosity: 0.9,
-            temperature: 20.0, // Celsius
-            salinity: 3.5, // Percentage
-        }
-    }
-}
 
 // New: Microscopic Scale Physics
 #[derive(Resource)]
@@ -538,6 +535,92 @@ impl Default for ScreenShakeResource {
             decay_rate: 2.5,
             shake_intensity: 25.0,
             rotation_factor: 0.02,
+        }
+    }
+}
+
+// (Persistent) High Scores
+#[derive(Resource, Default)]
+pub struct GameScore {
+    pub current: u32,
+    pub high_scores: Vec<u32>,
+    pub score_multiplier: f32,
+    pub multiplier_timer: f32,
+    pub high_score_data: Option<HighScoreData>,
+    pub total_atp_collected: u64,
+    pub enemies_defeated: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HighScoreData {
+    pub scores: Vec<HighScoreEntry>,
+    pub total_games_played: u32,
+    pub best_evolution_reached: String,
+    pub longest_survival_time: f32,
+    pub total_atp_collected: u64,
+    pub enemies_defeated: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HighScoreEntry {
+    pub score: u32,
+    pub date: String,
+    pub evolution_type: String,
+    pub waves_survived: u32,
+    pub time_played: f32,
+}
+
+impl Default for HighScoreData {
+    fn default() -> Self {
+        Self {
+            scores: vec![
+                HighScoreEntry {
+                    score: 10000,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Cytoplasmic Spray".to_string(),
+                    waves_survived: 10,
+                    time_played: 300.0,
+                },
+                HighScoreEntry {
+                    score: 7500,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Pseudopod Network".to_string(),
+                    waves_survived: 8,
+                    time_played: 240.0,
+                },
+                HighScoreEntry {
+                    score: 5000,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Bioluminescent Beam".to_string(),
+                    waves_survived: 6,
+                    time_played: 180.0,
+                },
+            ],
+            total_games_played: 3,
+            best_evolution_reached: "Bioluminescent Beam".to_string(),
+            longest_survival_time: 300.0,
+            total_atp_collected: 2500,
+            enemies_defeated: 150,
+        }
+    }
+}
+
+use crate::components::{TidePhase};
+
+// Tidal Mechanics
+#[derive(Resource)]
+pub struct TidalState {
+    pub last_king_tide: f32,
+    pub current_tide_phase: TidePhase,
+    pub debris_active: bool,
+}
+
+impl Default for TidalState {
+    fn default() -> Self {
+        Self {
+            last_king_tide: 0.0,
+            current_tide_phase: TidePhase::Rising,
+            debris_active: false,
         }
     }
 }

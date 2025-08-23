@@ -16,6 +16,9 @@ mod audio;
 mod lighting;
 mod explosions;
 mod particles;
+mod tidal_mechanics;
+mod high_scores;
+mod powerup_systems;
 
 use components::*;
 use resources::*;
@@ -30,6 +33,9 @@ use audio::*;
 use lighting::*;
 use explosions::*;
 use particles::*;
+use tidal_mechanics::*;
+use high_scores::*;
+use powerup_systems::{spawn_powerup_system};
 
 fn main() {
     App::new()
@@ -55,6 +61,7 @@ fn main() {
         .init_resource::<BioluminescenceManager>()
         .init_resource::<EcosystemState>()
         .init_resource::<ScreenShakeResource>()
+        .init_resource::<TidalState>()
 
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
@@ -65,6 +72,7 @@ fn main() {
         .add_event::<AddScreenShake>()
         .add_event::<EnemyHit>()
         .add_event::<SpawnEnhancedExplosion>()
+        .add_event::<TidalEvent>()
 
         .add_systems(Startup, (
             setup_camera, 
@@ -72,11 +80,12 @@ fn main() {
             spawn_biological_player, 
             load_biological_assets, 
             setup_biological_ui.after(load_biological_assets), 
-            load_high_scores,
+            load_high_scores_from_file,
             init_particle_pool,
             init_fluid_environment, 
             init_chemical_zones,
             init_current_generator,
+            init_tidal_state, // do we need this?
             start_ambient_music.after(load_biological_assets),
         ))
         .add_systems(Update, fps_system)
@@ -100,6 +109,7 @@ fn main() {
         .add_systems(Update, (
             update_cell_wall_timer_ui,
             update_evolution_ui,
+            update_tidal_ui,
 
             spawn_extra_life_powerups,
             extra_life_collection_system,
@@ -158,7 +168,6 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
 
         // Sixth Update group - biological environment systems
-
         .add_systems(Update, (
             damage_text_system,
             fluid_dynamics_system,
@@ -173,6 +182,14 @@ fn main() {
             scroll_thermal_vents,
         ).run_if(in_state(GameState::Playing)))
 
+        // TIDAL MECHANICS GROUP
+        .add_systems(Update, (
+            advanced_tidal_system,
+            process_tidal_events,
+            update_king_tide,
+            update_tidal_debris,
+        ).run_if(in_state(GameState::Playing)))
+
         // Chemical Environment Effects
         .add_systems(Update, (
             apply_chemical_damage_system,
@@ -182,6 +199,8 @@ fn main() {
 
         // Event processing systems
         .add_systems(Update, (
+            enemy_animation_system,
+
             spawn_explosion_system,
             spawn_enemy_system,
             spawn_powerup_system,
@@ -193,19 +212,32 @@ fn main() {
             update_evolution_ui,
             check_game_over,
             handle_restart_input,
-            // 
+        ).run_if(in_state(GameState::Playing)))
+
+        // Debug Systems
+        .add_systems(Update, (
             debug_atp_spawner,
             debug_spawn_evolution_chamber,
+            debug_trigger_king_tide,
         ).run_if(in_state(GameState::Playing)))
-        .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
+
+        // Game Over
+        .add_systems(OnEnter(GameState::GameOver), (save_high_score_to_file, enhanced_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
         .add_systems(OnEnter(GameState::Playing), reset_biological_game_state)
+        
+        // Game Paused
         .add_systems(OnEnter(GameState::Paused), setup_pause_ui)
         .add_systems(OnExit(GameState::Paused), cleanup_pause_ui)
         .add_systems(Update, (
             handle_restart_button,
         ).run_if(in_state(GameState::GameOver)))
+
         .run();
+}
+
+pub fn init_tidal_state(mut commands: Commands) {
+    commands.init_resource::<TidalState>();
 }
 
 // Enhanced player spawning with biological properties
@@ -351,6 +383,20 @@ pub fn setup_biological_ui(mut commands: Commands) {
         EvolutionText,
     ));
 
+    // Tidal State
+    commands.spawn((
+        Text::new("Tide: Normal"),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            top: Val::Px(110.0),
+            ..default()
+        },
+        TextFont { font_size: 14.0, ..default() },
+        TextColor(Color::srgb(0.6, 0.9, 1.0)),
+        TidalStatusText,
+    ));
+
     // Emergency spore counter
     commands.spawn((
         Text::new("Emergency Spores: 3"),
@@ -483,24 +529,38 @@ pub fn setup_biological_background(mut commands: Commands, asset_server: Res<Ass
 // Load biological-themed assets
 pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     let assets = GameAssets {
+        // Player and general
         player_texture: asset_server.load("textures/player.png"),
-        enemy_texture: asset_server.load("textures/enemy.png"),
         projectile_texture: asset_server.load("textures/bullet.png"),
         explosion_texture: asset_server.load("textures/explosion.png"),
         particle_texture: asset_server.load("textures/particle.png"),
         barrier_texture: asset_server.load("textures/shield_barrier.png"),
-        // Renamed power-up textures for biological theme
+        
+        // UNIQUE ENEMY SPRITES
+        enemy_texture: asset_server.load("textures/enemy.png"),
+        viral_particle_texture: asset_server.load("textures/enemies/viral_particle.png"),
+        aggressive_bacteria_texture: asset_server.load("textures/enemies/aggressive_bacteria.png"),
+        parasitic_protozoa_texture: asset_server.load("textures/enemies/parasitic_protozoa.png"),
+        infected_macrophage_texture: asset_server.load("textures/enemies/infected_macrophage.png"),
+        suicidal_spore_texture: asset_server.load("textures/enemies/suicidal_spore.png"),
+        biofilm_colony_texture: asset_server.load("textures/enemies/biofilm_colony.png"),
+        swarm_cell_texture: asset_server.load("textures/enemies/swarm_cell.png"),
+        reproductive_vesicle_texture: asset_server.load("textures/enemies/reproductive_vesicle.png"),
+        offspring_texture: asset_server.load("textures/enemies/offspring.png"),
+        
+        // Power-ups (existing)
         health_powerup_texture: asset_server.load("textures/health_powerup.png"),
         shield_powerup_texture: asset_server.load("textures/shield_powerup.png"),
         speed_powerup_texture: asset_server.load("textures/speed_powerup.png"),
         multiplier_powerup_texture: asset_server.load("textures/symbiotic.png"),
         rapidfire_powerup_texture: asset_server.load("textures/weapon_powerup.png"),
+        
+        // Background and audio (existing)
         background_layers: vec![
             asset_server.load("textures/bg_layer1.png"),
             asset_server.load("textures/bg_layer2.png"),
             asset_server.load("textures/bg_layer3.png"),
         ],
-        // Biological sound effects
         sfx_shoot: asset_server.load("audio/organic_pulse.ogg"),
         sfx_explosion: asset_server.load("audio/cell_burst.ogg"),
         sfx_powerup: asset_server.load("audio/evolution.ogg"),
@@ -1128,3 +1188,19 @@ pub fn debug_spawn_evolution_chamber(
 }
 
 
+pub fn debug_trigger_king_tide(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut tidal_physics: ResMut<TidalPoolPhysics>,
+    mut tidal_events: EventWriter<TidalEvent>,
+) {
+    if keyboard.just_pressed(KeyCode::F4) {
+        println!("🌊 DEBUG: Triggering King Tide!");
+        tidal_physics.king_tide_active = true;
+        tidal_physics.king_tide_timer = 0.0;
+        tidal_physics.king_tide_intensity = 3.0;
+        tidal_events.write(TidalEvent::KingTideBegin {
+            intensity: 3.0,
+            duration: 15.0,
+        });
+    }
+}

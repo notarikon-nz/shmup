@@ -20,6 +20,9 @@ pub fn atp_pickup_system(
                 player_atp.amount += atp_component.amount;
                 game_score.current += atp_component.amount * 10; // ATP also gives points
                 commands.entity(atp_entity).despawn();
+
+                // stats tracking
+                game_score.total_atp_collected += atp_component.amount as u64;
             }
         }
     }
@@ -45,7 +48,7 @@ pub fn spawn_atp_on_death(
                     EnemyType::ReproductiveVesicle => (15, 0.9, 12),
                     EnemyType::Offspring => (1, 0.5, 2),
                 };
-                
+
                 // Random chance to drop ATP based on organism energy content
                 if (event.position.x * 123.456).sin().abs() < spawn_chance {
                     // Main ATP drop
@@ -69,12 +72,12 @@ pub fn spawn_atp_on_death(
                             },
                         },
                     ));
-                    
+
                     // Spawn smaller ATP particles for organic feel
                     for i in 0..particle_count {
                         let angle = (i as f32 / particle_count as f32) * std::f32::consts::TAU;
                         let offset = Vec2::from_angle(angle) * 20.0;
-                        
+
                         commands.spawn((
                             Sprite {
                                 image: assets.particle_texture.clone(),
@@ -118,21 +121,21 @@ pub fn move_atp(
     for (mut transform, mut bio_particle) in atp_query.iter_mut() {
         // Gentle downward drift
         transform.translation.y -= 80.0 * time.delta_secs();
-        
+
         // Organic floating animation
         let bob_phase = time.elapsed_secs() * bio_particle.pulse_frequency + transform.translation.x * 0.01;
         let bob_amplitude = 15.0;
         transform.translation.y += bob_phase.sin() * bob_amplitude * time.delta_secs();
-        
+
         // Horizontal drift based on position
         let drift = (time.elapsed_secs() * 1.5 + transform.translation.y * 0.005).sin() * 30.0;
         transform.translation.x += drift * time.delta_secs();
-        
+
         // Respond to fluid currents
         let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
         let current = sample_current(&fluid_environment, grid_pos);
         transform.translation += (current * bio_particle.organic_motion.response_to_current).extend(0.0) * time.delta_secs();
-        
+
         // Organic rotation
         transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 1.5);
     }
@@ -156,38 +159,38 @@ pub fn evolution_chamber_interaction(
                     evolution_system.cellular_adaptations.membrane_permeability *= 1.2;
                     println!("Upgraded damage!"); // Debug
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit2) && atp.amount >= 15 {
                     // Enhance metabolic rate
                     atp.amount -= 15;
                     upgrades.metabolic_rate *= 1.3;
                     evolution_system.cellular_adaptations.metabolic_efficiency *= 1.3;
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit3) && atp.amount >= 20 {
                     // Strengthen cellular integrity
                     atp.amount -= 20;
                     upgrades.max_health += 25;
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit4) && atp.amount >= 25 {
                     // Develop enzyme production
                     atp.amount -= 25;
                     evolution_system.cellular_adaptations.extremophile_traits = true;
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit5) && atp.amount >= 30 {
                     // Enhance bioluminescence
                     atp.amount -= 30;
                     evolution_system.cellular_adaptations.biofilm_formation = true;
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit6) && atp.amount >= 20 {
                     // Develop emergency spore
                     atp.amount -= 20;
                     evolution_system.emergency_spores += 1;
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit7) && atp.amount >= 50 {
                     atp.amount -= 50;
                     evolution_system.primary_evolution = EvolutionType::PseudopodNetwork {
@@ -198,7 +201,7 @@ pub fn evolution_chamber_interaction(
                     };
                     println!("Evolved to Pseudopod Network!"); // Debug
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit8) && atp.amount >= 75 {
                     // Evolve to Symbiotic Hunters
                     atp.amount -= 75;
@@ -209,7 +212,7 @@ pub fn evolution_chamber_interaction(
                         blast_radius: 50.0,
                     };
                 }
-                
+
                 if keyboard.just_pressed(KeyCode::Digit9) && atp.amount >= 100 {
                     // Evolve to Bioluminescent Beam
                     atp.amount -= 100;
@@ -245,7 +248,7 @@ pub fn evolution_powerup_collection(
                             });
                         }
                     }
-                    
+
                     AdaptationType::CellularDivisionRate(multiplier) => {
                         evolution_system.cellular_adaptations.membrane_permeability *= multiplier;
                         if evolution_powerup.temporary {
@@ -255,7 +258,7 @@ pub fn evolution_powerup_collection(
                             });
                         }
                     }
-                    
+
                     AdaptationType::EnzymeProduction => {
                         evolution_system.cellular_adaptations.extremophile_traits = true;
                         if evolution_powerup.temporary {
@@ -264,7 +267,7 @@ pub fn evolution_powerup_collection(
                             });
                         }
                     }
-                    
+
                     AdaptationType::Bioluminescence => {
                         evolution_system.cellular_adaptations.biofilm_formation = true;
                         if evolution_powerup.temporary {
@@ -273,7 +276,7 @@ pub fn evolution_powerup_collection(
                             });
                         }
                     }
-                    
+
                     AdaptationType::ChemicalResistance => {
                         evolution_system.cellular_adaptations.chemoreceptor_sensitivity *= 0.5; // Less sensitive = more resistant
                         if evolution_powerup.temporary {
@@ -282,7 +285,7 @@ pub fn evolution_powerup_collection(
                             });
                         }
                     }
-                    
+
                     AdaptationType::EvolutionSwap(new_evolution) => {
                         evolution_system.secondary_evolution = Some(evolution_system.primary_evolution.clone());
                         evolution_system.primary_evolution = new_evolution.clone();
@@ -294,7 +297,7 @@ pub fn evolution_powerup_collection(
                         }
                     }
                 }
-                
+
                 commands.entity(powerup_entity).despawn();
             }
         }
@@ -322,7 +325,7 @@ pub fn update_temporary_evolution_effects(
                 commands.entity(entity).remove::<TemporaryMetabolicBoost>();
             }
         }
-        
+
         // Update cellular division rate
         for (entity, mut division) in cellular_division_query.iter_mut() {
             division.timer -= time.delta_secs();
@@ -331,7 +334,7 @@ pub fn update_temporary_evolution_effects(
                 commands.entity(entity).remove::<TemporaryCellularDivision>();
             }
         }
-        
+
         // Update enzyme production
         for (entity, mut enzyme) in enzyme_production_query.iter_mut() {
             enzyme.timer -= time.delta_secs();
@@ -340,7 +343,7 @@ pub fn update_temporary_evolution_effects(
                 commands.entity(entity).remove::<TemporaryEnzymeProduction>();
             }
         }
-        
+
         // Update bioluminescence
         for (entity, mut biolum) in bioluminescence_query.iter_mut() {
             biolum.timer -= time.delta_secs();
@@ -349,7 +352,7 @@ pub fn update_temporary_evolution_effects(
                 commands.entity(entity).remove::<TemporaryBioluminescence>();
             }
         }
-        
+
         // Update chemical resistance
         for (entity, mut resistance) in chemical_resistance_query.iter_mut() {
             resistance.timer -= time.delta_secs();
@@ -358,7 +361,7 @@ pub fn update_temporary_evolution_effects(
                 commands.entity(entity).remove::<TemporaryChemicalResistance>();
             }
         }
-        
+
         // Update evolution swap
         for (entity, mut swap) in evolution_swap_query.iter_mut() {
             swap.timer -= time.delta_secs();
@@ -382,50 +385,50 @@ pub fn spawn_evolution_powerups(
         // Spawn evolution power-ups less frequently than regular power-ups
         if enemy_spawner.wave_timer % 30.0 < 0.1 && enemy_spawner.wave_timer > 0.1 {
             let x_position = (time.elapsed_secs() * 25.0).sin() * 280.0;
-            
+
             let (adaptation_type, texture, color, temporary) = match (time.elapsed_secs() as u32 / 30) % 6 {
                 0 => (
-                    AdaptationType::MetabolicBoost(1.5), 
-                    assets.health_powerup_texture.clone(), 
+                    AdaptationType::MetabolicBoost(1.5),
+                    assets.health_powerup_texture.clone(),
                     Color::srgb(0.8, 1.0, 0.6), // Healthy green
                     true
                 ),
                 1 => (
-                    AdaptationType::CellularDivisionRate(1.8), 
-                    assets.rapidfire_powerup_texture.clone(), 
+                    AdaptationType::CellularDivisionRate(1.8),
+                    assets.rapidfire_powerup_texture.clone(),
                     Color::srgb(0.6, 0.9, 1.0), // Cellular blue
                     true
                 ),
                 2 => (
-                    AdaptationType::EnzymeProduction, 
-                    assets.shield_powerup_texture.clone(), 
+                    AdaptationType::EnzymeProduction,
+                    assets.shield_powerup_texture.clone(),
                     Color::srgb(0.9, 0.7, 1.0), // Enzyme purple
                     true
                 ),
                 3 => (
-                    AdaptationType::Bioluminescence, 
-                    assets.multiplier_powerup_texture.clone(), 
+                    AdaptationType::Bioluminescence,
+                    assets.multiplier_powerup_texture.clone(),
                     Color::srgb(1.0, 1.0, 0.7), // Bioluminescent yellow
                     true
                 ),
                 4 => (
                     AdaptationType::EvolutionSwap(EvolutionType::PseudopodNetwork {
                         damage: 12, fire_rate: 0.12, tendril_count: 7, spread_angle: 0.8
-                    }), 
-                    assets.speed_powerup_texture.clone(), 
+                    }),
+                    assets.speed_powerup_texture.clone(),
                     Color::srgb(1.0, 0.8, 0.6), // Organic orange
                     true
                 ),
                 _ => (
                     AdaptationType::EvolutionSwap(EvolutionType::EnzymeBurst {
                         damage: 6, fire_rate: 0.05, acid_damage: 3.0
-                    }), 
-                    assets.explosion_texture.clone(), 
+                    }),
+                    assets.explosion_texture.clone(),
                     Color::srgb(0.8, 1.0, 0.8), // Chemical green
                     true
                 ),
             };
-            
+
             commands.spawn((
                 Sprite {
                     image: texture,
@@ -463,10 +466,10 @@ pub fn spawn_biological_powerups(
 ) {
     enemy_spawner.powerup_timer -= time.delta_secs();
     *extra_life_timer += time.delta_secs();
-    
+
     if enemy_spawner.powerup_timer <= 0.0 {
         let x_position = (time.elapsed_secs() * 40.0).sin() * 320.0;
-        
+
         let power_type = if (time.elapsed_secs() * 987.654).sin().abs() < 0.05 {
             PowerUpType::CellularRegeneration { amount: 1 } // Use as extra life marker
         } else {
@@ -487,7 +490,7 @@ pub fn spawn_biological_powerups(
             position: Vec3::new(x_position, 420.0, 0.0),
             power_type,
         });
-        
+
         enemy_spawner.powerup_timer = 15.0; // Slightly more frequent for biological variety
     }
 }
@@ -505,7 +508,7 @@ pub fn handle_biological_powerup_collection(
         for (powerup_entity, powerup_transform, powerup_collider, powerup) in powerup_query.iter() {
             let distance = player_transform.translation.distance(powerup_transform.translation);
             if distance < player_collider.radius + powerup_collider.radius {
-                
+
                 // Spawn organic absorption particles
                 particle_events.write(SpawnParticles {
                     position: powerup_transform.translation,
@@ -521,17 +524,17 @@ pub fn handle_biological_powerup_collection(
                         bioluminescence: 1.0,
                     },
                 });
-                
+
                 match &powerup.power_type {
                     PowerUpType::CellularRegeneration { amount } => {
                         player_health.0 = (player_health.0 + amount).min(100);
-                        
+
                         // Spawn healing particles
                         if let Some(assets) = &assets {
                             for i in 0..8 {
                                 let angle = (i as f32 / 8.0) * std::f32::consts::TAU;
                                 let offset = Vec2::from_angle(angle) * 25.0;
-                                
+
                                 commands.spawn((
                                     Sprite {
                                         image: assets.particle_texture.clone(),
@@ -562,13 +565,13 @@ pub fn handle_biological_powerup_collection(
                             }
                         }
                     }
-                    
+
                     PowerUpType::CellWall { duration } => {
                         commands.entity(player_entity).insert(CellWallReinforcement {
                             timer: *duration,
                             alpha_timer: 0.0,
                         });
-                        
+
                         if let Some(assets) = &assets {
                             // Spawn cell wall visual effect
                             commands.spawn((
@@ -592,48 +595,48 @@ pub fn handle_biological_powerup_collection(
                             ));
                         }
                     }
-                    
+
                     PowerUpType::Flagella { multiplier, duration } => {
                         commands.entity(player_entity).insert(FlagellaBoost {
                             timer: *duration,
                             multiplier: *multiplier,
                         });
                     }
-                    
+
                     PowerUpType::SymbioticBoost { multiplier, duration } => {
                         commands.entity(player_entity).insert(SymbioticMultiplier {
                             timer: *duration,
                             multiplier: *multiplier,
                         });
                     }
-                    
+
                     PowerUpType::MitochondriaOvercharge { rate_multiplier, duration } => {
                         commands.entity(player_entity).insert(MitochondriaOvercharge {
                             timer: *duration,
                             rate_multiplier: *rate_multiplier,
                         });
                     }
-                    
+
                     PowerUpType::Photosynthesis { energy_regen, duration } => {
                         commands.entity(player_entity).insert(PhotosynthesisActive {
                             timer: *duration,
                             energy_per_second: *energy_regen,
                         });
                     }
-                    
+
                     PowerUpType::Chemotaxis { homing_strength, duration } => {
                         commands.entity(player_entity).insert(ChemotaxisActive {
                             timer: *duration,
                             homing_strength: *homing_strength,
                         });
                     }
-                    
+
                     PowerUpType::Osmoregulation { immunity_duration } => {
                         commands.entity(player_entity).insert(OsmoregulationActive {
                             timer: *immunity_duration,
                         });
                     }
-                    
+
                     PowerUpType::BinaryFission { clone_duration } => {
                         commands.entity(player_entity).insert(BinaryFissionActive {
                             timer: *clone_duration,
@@ -641,7 +644,7 @@ pub fn handle_biological_powerup_collection(
                         });
                     }
                 }
-                
+
                 commands.entity(powerup_entity).despawn();
             }
         }
@@ -653,7 +656,7 @@ pub fn handle_biological_powerup_collection(
                 player.lives += 1;
                 commands.entity(life_entity).despawn();
             }
-        }        
+        }
     }
 }
 
@@ -666,26 +669,26 @@ pub fn move_biological_powerups(
     for (mut transform, mut powerup, bio_particle) in powerup_query.iter_mut() {
         // Slow downward movement
         transform.translation.y -= 120.0 * time.delta_secs();
-        
+
         // Organic bobbing animation
         powerup.bob_timer += time.delta_secs() * 2.5;
         let bob_amplitude = if bio_particle.is_some() { 20.0 } else { 15.0 };
         transform.translation.y += powerup.bob_timer.sin() * bob_amplitude * time.delta_secs();
-        
+
         // Horizontal drift based on biological type
         let drift_frequency = 1.5 + powerup.bioluminescent_pulse * 0.5;
         let drift = (time.elapsed_secs() * drift_frequency + transform.translation.x * 0.005).sin() * 40.0;
         transform.translation.x += drift * time.delta_secs();
-        
+
         // Respond to fluid currents
         let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
         let current = sample_current(&fluid_environment, grid_pos);
         transform.translation += (current * 0.6).extend(0.0) * time.delta_secs();
-        
+
         // Organic rotation with variation
         let rotation_speed = 1.8 + (powerup.bioluminescent_pulse * 0.5);
         transform.rotation *= Quat::from_rotation_z(time.delta_secs() * rotation_speed);
-        
+
         // Update bioluminescent pulse for organic glow
         powerup.bioluminescent_pulse += time.delta_secs() * 2.0;
     }
@@ -703,7 +706,7 @@ pub fn collect_atp_with_energy_transfer(
     if let Ok((player_transform, player_collider, mut player_atp)) = player_query.single_mut() {
         for (atp_entity, atp_transform, atp_collider, atp_component) in atp_query.iter() {
             let distance = player_transform.translation.distance(atp_transform.translation);
-            
+
             // Extended collection range for more organic feel
             if distance < (player_collider.radius + atp_collider.radius) * 1.5 {
                 // Energy transfer particle stream
@@ -724,11 +727,11 @@ pub fn collect_atp_with_energy_transfer(
                         bioluminescence: 1.0,
                     },
                 });
-                
+
                 // Collect ATP
                 player_atp.amount += atp_component.amount;
                 game_score.current += atp_component.amount * 12; // Slightly higher points for biological energy
-                
+
                 commands.entity(atp_entity).despawn();
             }
         }
@@ -765,13 +768,13 @@ pub fn spawn_evolution_chambers(
                     },
                 },
             )).id();
-            
+
             // Spawn organic tendrils around the chamber
             for i in 0..6 {
                 let angle = (i as f32 / 6.0) * std::f32::consts::TAU;
                 let radius = 40.0;
                 let tendril_pos = Vec2::from_angle(angle) * radius;
-                
+
                 commands.spawn((
                     Sprite {
                         image: assets.particle_texture.clone(),
@@ -815,7 +818,7 @@ pub fn update_evolution_ui(
         let near_chamber = chamber_query.iter().any(|chamber_transform| {
             player_transform.translation.distance(chamber_transform.translation) < 60.0
         });
-        
+
         if near_chamber {
             // Show evolution UI if not already showing
             if existing_ui_query.is_empty() {
@@ -852,14 +855,14 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
             TextColor(Color::srgb(0.3, 1.0, 0.7)),
             Node { margin: UiRect::bottom(Val::Px(10.0)), ..default() },
         ));
-        
+
         parent.spawn((
             Text::new(format!("ATP Available: {}⚡", atp_amount)),
             TextFont { font_size: 16.0, ..default() },
             TextColor(Color::srgb(1.0, 1.0, 0.4)),
             Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() },
         ));
-        
+
         // Evolution upgrades with detailed explanations
         let evolutions = [
             (
@@ -869,79 +872,79 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
                 "Strengthens cellular membrane for more effective attacks"
             ),
             (
-                "2 - Metabolic Enhancement (15 ATP)", 
+                "2 - Metabolic Enhancement (15 ATP)",
                 15,
                 "⚡ +30% movement speed & fire rate",
                 "Optimizes ATP synthesis for faster cellular processes"
             ),
             (
-                "3 - Cellular Integrity (20 ATP)", 
+                "3 - Cellular Integrity (20 ATP)",
                 20,
-                "❤️ +25 Maximum Health Points", 
+                "❤️ +25 Maximum Health Points",
                 "Reinforces cell structure - increases total health capacity"
             ),
             (
-                "4 - Enzyme Production (25 ATP)", 
+                "4 - Enzyme Production (25 ATP)",
                 25,
                 "🧪 Immunity to environmental toxins",
                 "Develops extremophile traits for hostile environments"
             ),
             (
-                "5 - Bioluminescence (30 ATP)", 
+                "5 - Bioluminescence (30 ATP)",
                 30,
                 "💡 Enhanced coordination abilities",
                 "Enables biofilm formation for defensive structures"
             ),
             (
-                "6 - Emergency Spore (20 ATP)", 
+                "6 - Emergency Spore (20 ATP)",
                 20,
                 "💥 +1 Emergency reproductive blast",
                 "Develops additional spore for area-effect emergency defense"
             ),
             (
-                "7 - Pseudopod Network (50 ATP)", 
+                "7 - Pseudopod Network (50 ATP)",
                 50,
                 "🕷️ Multi-directional tendril weapon",
                 "Evolves spread-shot capability with 5 organic projectiles"
             ),
             (
-                "8 - Symbiotic Hunters (75 ATP)", 
+                "8 - Symbiotic Hunters (75 ATP)",
                 75,
                 "🎯 Homing cooperative organisms",
                 "Self-guided missiles with blast radius and target tracking"
             ),
             (
-                "9 - Bioluminescent Beam (100 ATP)", 
+                "9 - Bioluminescent Beam (100 ATP)",
                 100,
                 "🌟 Concentrated energy discharge",
                 "Sustained beam weapon with charging mechanism"
             ),
         ];
-        
+
         for (title, cost, effect, description) in evolutions {
             let color = if atp_amount >= cost {
                 Color::srgb(0.9, 1.0, 0.9)
             } else {
                 Color::srgb(0.5, 0.6, 0.5)
             };
-            
+
             parent.spawn((
                 Text::new(title),
                 TextFont { font_size: 14.0, ..default() },
                 TextColor(color),
                 Node { margin: UiRect::bottom(Val::Px(2.0)), ..default() },
             ));
-            
+
             parent.spawn((
                 Text::new(effect),
                 TextFont { font_size: 12.0, ..default() },
                 TextColor(Color::srgb(0.8, 0.9, 0.8)),
-                Node { 
+                Node {
                     margin: UiRect::bottom(Val::Px(1.0)),
-                    ..default() 
+                    ..default()
                 },
             ));
-            
+
             parent.spawn((
                 Text::new(description),
                 TextFont { font_size: 10.0, ..default() },
@@ -949,7 +952,7 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
                 Node { margin: UiRect::bottom(Val::Px(8.0)), ..default() },
             ));
         }
-        
+
         parent.spawn((
             Text::new("💡 Tip: Stand near chamber and press number keys to evolve"),
             TextFont { font_size: 12.0, ..default() },
@@ -986,13 +989,13 @@ pub fn spawn_extra_life_powerups(
 ) {
     if let Some(assets) = assets {
         *spawn_timer += time.delta_secs();
-        
+
         // Spawn every 150 seconds
         if *spawn_timer >= 150.0 {
             *spawn_timer = 0.0;
-            
+
             let x_position = (time.elapsed_secs() * 20.0).sin() * 280.0;
-            
+
             commands.spawn((
                 Sprite {
                     image: assets.health_powerup_texture.clone(),
@@ -1030,12 +1033,12 @@ pub fn extra_life_collection_system(
     if let Ok((player_transform, player_collider, mut player)) = player_query.single_mut() {
         for (life_entity, life_transform, life_collider, mut extra_life) in extra_life_query.iter_mut() {
             if extra_life.collected { continue; }
-            
+
             let distance = player_transform.translation.distance(life_transform.translation);
             if distance < player_collider.radius + life_collider.radius {
                 extra_life.collected = true;
                 player.lives += 1;
-                
+
                 // Enhanced celebration effect
                 particle_events.write(SpawnParticles {
                     position: life_transform.translation,
@@ -1051,10 +1054,10 @@ pub fn extra_life_collection_system(
                         bioluminescence: 1.0,
                     },
                 });
-                
+
                 // Positive screen shake
                 shake_events.write(AddScreenShake { amount: 0.3 });
-                
+
                 commands.entity(life_entity).despawn();
             }
         }

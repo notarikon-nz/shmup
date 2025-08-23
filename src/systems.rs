@@ -590,9 +590,22 @@ pub fn spawn_enemy_system(
             let chemical_signature = event.enemy_type.get_chemical_signature();
             let chemical_signature_clone = chemical_signature.clone();
 
-            commands.spawn((
+            // GET UNIQUE TEXTURE based on enemy type
+            let texture = match event.enemy_type {
+                EnemyType::ViralParticle => assets.viral_particle_texture.clone(),
+                EnemyType::AggressiveBacteria => assets.aggressive_bacteria_texture.clone(),
+                EnemyType::ParasiticProtozoa => assets.parasitic_protozoa_texture.clone(),
+                EnemyType::InfectedMacrophage => assets.infected_macrophage_texture.clone(),
+                EnemyType::SuicidalSpore => assets.suicidal_spore_texture.clone(),
+                EnemyType::BiofilmColony => assets.biofilm_colony_texture.clone(),
+                EnemyType::SwarmCell => assets.swarm_cell_texture.clone(),
+                EnemyType::ReproductiveVesicle => assets.reproductive_vesicle_texture.clone(),
+                EnemyType::Offspring => assets.offspring_texture.clone(),
+            };
+
+            let mut enemy_commands = commands.spawn((
                 Sprite {
-                    image: assets.enemy_texture.clone(),
+                    image: texture,
                     color,
                     ..default()
                 },
@@ -614,124 +627,82 @@ pub fn spawn_enemy_system(
                     damage_per_second_outside_range: 3,
                 },
             ));
-        }
-    }
-}
 
-pub fn spawn_powerup_system(
-    mut commands: Commands,
-    mut powerup_events: EventReader<SpawnPowerUp>,
-    assets: Option<Res<GameAssets>>,
-) {
-    if let Some(assets) = assets {
-        for event in powerup_events.read() {
-            let (texture, color) = match &event.power_type {
-                PowerUpType::CellularRegeneration { .. } => (assets.health_powerup_texture.clone(), Color::srgb(0.4, 1.0, 0.6)),
-                PowerUpType::CellWall { .. } => (assets.shield_powerup_texture.clone(), Color::srgb(0.4, 1.0, 0.8)),
-                PowerUpType::Flagella { .. } => (assets.speed_powerup_texture.clone(), Color::srgb(0.6, 0.9, 1.0)),
-                PowerUpType::SymbioticBoost { .. } => (assets.multiplier_powerup_texture.clone(), Color::srgb(1.0, 0.8, 0.4)),
-                PowerUpType::MitochondriaOvercharge { .. } => (assets.rapidfire_powerup_texture.clone(), Color::srgb(1.0, 0.6, 0.8)),
-                PowerUpType::Photosynthesis { .. } => (assets.health_powerup_texture.clone(), Color::srgb(0.6, 1.0, 0.3)),
-                PowerUpType::Chemotaxis { .. } => (assets.speed_powerup_texture.clone(), Color::srgb(0.8, 0.6, 1.0)),
-                PowerUpType::Osmoregulation { .. } => (assets.shield_powerup_texture.clone(), Color::srgb(0.3, 0.8, 0.9)),
-                PowerUpType::BinaryFission { .. } => (assets.rapidfire_powerup_texture.clone(), Color::srgb(1.0, 0.9, 0.3)),
-            };
-            
-            commands.spawn((
-                Sprite {
-                    image: texture,
-                    color,
-                    ..default()
-                },
-                Transform::from_translation(event.position),
-                PowerUp {
-                    power_type: event.power_type.clone(),
-                    bob_timer: 0.0,
-                    bioluminescent_pulse: 0.0,
-                },
-                Collider { radius: 12.0 },
-                BioluminescentParticle {
-                    base_color: color,
-                    pulse_frequency: 2.5,
-                    pulse_intensity: 0.5,
-                    organic_motion: OrganicMotion {
-                        undulation_speed: 1.8,
-                        response_to_current: 0.7,
-                    },
-                },
-            ));
-        }
-    }
-}
-
-pub fn spawn_particles_system(
-    mut commands: Commands,
-    mut particle_events: EventReader<SpawnParticles>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-) {
-    if let Some(assets) = assets {
-        for event in particle_events.read() {
-            for i in 0..event.count {
-                let config = &event.config;
-                let rand_seed = time.elapsed_secs() * 1000.0 + i as f32;
-                let rand_x = (rand_seed * 12.9898).sin().abs().fract();
-                let rand_y = (rand_seed * 78.233).sin().abs().fract();
-                let rand_lifetime = (rand_seed * 35.456).sin().abs().fract();
-                let rand_size = (rand_seed * 91.123).sin().abs().fract();
-                
-                let velocity = Vec2::new(
-                    config.velocity_range.0.x + (config.velocity_range.1.x - config.velocity_range.0.x) * rand_x,
-                    config.velocity_range.0.y + (config.velocity_range.1.y - config.velocity_range.0.y) * rand_y,
-                );
-                let lifetime = config.lifetime_range.0 + (config.lifetime_range.1 - config.lifetime_range.0) * rand_lifetime;
-                let size = config.size_range.0 + (config.size_range.1 - config.size_range.0) * rand_size;
-                
-                let drift_pattern = if config.organic_motion {
-                    match i % 4 {
-                        0 => DriftPattern::Floating,
-                        1 => DriftPattern::Pulsing,
-                        2 => DriftPattern::Spiraling,
-                        _ => DriftPattern::Brownian,
-                    }
-                } else {
-                    DriftPattern::Brownian
-                };
-                
-                let mut particle_commands = commands.spawn((
-                    Sprite {
-                        image: assets.particle_texture.clone(),
-                        color: config.color_start,
-                        ..default()
-                    },
-                    Transform::from_translation(event.position).with_scale(Vec3::splat(size)),
-                    Particle {
-                        velocity,
-                        lifetime: 0.0,
-                        max_lifetime: lifetime,
-                        size,
-                        fade_rate: 1.0,
-                        bioluminescent: config.organic_motion,
-                        drift_pattern,
-                    },
-                ));
-                
-                // Add bioluminescent properties for organic particles
-                if config.organic_motion {
-                    particle_commands.insert(BioluminescentParticle {
-                        base_color: config.color_start,
-                        pulse_frequency: 1.5 + rand_x * 3.0,
-                        pulse_intensity: config.bioluminescence,
-                        organic_motion: OrganicMotion {
-                            undulation_speed: 1.0 + rand_y * 2.0,
-                            response_to_current: 0.6 + rand_size * 0.4,
-                        },
+            // ADD UNIQUE BEHAVIORS based on enemy type
+            match event.enemy_type {
+                EnemyType::ViralParticle => {
+                    // Viruses have pulsing animation
+                    enemy_commands.insert(PulsingAnimation {
+                        frequency: 4.0,
+                        intensity: 0.2,
+                    });
+                }
+                EnemyType::AggressiveBacteria => {
+                    // Bacteria have flagella movement
+                    enemy_commands.insert(FlagellaAnimation {
+                        undulation_speed: 6.0,
+                        amplitude: 2.0,
+                    });
+                }
+                EnemyType::ParasiticProtozoa => {
+                    // Protozoa have pseudopod extensions
+                    enemy_commands.insert(PseudopodAnimation {
+                        extension_speed: 3.0,
+                        max_extension: 8.0,
+                    });
+                }
+                EnemyType::InfectedMacrophage => {
+                    // Macrophages have corruption effects
+                    enemy_commands.insert(CorruptionEffect {
+                        intensity: 1.0,
+                        color_shift_speed: 2.0,
+                    });
+                }
+                EnemyType::SuicidalSpore => {
+                    // Spores have warning flash
+                    enemy_commands.insert(WarningFlash {
+                        flash_frequency: 8.0,
+                        warning_color: Color::srgb(1.0, 0.3, 0.3),
+                    });
+                }
+                EnemyType::BiofilmColony => {
+                    // Colonies have toxic aura
+                    enemy_commands.insert(ToxicAura {
+                        radius: 40.0,
+                        pulse_speed: 2.0,
+                    });
+                }
+                EnemyType::SwarmCell => {
+                    // Swarm cells have coordination indicators
+                    enemy_commands.insert(CoordinationIndicator {
+                        signal_strength: 1.0,
+                        communication_range: 80.0,
+                    });
+                }
+                EnemyType::ReproductiveVesicle => {
+                    // Vesicles have gestation animation
+                    enemy_commands.insert(GestationAnimation {
+                        pulse_frequency: 1.5,
+                        growth_factor: 0.3,
+                    });
+                }
+                EnemyType::Offspring => {
+                    // Offspring have juvenile wiggle
+                    enemy_commands.insert(JuvenileWiggle {
+                        wiggle_speed: 10.0,
+                        amplitude: 3.0,
                     });
                 }
             }
+
+
         }
     }
 }
+
+
+
+
 
 // Helper functions for fluid dynamics
 fn world_to_grid_pos(world_pos: Vec2, fluid_env: &FluidEnvironment) -> (usize, usize) {
@@ -861,6 +832,9 @@ pub fn collision_system(
                             enemy_type: Some(enemy_type.clone()),
                         });
                         commands.entity(enemy_entity).despawn();
+
+                        // stats tracking
+                        game_score.enemies_defeated += 1;
                     }
                     break;
                 }
@@ -1055,5 +1029,27 @@ pub fn update_cell_wall_timer_ui(
         } else {
             **text = String::new();
         }
+    }
+}
+
+// Tidal UI
+pub fn update_tidal_ui(
+    tidal_physics: Res<TidalPoolPhysics>,
+    mut tidal_text_query: Query<&mut Text, With<TidalStatusText>>,
+) {
+    if let Ok(mut text) = tidal_text_query.single_mut() {
+        let tide_strength = tidal_physics.tide_level.sin();
+        let status = if tidal_physics.king_tide_active {
+            "🌊 KING TIDE! 🌊"
+        } else if tide_strength > 0.8 {
+            "Tide: High"
+        } else if tide_strength < -0.8 {
+            "Tide: Low"
+        } else if tide_strength > 0.0 {
+            "Tide: Rising"
+        } else {
+            "Tide: Falling"
+        };
+        **text = status.to_string();
     }
 }

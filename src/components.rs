@@ -156,7 +156,7 @@ pub enum PowerUpType {
     Flagella { multiplier: f32, duration: f32 },
     SymbioticBoost { multiplier: f32, duration: f32 },
     MitochondriaOvercharge { rate_multiplier: f32, duration: f32 },
-    
+
     // New biological power-ups
     Photosynthesis { energy_regen: f32, duration: f32 },
     Chemotaxis { homing_strength: f32, duration: f32 },
@@ -440,7 +440,7 @@ impl EvolutionType {
             EvolutionType::ElectricDischarge { damage, .. } => *damage,
         }
     }
-    
+
     pub fn get_fire_rate(&self) -> f32 {
         match self {
             EvolutionType::CytoplasmicSpray { fire_rate, .. } => *fire_rate,
@@ -452,7 +452,7 @@ impl EvolutionType {
             EvolutionType::ElectricDischarge { .. } => 1.5,
         }
     }
-    
+
     pub fn get_display_name(&self) -> &'static str {
         match self {
             EvolutionType::CytoplasmicSpray { .. } => "Cytoplasmic Spray",
@@ -620,7 +620,7 @@ pub struct ThermalParticle {
     pub heat_intensity: f32,
     pub rise_speed: f32,
     pub lifetime: f32,
-    pub max_lifetime: f32,    
+    pub max_lifetime: f32,
 }
 
 // better damage
@@ -706,21 +706,21 @@ pub enum ExplosionType {
 impl From<&Enemy> for ExplosionType {
     fn from(enemy: &Enemy) -> Self {
         match enemy.enemy_type {
-            EnemyType::InfectedMacrophage => ExplosionType::Biological { 
-                toxin_release: true, 
-                membrane_rupture: true 
+            EnemyType::InfectedMacrophage => ExplosionType::Biological {
+                toxin_release: true,
+                membrane_rupture: true
             },
-            EnemyType::BiofilmColony => ExplosionType::Chemical { 
-                ph_change: -1.2, 
-                oxygen_release: 0.4 
+            EnemyType::BiofilmColony => ExplosionType::Chemical {
+                ph_change: -1.2,
+                oxygen_release: 0.4
             },
-            EnemyType::AggressiveBacteria => ExplosionType::Biological { 
-                toxin_release: enemy.chemical_signature.releases_toxins, 
-                membrane_rupture: false 
+            EnemyType::AggressiveBacteria => ExplosionType::Biological {
+                toxin_release: enemy.chemical_signature.releases_toxins,
+                membrane_rupture: false
             },
-            EnemyType::ParasiticProtozoa => ExplosionType::Biological { 
-                toxin_release: false, 
-                membrane_rupture: true 
+            EnemyType::ParasiticProtozoa => ExplosionType::Biological {
+                toxin_release: false,
+                membrane_rupture: true
             },
             _ => ExplosionType::Standard,
         }
@@ -740,3 +740,96 @@ pub struct FlashEffect {
 
 #[derive(Component)]
 pub struct LightGlowSprite;
+
+// TIDAL SYSTEM
+
+#[derive(Component)]
+pub struct TidalDebris {
+    pub velocity: Vec2,
+    pub lifetime: f32,
+    pub max_lifetime: f32,
+    pub spin_speed: f32,
+}
+
+#[derive(Component)]
+pub struct ThermalVentActivation {
+    pub timer: f32,
+    pub max_time: f32,
+    pub pulse_frequency: f32,
+}
+
+#[derive(Component)]
+pub struct CurrentIndicator {
+    pub timer: f32,
+    pub max_time: f32,
+    pub direction: Vec2,
+}
+
+#[derive(Clone, Copy, Default)]
+pub enum TidePhase {
+    #[default]
+    Rising,
+    HighTide,
+    Receding,
+    LowTide,
+}
+
+// Tidal UI
+#[derive(Component)]
+pub struct TidalStatusText;
+
+// Animation Components (Unique Enemies)
+
+#[derive(Component)]
+pub struct PulsingAnimation {
+    pub frequency: f32,
+    pub intensity: f32,
+}
+
+#[derive(Component)]
+pub struct FlagellaAnimation {
+    pub undulation_speed: f32,
+    pub amplitude: f32,
+}
+
+#[derive(Component)]
+pub struct PseudopodAnimation {
+    pub extension_speed: f32,
+    pub max_extension: f32,
+}
+
+#[derive(Component)]
+pub struct CorruptionEffect {
+    pub intensity: f32,
+    pub color_shift_speed: f32,
+}
+
+#[derive(Component)]
+pub struct WarningFlash {
+    pub flash_frequency: f32,
+    pub warning_color: Color,
+}
+
+#[derive(Component)]
+pub struct ToxicAura {
+    pub radius: f32,
+    pub pulse_speed: f32,
+}
+
+#[derive(Component)]
+pub struct CoordinationIndicator {
+    pub signal_strength: f32,
+    pub communication_range: f32,
+}
+
+#[derive(Component)]
+pub struct GestationAnimation {
+    pub pulse_frequency: f32,
+    pub growth_factor: f32,
+}
+
+#[derive(Component)]
+pub struct JuvenileWiggle {
+    pub wiggle_speed: f32,
+    pub amplitude: f32,
+}

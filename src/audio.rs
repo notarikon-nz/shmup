@@ -14,7 +14,7 @@ pub fn audio_system(
 ) {
     if let Some(assets) = assets {
         *last_shoot_audio -= time.delta_secs();
-        
+
         // Shooting sounds
         if input_state.shooting && *last_shoot_audio <= 0.0 {
             commands.spawn((
@@ -23,7 +23,7 @@ pub fn audio_system(
             ));
             *last_shoot_audio = 0.1;
         }
-        
+
         // Explosion sounds
         for event in explosion_events.read() {
             commands.spawn((
@@ -31,7 +31,7 @@ pub fn audio_system(
                 PlaybackSettings::DESPAWN.with_volume(Volume::Linear(0.5)),
             ));
         }
-        
+
         // Power-up sounds
         for _event in powerup_events.read() {
             commands.spawn((
