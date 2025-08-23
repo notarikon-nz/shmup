@@ -85,7 +85,7 @@ fn main() {
             init_fluid_environment, 
             init_chemical_zones,
             init_current_generator,
-            init_tidal_state, // do we need this?
+            // init_tidal_state, // do we need this?
             start_ambient_music.after(load_biological_assets),
         ))
         .add_systems(Update, fps_system)
@@ -183,8 +183,9 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
 
         // TIDAL MECHANICS GROUP
+
         .add_systems(Update, (
-            advanced_tidal_system,
+            advanced_tidal_system, // PROBLEM with apply_tidal_effects
             process_tidal_events,
             update_king_tide,
             update_tidal_debris,
@@ -197,10 +198,21 @@ fn main() {
             ecosystem_monitoring_system,
         ).run_if(in_state(GameState::Playing)))
 
+        // animation systems
+        .add_systems(Update, (
+            signal_particle_spawning,
+            virus_pulsing_animation,
+            bacteria_flagella_animation,
+            corruption_color_shift,
+            warning_flash_animation,
+            offspring_wiggle_animation,
+            pseudopod_animation,
+            gestation_animation,
+            toxic_aura_animation,
+        ).run_if(in_state(GameState::Playing)))
+
         // Event processing systems
         .add_systems(Update, (
-            enemy_animation_system,
-
             spawn_explosion_system,
             spawn_enemy_system,
             spawn_powerup_system,

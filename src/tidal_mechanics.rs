@@ -54,6 +54,9 @@ pub fn advanced_tidal_system(
         trigger_king_tide(&mut tidal_physics, &mut tidal_events);
     }
     
+
+    /*
+
     // Apply tidal effects to environment
     apply_tidal_effects(
         &tidal_physics,
@@ -64,6 +67,7 @@ pub fn advanced_tidal_system(
         time.delta_secs(),
     );
     
+    */ 
     // Visual camera effects for dramatic tides
     if let Ok(mut camera_transform) = camera_query.single_mut() {
         let tide_sway = tide_strength * 2.0;

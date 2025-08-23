@@ -804,27 +804,59 @@ fn cluster_positions(positions: &[Vec2], cluster_radius: f32) -> Vec<Vec2> {
     clusters
 }
 
-pub fn enemy_animation_system(
-    mut pulsing_query: Query<(&mut Transform, &mut Sprite, &PulsingAnimation), (With<PulsingAnimation>, Without<FlagellaAnimation>, Without<CorruptionEffect>)>,
-    mut flagella_query: Query<(&mut Transform, &FlagellaAnimation), (With<FlagellaAnimation>, Without<PulsingAnimation>, Without<CorruptionEffect>)>,
-    mut corruption_query: Query<(&mut Sprite, &CorruptionEffect), (With<CorruptionEffect>, Without<PulsingAnimation>, Without<FlagellaAnimation>)>,
-    mut warning_query: Query<(&mut Sprite, &WarningFlash), With<WarningFlash>>,
-    mut pseudopod_query: Query<(&mut Transform, &PseudopodAnimation), With<PseudopodAnimation>>,
-    mut aura_query: Query<(&Transform, &ToxicAura), With<ToxicAura>>,
-    mut coordination_query: Query<(&Transform, &CoordinationIndicator), With<CoordinationIndicator>>,
-    mut gestation_query: Query<(&mut Transform, &GestationAnimation), With<GestationAnimation>>,
-    mut wiggle_query: Query<(&mut Transform, &JuvenileWiggle), With<JuvenileWiggle>>,
+pub fn signal_particle_spawning (
     mut commands: Commands,
+    coordination_query: Query<(Entity, &CoordinationIndicator)>,
+    transform_lookup: Query<&Transform, Without<Particle>>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
-    // 1. PULSING ANIMATION (Viruses)
+
+    // 9. COORDINATION INDICATORS (Swarm Cells) - Signal particle spawning
+    if let Some(assets) = &assets {
+        for (entity, coordination) in coordination_query.iter() {
+            if let Ok(transform) = transform_lookup.get(entity) {
+                let signal_pulse = (time.elapsed_secs() * 4.0).sin();
+                if signal_pulse > 0.9 {
+                    // Spawn coordination signal particles occasionally
+                    for i in 0..2 {
+                        let angle = (i as f32 / 2.0) * std::f32::consts::TAU + time.elapsed_secs();
+                        let offset = Vec2::from_angle(angle) * coordination.communication_range;
+                        
+                        commands.spawn((
+                            Sprite {
+                                image: assets.particle_texture.clone(),
+                                color: Color::srgba(0.4, 0.8, 1.0, 0.6),
+                                custom_size: Some(Vec2::splat(3.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(transform.translation + offset.extend(0.0)),
+                            Particle {
+                                velocity: Vec2::ZERO,
+                                lifetime: 0.0,
+                                max_lifetime: 0.5,
+                                size: 3.0,
+                                fade_rate: 2.0,
+                                bioluminescent: true,
+                                drift_pattern: DriftPattern::Pulsing,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn virus_pulsing_animation (
+    mut pulsing_query: Query<(&mut Transform, &mut Sprite, &PulsingAnimation)>,
+    time: Res<Time>,
+) {
     for (mut transform, mut sprite, pulsing) in pulsing_query.iter_mut() {
         let pulse = (time.elapsed_secs() * pulsing.frequency).sin();
         let scale = 1.0 + pulse * pulsing.intensity;
         transform.scale = Vec3::splat(scale);
         
-        // Color pulse
         let brightness = 0.8 + pulse * 0.2;
         sprite.color = Color::srgba(
             sprite.color.to_srgba().red * brightness,
@@ -833,22 +865,27 @@ pub fn enemy_animation_system(
             sprite.color.to_srgba().alpha,
         );
     }
+}
 
-    // 2. FLAGELLA ANIMATION (Bacteria)
+pub fn bacteria_flagella_animation (
+    mut flagella_query: Query<(&mut Transform, &FlagellaAnimation)>,
+    time: Res<Time>,
+) {
     for (mut transform, flagella) in flagella_query.iter_mut() {
         let undulation = (time.elapsed_secs() * flagella.undulation_speed).sin();
         transform.translation.x += undulation * flagella.amplitude * time.delta_secs();
-        
-        // Slight rotation for swimming motion
         transform.rotation *= Quat::from_rotation_z(undulation * 0.1 * time.delta_secs());
     }
+}
 
-    // 3. CORRUPTION EFFECT (Infected Macrophages)
+pub fn corruption_color_shift (
+    mut corruption_query: Query<(&mut Sprite, &CorruptionEffect)>,
+    time: Res<Time>,
+) {
     for (mut sprite, corruption) in corruption_query.iter_mut() {
         let corruption_pulse = (time.elapsed_secs() * corruption.color_shift_speed).sin();
         let corruption_factor = corruption.intensity * (0.5 + corruption_pulse * 0.5);
         
-        // Shift toward sickly colors
         let base_color = sprite.color;
         sprite.color = Color::srgba(
             base_color.to_srgba().red * (1.0 - corruption_factor * 0.3),
@@ -857,74 +894,107 @@ pub fn enemy_animation_system(
             base_color.to_srgba().alpha,
         );
     }
+}
 
-    // 4. WARNING FLASH (Suicidal Spores)
+pub fn warning_flash_animation (
+    mut warning_query: Query<(&mut Sprite, &WarningFlash)>,
+    time: Res<Time>,
+) {
     for (mut sprite, warning) in warning_query.iter_mut() {
         let flash = (time.elapsed_secs() * warning.flash_frequency).sin();
-        if flash > 0.7 {
-            sprite.color = warning.warning_color;
+        sprite.color = if flash > 0.7 {
+            warning.warning_color
         } else {
-            // Reset to base color (you'd need to store original)
-            sprite.color = Color::srgb(1.0, 0.7, 0.2);
+            Color::srgb(1.0, 0.7, 0.2)
+        };
+    }
+}
+
+pub fn offspring_wiggle_animation (
+    mut transforms: Query<&mut Transform>,
+    mut wiggle_query: Query<(Entity, &JuvenileWiggle)>,
+    time: Res<Time>,
+) {
+    for (entity, wiggle) in wiggle_query.iter() {
+        if let Ok(mut transform) = transforms.get_mut(entity) {
+            let wiggle_x = (time.elapsed_secs() * wiggle.wiggle_speed).sin();
+            let wiggle_y = (time.elapsed_secs() * wiggle.wiggle_speed * 1.3).cos();
+            transform.translation.x += wiggle_x * wiggle.amplitude * time.delta_secs();
+            transform.translation.y += wiggle_y * wiggle.amplitude * 0.5 * time.delta_secs();
         }
     }
+}
 
-    // 5. PSEUDOPOD ANIMATION (Protozoa)
-    for (mut transform, pseudopod) in pseudopod_query.iter_mut() {
-        let extension = (time.elapsed_secs() * pseudopod.extension_speed).sin();
-        let stretch_x = 1.0 + extension * pseudopod.max_extension * 0.1;
-        let stretch_y = 1.0 - extension * pseudopod.max_extension * 0.05;
-        transform.scale = Vec3::new(stretch_x, stretch_y, 1.0);
+// 3. PSEUDOPOD ANIMATION (Protozoa) - Transform only
+pub fn pseudopod_animation (
+    mut transforms: Query<&mut Transform>,
+    pseudopod_query: Query<(Entity, &PseudopodAnimation)>,
+    time: Res<Time>,
+) {
+    for (entity, pseudopod) in pseudopod_query.iter() {
+        if let Ok(mut transform) = transforms.get_mut(entity) {
+            let extension = (time.elapsed_secs() * pseudopod.extension_speed).sin();
+            let stretch_x = 1.0 + extension * pseudopod.max_extension * 0.1;
+            let stretch_y = 1.0 - extension * pseudopod.max_extension * 0.05;
+            transform.scale = Vec3::new(stretch_x, stretch_y, 1.0);
+        }
     }
+}
 
-    // 6. TOXIC AURA (Biofilm Colonies)
+// 4. GESTATION ANIMATION (Reproductive Vesicles) - Transform only
+pub fn gestation_animation (
+    mut transforms: Query<&mut Transform>,
+    gestation_query: Query<(Entity, &GestationAnimation)>,
+    time: Res<Time>,
+) {
+    for (entity, gestation) in gestation_query.iter() {
+        if let Ok(mut transform) = transforms.get_mut(entity) {
+            let growth_pulse = (time.elapsed_secs() * gestation.pulse_frequency).sin();
+            let growth = 1.0 + growth_pulse * gestation.growth_factor * 0.1;
+            transform.scale = Vec3::splat(growth);
+        }
+    }
+}
+
+// 8. TOXIC AURA (Biofilm Colonies) - Particle spawning
+pub fn toxic_aura_animation (
+    mut commands: Commands,
+    transform_lookup: Query<&Transform, Without<Particle>>,
+    aura_query: Query<(Entity, &ToxicAura)>,
+    time: Res<Time>,
+    assets: Option<Res<GameAssets>>,
+) {
     if let Some(assets) = &assets {
-        for (transform, aura) in aura_query.iter() {
-            let pulse = (time.elapsed_secs() * aura.pulse_speed).sin();
-            if pulse > 0.8 {
-                // Spawn toxic particles occasionally
-                for i in 0..3 {
-                    let angle = (i as f32 / 3.0) * std::f32::consts::TAU;
-                    let offset = Vec2::from_angle(angle) * aura.radius;
-                    
-                    commands.spawn((
-                        Sprite {
-                            image: assets.particle_texture.clone(),
-                            color: Color::srgba(0.6, 0.8, 0.3, 0.5),
-                            custom_size: Some(Vec2::splat(4.0)),
-                            ..default()
-                        },
-                        Transform::from_translation(transform.translation + offset.extend(0.0)),
-                        Particle {
-                            velocity: offset.normalize() * 20.0,
-                            lifetime: 0.0,
-                            max_lifetime: 2.0,
-                            size: 4.0,
-                            fade_rate: 0.5,
-                            bioluminescent: false,
-                            drift_pattern: DriftPattern::Floating,
-                        },
-                    ));
+        for (entity, aura) in aura_query.iter() {
+            if let Ok(transform) = transform_lookup.get(entity) {
+                let pulse = (time.elapsed_secs() * aura.pulse_speed).sin();
+                if pulse > 0.8 {
+                    // Spawn toxic particles occasionally
+                    for i in 0..3 {
+                        let angle = (i as f32 / 3.0) * std::f32::consts::TAU;
+                        let offset = Vec2::from_angle(angle) * aura.radius;
+                        
+                        commands.spawn((
+                            Sprite {
+                                image: assets.particle_texture.clone(),
+                                color: Color::srgba(0.6, 0.8, 0.3, 0.5),
+                                custom_size: Some(Vec2::splat(4.0)),
+                                ..default()
+                            },
+                            Transform::from_translation(transform.translation + offset.extend(0.0)),
+                            Particle {
+                                velocity: offset.normalize() * 20.0,
+                                lifetime: 0.0,
+                                max_lifetime: 2.0,
+                                size: 4.0,
+                                fade_rate: 0.5,
+                                bioluminescent: false,
+                                drift_pattern: DriftPattern::Floating,
+                            },
+                        ));
+                    }
                 }
             }
         }
     }
-
-    // 7. GESTATION ANIMATION (Reproductive Vesicles)
-    for (mut transform, gestation) in gestation_query.iter_mut() {
-        let growth_pulse = (time.elapsed_secs() * gestation.pulse_frequency).sin();
-        let growth = 1.0 + growth_pulse * gestation.growth_factor * 0.1;
-        transform.scale = Vec3::splat(growth);
-    }
-
-    // 8. JUVENILE WIGGLE (Offspring)
-    for (mut transform, wiggle) in wiggle_query.iter_mut() {
-        let wiggle_x = (time.elapsed_secs() * wiggle.wiggle_speed).sin();
-        let wiggle_y = (time.elapsed_secs() * wiggle.wiggle_speed * 1.3).cos();
-        transform.translation.x += wiggle_x * wiggle.amplitude * time.delta_secs();
-        transform.translation.y += wiggle_y * wiggle.amplitude * 0.5 * time.delta_secs();
-    }
 }
-
-
-
