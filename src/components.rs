@@ -26,13 +26,7 @@ pub struct Collider {
 #[derive(Component)]
 pub struct Health(pub i32);
 
-#[derive(Component)]
-pub struct Explosion {
-    pub timer: f32,
-    pub max_time: f32,
-    pub intensity: f32,
-    pub organic: bool, // New: organic explosions have different effects
-}
+
 
 // Enhanced Particle System with Biological Properties
 #[derive(Component)]
@@ -625,6 +619,8 @@ pub struct MembranePhysics {
 pub struct ThermalParticle {
     pub heat_intensity: f32,
     pub rise_speed: f32,
+    pub lifetime: f32,
+    pub max_lifetime: f32,    
 }
 
 // better damage
@@ -648,6 +644,11 @@ pub struct ExtraLifePowerUp {
 #[derive(Component)]
 pub struct CellWallTimerText;
 
+// Add this component to link lights to explosions
+#[derive(Component)]
+pub struct LinkedExplosionLight(pub Entity);
+
+
 // lighting test
 #[derive(Component)]
 pub struct ExplosionLight {
@@ -659,17 +660,17 @@ pub struct ExplosionLight {
     pub falloff: f32,
 }
 
-// better explosions
 #[derive(Component, Clone)]
-pub struct EnhancedExplosion {
+pub struct Explosion {
     pub timer: f32,
     pub max_time: f32,
     pub intensity: f32,
     pub explosion_type: ExplosionType,
     pub layers: Vec<ExplosionLayer>,
-    pub light_id: Option<Entity>, // For future lighting system
+    pub current_layer_index: usize,
 }
 
+// Keep ExplosionLayer and ExplosionPhase as they provide the variety
 #[derive(Component, Clone)]
 pub struct ExplosionLayer {
     pub phase: ExplosionPhase,
@@ -685,11 +686,12 @@ pub struct ExplosionLayer {
 
 #[derive(Clone)]
 pub enum ExplosionPhase {
-    Shockwave,    // Fast expanding ring
-    CoreBlast,    // Central explosion
-    Debris,       // Scattered fragments
-    Afterglow,    // Lingering particles
-    Membrane,     // Biological cell rupture
+    Shockwave,
+    CoreBlast,
+    Debris,
+    Afterglow,
+    Membrane,
+    MiniBlast,  // Incorporates old MiniExplosion functionality
 }
 
 #[derive(Clone)]
@@ -734,12 +736,7 @@ pub struct FlashEffect {
     pub flash_color: Color,
 }
 
-#[derive(Component)]
-pub struct MiniExplosion {
-    pub timer: f32,
-    pub max_time: f32,
-    pub size: f32,
-}
+
 
 #[derive(Component)]
 pub struct LightGlowSprite;

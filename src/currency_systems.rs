@@ -691,6 +691,7 @@ pub fn move_biological_powerups(
     }
 }
 
+
 // Enhanced ATP collection with organic energy transfer
 pub fn collect_atp_with_energy_transfer(
     mut commands: Commands,

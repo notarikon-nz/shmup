@@ -14,6 +14,8 @@ mod currency_systems;
 mod biological_systems; 
 mod audio; 
 mod lighting;
+mod explosions;
+mod particles;
 
 use components::*;
 use resources::*;
@@ -26,16 +28,8 @@ use currency_systems::*;
 use biological_systems::*; 
 use audio::*;
 use lighting::*;
-
-/*
-    // SPRITE LIST
-    Player: Translucent cell with visible nucleus (16x16px, white/cyan)
-    Enemies: Various microorganism shapes (8-32px, different colors)
-    Projectiles: Small dots/vesicles (4x4px, white center with transparent edges)
-    Particles: Single white pixel (1x1px) for maximum flexibility
-    Power-ups: Glowing organic shapes (16x16px, bright colors)
-    Explosions: Wispy organic burst (32x32px, white with transparent falloff)
-*/
+use explosions::*;
+use particles::*;
 
 fn main() {
     App::new()
@@ -80,8 +74,8 @@ fn main() {
             setup_biological_ui.after(load_biological_assets), 
             load_high_scores,
             init_particle_pool,
-            init_fluid_environment, // New
-            init_chemical_zones, // New
+            init_fluid_environment, 
+            init_chemical_zones,
             init_current_generator,
             start_ambient_music.after(load_biological_assets),
         ))
@@ -104,8 +98,6 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (
-            // spawn_enhanced_explosion_system,
-            // enhanced_projectile_collision_system,
             update_cell_wall_timer_ui,
             update_evolution_ui,
 
@@ -115,30 +107,35 @@ fn main() {
             render_light_effects,
         ).run_if(in_state(GameState::Playing)))
 
+        // Fifth Update group - effect and cleanup systems
+        .add_systems(Update, (                
+            update_biological_effects,
+            update_temporary_evolution_effects,
+            consolidated_explosion_system, 
+
+            unified_particle_system, 
+
+            update_parallax,
+            cleanup_offscreen,
+            spawn_bioluminescent_trail,
+        ).run_if(in_state(GameState::Playing)))
 
         // Second Update group - projectile and movement systems
         .add_systems(Update, (
             move_projectiles,
-            update_missiles,
-            update_laser_beams,
-            update_smart_bombs,
-            
-            update_toxin_clouds,
-            update_electric_arcs,
-            
+
+            unified_weapon_update_system,
+           
             move_biological_powerups,
             move_atp,
+            collect_atp_with_energy_transfer,
 
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (
             update_cell_wall_timer,
             enemy_flash_system,
-            mini_explosion_system,
             screen_shake_system,
-            explosion_lighting_system,
-            update_explosion_lights,
-
         ).run_if(in_state(GameState::Playing)))
 
         // Third Update group - enemy systems (separate from projectile systems)
@@ -159,46 +156,30 @@ fn main() {
             evolution_chamber_interaction,
             handle_biological_powerup_collection,
         ).run_if(in_state(GameState::Playing)))
-        // Fifth Update group - effect and cleanup systems
-        .add_systems(Update, (                
-            update_biological_effects,
-            update_temporary_evolution_effects,
-            update_explosions,
-            update_organic_particles,
-            update_particle_emitters,
-            update_parallax,
-            cleanup_offscreen,
-            spawn_bioluminescent_trail,
-        ).run_if(in_state(GameState::Playing)))
+
         // Sixth Update group - biological environment systems
+
         .add_systems(Update, (
-            update_toxin_clouds,
-            update_electric_arcs,
             damage_text_system,
             fluid_dynamics_system,
             chemical_environment_system,
             update_current_field,
-            bioluminescence_system,
             organic_ai_system,
             generate_procedural_currents,
-            spawn_organic_particle_effects,
             cell_division_system,
             symbiotic_pair_system,
             thermal_vent_effects_system,
-            update_thermal_particles,
             dynamic_chemical_zone_system,
             scroll_thermal_vents,
         ).run_if(in_state(GameState::Playing)))
 
+        // Chemical Environment Effects
         .add_systems(Update, (
-            // Chemical Environment Effects
             apply_chemical_damage_system,
-            // Colony Pheromone Communication
             pheromone_communication_system,
-            advanced_bioluminescence_system.run_if(in_state(GameState::Playing)),
-            ecosystem_monitoring_system.run_if(in_state(GameState::Playing)),
-
+            ecosystem_monitoring_system,
         ).run_if(in_state(GameState::Playing)))
+
         // Event processing systems
         .add_systems(Update, (
             spawn_explosion_system,
@@ -440,19 +421,21 @@ pub fn setup_biological_ui(mut commands: Commands) {
         CellWallTimerText,
     ));
 
-    // FPS Text
     commands.spawn((
-        Text::new("FPS: 0"),
+        Text::new("FPS: --"),
         Node {
             position_type: PositionType::Absolute,
             right: Val::Px(20.0),
-            bottom: Val::Px(40.0),
+            bottom: Val::Px(20.0), // Changed from bottom: Val::Px(40.0)
             ..default()
         },
-        TextFont { font_size: 14.0, ..default() },
-        TextColor(Color::WHITE),
+        TextFont { 
+            font_size: 18.0, // Increased size
+            ..default() 
+        },
+        TextColor(Color::srgb(0.9, 1.0, 0.9)), // Brighter color
         FpsText,
-    ));    
+    ));  
 }
 
 // New biological background with organic elements
@@ -1143,3 +1126,5 @@ pub fn debug_spawn_evolution_chamber(
         }
     }
 }
+
+

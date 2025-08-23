@@ -182,132 +182,6 @@ pub fn generate_procedural_currents(
     }
 }
 
-// Organic Particle Effects System
-pub fn spawn_organic_particle_effects(
-    mut commands: Commands,
-    mut particle_events: EventWriter<SpawnParticles>,
-    enemy_query: Query<(&Transform, &Enemy, &Health)>,
-    player_query: Query<&Transform, With<Player>>,
-    chemical_environment: Res<ChemicalEnvironment>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-    mut spawn_timer: Local<f32>,
-) {
-    *spawn_timer -= time.delta_secs();
-    
-    if *spawn_timer <= 0.0 && assets.is_some() {
-        let assets = assets.unwrap();
-        
-        // Spawn nutrient particles in healthy zones
-        for zone in &chemical_environment.ph_zones {
-            if zone.ph_level >= 6.8 && zone.ph_level <= 7.2 {
-                // Good pH zone - spawn nutrients
-                particle_events.write(SpawnParticles {
-                    position: zone.position.extend(0.0),
-                    count: 3,
-                    config: ParticleConfig {
-                        color_start: Color::srgb(0.4, 0.9, 0.6),
-                        color_end: Color::srgba(0.2, 0.7, 0.4, 0.0),
-                        velocity_range: (Vec2::new(-15.0, -15.0), Vec2::new(15.0, 15.0)),
-                        lifetime_range: (3.0, 6.0),
-                        size_range: (0.2, 0.4), // 2-4
-                        gravity: Vec2::new(0.0, -10.0),
-                        organic_motion: true,
-                        bioluminescence: 0.6,
-                    },
-                });
-            }
-        }
-        
-        // Spawn cellular debris around damaged enemies
-        for (transform, enemy, health) in enemy_query.iter() {
-            if health.0 < enemy.health / 2 {
-                // Damaged enemy - spawn debris
-                let debris_color = match enemy.enemy_type {
-                    EnemyType::ViralParticle => Color::srgb(0.9, 0.9, 1.0),
-                    EnemyType::AggressiveBacteria => Color::srgb(1.0, 0.4, 0.4),
-                    EnemyType::ParasiticProtozoa => Color::srgb(0.7, 0.9, 0.4),
-                    _ => Color::srgb(0.8, 0.8, 0.8),
-                };
-                
-                commands.spawn((
-                    Sprite {
-                        image: assets.particle_texture.clone(),
-                        color: debris_color,
-                        custom_size: Some(Vec2::splat(2.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(transform.translation),
-                    BioluminescentParticle {
-                        base_color: debris_color,
-                        pulse_frequency: 4.0,
-                        pulse_intensity: 0.3,
-                        organic_motion: OrganicMotion {
-                            undulation_speed: 2.0,
-                            response_to_current: 0.9,
-                        },
-                    },
-                    Particle {
-                        velocity: Vec2::new(
-                            (time.elapsed_secs() * 123.45 + transform.translation.x * 0.01).sin() * 50.0,
-                            (time.elapsed_secs() * 67.89 + transform.translation.y * 0.01).cos() * 40.0,
-                        ),
-                        lifetime: 0.0,
-                        max_lifetime: 2.0,
-                        size: 2.0,
-                        fade_rate: 1.0,
-                        bioluminescent: true,
-                        drift_pattern: DriftPattern::Brownian,
-                    },
-                ));
-            }
-        }
-        
-        // Spawn bioluminescent plankton near player
-        if let Ok(player_transform) = player_query.single() {
-            for i in 0..2 {
-                let offset = Vec2::new(
-                    (time.elapsed_secs() * 45.67 + i as f32 * 100.0).sin() * 200.0,
-                    (time.elapsed_secs() * 23.45 + i as f32 * 150.0).cos() * 150.0,
-                );
-                
-                commands.spawn((
-                    Sprite {
-                        image: assets.particle_texture.clone(),
-                        color: Color::srgba(0.3, 0.8, 1.0, 0.7),
-                        custom_size: Some(Vec2::splat(3.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(player_transform.translation + offset.extend(0.0)),
-                    BioluminescentParticle {
-                        base_color: Color::srgb(0.3, 0.8, 1.0),
-                        pulse_frequency: 1.0 + (i as f32 * 0.5),
-                        pulse_intensity: 0.5,
-                        organic_motion: OrganicMotion {
-                            undulation_speed: 1.5,
-                            response_to_current: 0.7,
-                        },
-                    },
-                    Particle {
-                        velocity: Vec2::new(
-                            (time.elapsed_secs() * 89.12).sin() * 10.0,
-                            (time.elapsed_secs() * 56.78).cos() * 8.0,
-                        ),
-                        lifetime: 0.0,
-                        max_lifetime: 12.0,
-                        size: 3.0,
-                        fade_rate: 1.0,
-                        bioluminescent: true,
-                        drift_pattern: DriftPattern::Floating,
-                    },
-                ));
-            }
-        }
-        
-        *spawn_timer = 2.0; // Spawn every 2 seconds
-    }
-}
-
 // Helper functions
 fn grid_to_world_pos(grid_x: usize, grid_y: usize, fluid_env: &FluidEnvironment) -> Vec2 {
     Vec2::new(
@@ -331,7 +205,7 @@ pub fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) ->
     }
 }
 
-fn sample_ph(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32 {
+pub fn sample_ph(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32 {
     let mut ph = chemical_env.base_ph;
     
     for zone in &chemical_env.ph_zones {
@@ -521,122 +395,6 @@ pub fn update_current_field(
     }
 }
 
-// Bioluminescence System - Organic lighting effects
-pub fn bioluminescence_system(
-    mut commands: Commands,
-    mut bioluminescence_manager: ResMut<BioluminescenceManager>,
-    mut bioluminescent_query: Query<(&mut Transform, &mut Sprite, &mut BioluminescentParticle)>,
-    player_query: Query<&Transform, (With<Player>, Without<BioluminescentParticle>)>,
-    enemy_query: Query<(&Transform, &Enemy), (Without<Player>, Without<BioluminescentParticle>)>,
-    assets: Option<Res<GameAssets>>,
-    time: Res<Time>,
-) {
-    // Update existing bioluminescent particles
-    for (mut transform, mut sprite, mut bio_particle) in bioluminescent_query.iter_mut() {
-        // Organic pulsing
-        let pulse_phase = time.elapsed_secs() * bio_particle.pulse_frequency;
-        let pulse_intensity = (pulse_phase.sin() * 0.5 + 0.5) * bio_particle.pulse_intensity;
-        
-        // Apply pulsing to color brightness
-        let mut color = bio_particle.base_color;
-        let brightness = 0.6 + pulse_intensity * 0.4;
-        color = Color::srgba(
-            color.to_srgba().red * brightness,
-            color.to_srgba().green * brightness,
-            color.to_srgba().blue * brightness,
-            color.to_srgba().alpha,
-        );
-        sprite.color = color;
-        
-        // Organic undulation motion
-        let undulation = (time.elapsed_secs() * bio_particle.organic_motion.undulation_speed).sin();
-        transform.translation.y += undulation * 3.0 * time.delta_secs();
-        
-        // Gentle rotation
-        transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 0.2);
-    }
-    
-    // Spawn ambient bioluminescent particles
-    if let Some(assets) = assets {
-        // Spawn particles near player
-        if let Ok(player_transform) = player_query.single() {
-            if (time.elapsed_secs() * 3.0).sin() > 0.8 {
-                let spawn_offset = Vec2::new(
-                    (time.elapsed_secs() * 123.45).sin() * 150.0,
-                    (time.elapsed_secs() * 67.89).cos() * 100.0,
-                );
-                
-                commands.spawn((
-                    Sprite {
-                        image: assets.particle_texture.clone(),
-                        color: Color::srgba(0.3, 0.8, 1.0, 0.6),
-                        custom_size: Some(Vec2::splat(4.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(player_transform.translation + spawn_offset.extend(0.0)),
-                    BioluminescentParticle {
-                        base_color: Color::srgb(0.3, 0.8, 1.0),
-                        pulse_frequency: 1.5 + (time.elapsed_secs() * 0.1).sin(),
-                        pulse_intensity: 0.4,
-                        organic_motion: OrganicMotion {
-                            undulation_speed: 2.0,
-                            response_to_current: 0.8,
-                        },
-                    },
-                    Particle {
-                        velocity: Vec2::new(
-                            (time.elapsed_secs() * 45.67).sin() * 20.0,
-                            (time.elapsed_secs() * 89.12).cos() * 15.0,
-                        ),
-                        lifetime: 0.0,
-                        max_lifetime: 8.0,
-                        size: 4.0,
-                        fade_rate: 1.0,
-                        bioluminescent: true,
-                        drift_pattern: DriftPattern::Floating,
-                    },
-                ));
-            }
-        }
-        
-        // Spawn particles near enemies occasionally
-        for (enemy_transform, enemy) in enemy_query.iter() {
-            if enemy.chemical_signature.releases_toxins && (time.elapsed_secs() * 5.0 + enemy_transform.translation.x * 0.001).sin() > 0.9 {
-                commands.spawn((
-                    Sprite {
-                        image: assets.particle_texture.clone(),
-                        color: Color::srgba(1.0, 0.4, 0.2, 0.7),
-                        custom_size: Some(Vec2::splat(3.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(enemy_transform.translation),
-                    BioluminescentParticle {
-                        base_color: Color::srgb(1.0, 0.4, 0.2),
-                        pulse_frequency: 3.0,
-                        pulse_intensity: 0.6,
-                        organic_motion: OrganicMotion {
-                            undulation_speed: 1.0,
-                            response_to_current: 0.5,
-                        },
-                    },
-                    Particle {
-                        velocity: Vec2::new(
-                            (time.elapsed_secs() * 234.56).sin() * 30.0,
-                            (time.elapsed_secs() * 178.90).cos() * 25.0,
-                        ),
-                        lifetime: 0.0,
-                        max_lifetime: 3.0,
-                        size: 3.0,
-                        fade_rate: 1.0,
-                        bioluminescent: true,
-                        drift_pattern: DriftPattern::Brownian,
-                    },
-                ));
-            }
-        }
-    }
-}
-
 // Organic AI System - Enhanced biological behaviors
 pub fn organic_ai_system(
     mut enemy_query: Query<(&mut Transform, &mut Enemy)>,
@@ -791,42 +549,6 @@ pub fn apply_chemical_damage_system(
     }
 }
 
-
-// Advanced Particle Systems
-pub fn advanced_bioluminescence_system(
-    mut bio_query: Query<(&mut Sprite, &mut BioluminescentParticle, &Transform)>,
-    player_query: Query<&Transform, (With<Player>, Without<BioluminescentParticle>)>,
-    chemical_environment: Res<ChemicalEnvironment>,
-    time: Res<Time>,
-) {
-    if let Ok(player_transform) = player_query.single() {
-        for (mut sprite, mut bio_particle, transform) in bio_query.iter_mut() {
-            // Distance-based intensity
-            let distance_to_player = transform.translation.distance(player_transform.translation);
-            let proximity_boost = (200.0 - distance_to_player.min(200.0)) / 200.0;
-            
-            // Chemical environment affects bioluminescence
-            let ph = sample_ph(&chemical_environment, transform.translation.truncate());
-            let ph_factor = 1.0 - ((ph - 7.0).abs() * 0.1).min(0.5);
-            
-            // Dynamic pulsing
-            let pulse_phase = time.elapsed_secs() * bio_particle.pulse_frequency;
-            let pulse = (pulse_phase.sin() * 0.5 + 0.5) * bio_particle.pulse_intensity;
-            
-            let final_intensity = (0.4 + pulse * 0.6 + proximity_boost * 0.3) * ph_factor;
-            
-            let mut color = bio_particle.base_color;
-            color = Color::srgba(
-                color.to_srgba().red * final_intensity,
-                color.to_srgba().green * final_intensity,
-                color.to_srgba().blue * final_intensity,
-                color.to_srgba().alpha,
-            );
-            sprite.color = color;
-        }
-    }
-}
-
 // Ecosystem State Tracking
 pub fn ecosystem_monitoring_system(
     mut ecosystem: ResMut<EcosystemState>,
@@ -899,11 +621,13 @@ pub fn thermal_vent_effects_system(
                         ThermalParticle {
                             heat_intensity: vent.strength / 200.0,
                             rise_speed: 60.0,
+                            lifetime: 0.0,        // FIXED: Initialize lifetime
+                            max_lifetime: 4.0,    // FIXED: Set max lifetime to 4 seconds
                         },
                         Particle {
                             velocity: Vec2::new(0.0, 80.0) + offset.normalize() * 20.0,
                             lifetime: 0.0,
-                            max_lifetime: 3.0,
+                            max_lifetime: 4.0,    // FIXED: Match ThermalParticle lifetime
                             size: 4.0,
                             fade_rate: 0.8,
                             bioluminescent: true,
@@ -980,30 +704,6 @@ pub fn scroll_thermal_vents(
             vent.position.y = 450.0;
             vent.position.x = (time.elapsed_secs() * 123.45).sin() * 500.0; // Random X
             vent.active = (time.elapsed_secs() * 67.89).sin() > 0.0; // Random activation
-        }
-    }
-}
-
-pub fn update_thermal_particles(
-    mut commands: Commands,
-    mut thermal_query: Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite)>,
-    time: Res<Time>,
-) {
-    for (entity, mut transform, mut thermal, mut sprite) in thermal_query.iter_mut() {
-        // Rise and dissipate
-        transform.translation.y += thermal.rise_speed * time.delta_secs();
-        
-        // Heat shimmer effect
-        let shimmer = (time.elapsed_secs() * 8.0 + transform.translation.x * 0.1).sin() * 3.0;
-        transform.translation.x += shimmer * time.delta_secs();
-        
-        // Fade with height
-        thermal.heat_intensity -= time.delta_secs() * 0.4;
-        let alpha = thermal.heat_intensity.clamp(0.0, 1.0);
-        sprite.color = Color::srgba(1.0, 0.6 + alpha * 0.4, 0.2, alpha * 0.8);
-        
-        if thermal.heat_intensity <= 0.0 {
-            commands.entity(entity).despawn();
         }
     }
 }

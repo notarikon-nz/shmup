@@ -21,12 +21,6 @@ pub struct GameAssets {
 }
 
 #[derive(Resource)]
-pub struct ProjectilePool {
-    pub entities: Vec<Entity>,
-    pub index: usize,
-}
-
-#[derive(Resource)]
 pub struct ParticlePool {
     pub entities: Vec<Entity>,
     pub index: usize,
@@ -281,27 +275,6 @@ impl Default for BioluminescenceManager {
     }
 }
 
-// New: Biological Audio Manager
-#[derive(Resource)]
-pub struct BiologicalAudioManager {
-    pub ambient_sounds: Vec<Handle<AudioSource>>,
-    pub organic_sound_effects: Vec<Handle<AudioSource>>,
-    pub chemical_reaction_sounds: Vec<Handle<AudioSource>>,
-    pub current_ambient_layer: usize,
-    pub depth_audio_filter: f32,
-}
-
-impl Default for BiologicalAudioManager {
-    fn default() -> Self {
-        Self {
-            ambient_sounds: Vec::new(),
-            organic_sound_effects: Vec::new(),
-            chemical_reaction_sounds: Vec::new(),
-            current_ambient_layer: 0,
-            depth_audio_filter: 1.0,
-        }
-    }
-}
 
 // New: Ecosystem State Manager
 #[derive(Resource)]
@@ -342,18 +315,6 @@ impl Default for EcosystemState {
     }
 }
 
-// Enhanced enemy spawning with biological considerations
-#[derive(Resource)]
-pub struct BiologicalSpawner {
-    pub spawn_timer: f32,
-    pub wave_timer: f32,
-    pub organisms_spawned: u32,
-    pub evolution_pressure: f32, // Increases enemy complexity over time
-    pub chemical_attractants: Vec<ChemicalAttractant>,
-    pub colony_spawn_patterns: Vec<ColonySpawnPattern>,
-    pub infection_spread_rate: f32,
-}
-
 #[derive(Clone)]
 pub struct ChemicalAttractant {
     pub position: Vec2,
@@ -368,37 +329,6 @@ pub struct ColonySpawnPattern {
     pub spawn_positions: Vec<Vec2>,
     pub spawn_delays: Vec<f32>,
     pub organism_types: Vec<String>,
-}
-
-impl Default for BiologicalSpawner {
-    fn default() -> Self {
-        Self {
-            spawn_timer: 2.0,
-            wave_timer: 0.0,
-            organisms_spawned: 0,
-            evolution_pressure: 0.0,
-            chemical_attractants: Vec::new(),
-            colony_spawn_patterns: vec![
-                ColonySpawnPattern {
-                    pattern_name: "Biofilm Formation".to_string(),
-                    spawn_positions: vec![
-                        Vec2::new(0.0, 0.0),
-                        Vec2::new(-30.0, -30.0),
-                        Vec2::new(30.0, -30.0),
-                        Vec2::new(0.0, -60.0),
-                    ],
-                    spawn_delays: vec![0.0, 0.5, 0.5, 1.0],
-                    organism_types: vec![
-                        "BiofilmColony".to_string(),
-                        "SwarmCell".to_string(),
-                        "SwarmCell".to_string(),
-                        "SwarmCell".to_string(),
-                    ],
-                },
-            ],
-            infection_spread_rate: 0.1,
-        }
-    }
 }
 
 // New: Tidal Pool Physics
