@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::components::{PowerUpType, ParticleConfig};
+use crate::components::{PowerUpType, ParticleConfig, ExplosionType};
 use crate::enemy_types::{EnemyAI, EnemyType};
 
 #[derive(Event)]
@@ -44,4 +44,11 @@ pub struct AddScreenShake {
 pub struct EnemyHit {
     pub entity: Entity,
     pub position: Vec3,
+}
+
+#[derive(Event)]
+pub struct SpawnEnhancedExplosion {
+    pub position: Vec3,
+    pub intensity: f32,
+    pub explosion_type: ExplosionType,
 }

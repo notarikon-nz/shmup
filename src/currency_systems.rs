@@ -148,13 +148,13 @@ pub fn evolution_chamber_interaction(
     if let Ok((player_transform, mut atp, mut evolution_system, mut upgrades)) = player_query.single_mut() {
         for chamber_transform in chamber_query.iter() {
             let distance = player_transform.translation.distance(chamber_transform.translation);
-            if distance < 60.0 {
+            if distance < 80.0 {
                 // Player is near evolution chamber
                 if keyboard.just_pressed(KeyCode::Digit1) && atp.amount >= 10 {
-                    // Enhance cellular damage output
                     atp.amount -= 10;
                     upgrades.damage_amplification *= 1.2;
                     evolution_system.cellular_adaptations.membrane_permeability *= 1.2;
+                    println!("Upgraded damage!"); // Debug
                 }
                 
                 if keyboard.just_pressed(KeyCode::Digit2) && atp.amount >= 15 {
@@ -189,7 +189,6 @@ pub fn evolution_chamber_interaction(
                 }
                 
                 if keyboard.just_pressed(KeyCode::Digit7) && atp.amount >= 50 {
-                    // Evolve to Pseudopod Network
                     atp.amount -= 50;
                     evolution_system.primary_evolution = EvolutionType::PseudopodNetwork {
                         damage: 8,
@@ -197,6 +196,7 @@ pub fn evolution_chamber_interaction(
                         tendril_count: 5,
                         spread_angle: 0.6,
                     };
+                    println!("Evolved to Pseudopod Network!"); // Debug
                 }
                 
                 if keyboard.just_pressed(KeyCode::Digit8) && atp.amount >= 75 {
@@ -923,3 +923,87 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
 }
 
 
+
+
+pub fn spawn_extra_life_powerups(
+    mut commands: Commands,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    if let Some(assets) = assets {
+        *spawn_timer += time.delta_secs();
+        
+        // Spawn every 150 seconds
+        if *spawn_timer >= 150.0 {
+            *spawn_timer = 0.0;
+            
+            let x_position = (time.elapsed_secs() * 20.0).sin() * 280.0;
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.health_powerup_texture.clone(),
+                    color: Color::srgb(1.0, 0.2, 0.7), // Bright pink
+                    custom_size: Some(Vec2::splat(22.0)),
+                    ..default()
+                },
+                Transform::from_xyz(x_position, 420.0, 0.0),
+                ExtraLifePowerUp {
+                    collected: false,
+                    pulse_timer: 0.0,
+                },
+                Collider { radius: 11.0 },
+                BioluminescentParticle {
+                    base_color: Color::srgb(1.0, 0.2, 0.7),
+                    pulse_frequency: 1.2,
+                    pulse_intensity: 0.9,
+                    organic_motion: OrganicMotion {
+                        undulation_speed: 2.5,
+                        response_to_current: 0.4,
+                    },
+                },
+            ));
+        }
+    }
+}
+
+pub fn extra_life_collection_system(
+    mut commands: Commands,
+    mut extra_life_query: Query<(Entity, &Transform, &Collider, &mut ExtraLifePowerUp)>,
+    mut player_query: Query<(&Transform, &Collider, &mut Player)>,
+    mut particle_events: EventWriter<SpawnParticles>,
+    mut shake_events: EventWriter<AddScreenShake>,
+) {
+    if let Ok((player_transform, player_collider, mut player)) = player_query.single_mut() {
+        for (life_entity, life_transform, life_collider, mut extra_life) in extra_life_query.iter_mut() {
+            if extra_life.collected { continue; }
+            
+            let distance = player_transform.translation.distance(life_transform.translation);
+            if distance < player_collider.radius + life_collider.radius {
+                extra_life.collected = true;
+                player.lives += 1;
+                
+                // Enhanced celebration effect
+                particle_events.write(SpawnParticles {
+                    position: life_transform.translation,
+                    count: 30,
+                    config: ParticleConfig {
+                        color_start: Color::srgb(1.0, 0.2, 0.7),
+                        color_end: Color::srgba(1.0, 0.7, 0.9, 0.0),
+                        velocity_range: (Vec2::new(-150.0, -75.0), Vec2::new(150.0, 150.0)),
+                        lifetime_range: (1.5, 3.5),
+                        size_range: (0.6, 1.5),
+                        gravity: Vec2::new(0.0, -15.0),
+                        organic_motion: true,
+                        bioluminescence: 1.0,
+                    },
+                });
+                
+                // Positive screen shake
+                shake_events.write(AddScreenShake { amount: 0.3 });
+                
+                commands.entity(life_entity).despawn();
+            }
+        }
+    }
+}

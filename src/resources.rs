@@ -281,30 +281,6 @@ impl Default for BioluminescenceManager {
     }
 }
 
-// New: Organic Particle System
-#[derive(Resource)]
-pub struct OrganicParticleSystem {
-    pub particle_density: f32,
-    pub flow_response: f32,
-    pub bioluminescence_chance: f32,
-    pub organic_motion_intensity: f32,
-    pub nutrient_particles: Vec<Entity>,
-    pub debris_particles: Vec<Entity>,
-}
-
-impl Default for OrganicParticleSystem {
-    fn default() -> Self {
-        Self {
-            particle_density: 1.0,
-            flow_response: 0.7,
-            bioluminescence_chance: 0.3,
-            organic_motion_intensity: 1.0,
-            nutrient_particles: Vec::new(),
-            debris_particles: Vec::new(),
-        }
-    }
-}
-
 // New: Biological Audio Manager
 #[derive(Resource)]
 pub struct BiologicalAudioManager {
@@ -621,6 +597,7 @@ pub struct ScreenShakeResource {
     pub max_trauma: f32,
     pub decay_rate: f32,
     pub shake_intensity: f32,
+    pub rotation_factor: f32,
 }
 
 impl Default for ScreenShakeResource {
@@ -628,8 +605,9 @@ impl Default for ScreenShakeResource {
         Self {
             trauma: 0.0,
             max_trauma: 1.0,
-            decay_rate: 2.0,
-            shake_intensity: 30.0,
+            decay_rate: 2.5,
+            shake_intensity: 25.0,
+            rotation_factor: 0.02,
         }
     }
 }

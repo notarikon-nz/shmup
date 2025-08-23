@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::enemy_types::{Enemy,EnemyType};
 
 #[derive(Component)]
 pub struct Player {
@@ -118,13 +119,6 @@ pub enum ZoneType {
 pub struct ParallaxLayer {
     pub speed: f32,
     pub depth: f32,
-}
-
-#[derive(Component)]
-pub struct Light2D {
-    pub color: Color,
-    pub intensity: f32,
-    pub radius: f32,
 }
 
 // UI Components
@@ -631,11 +625,110 @@ pub struct ThermalParticle {
 }
 
 // better damage
+
+
+#[derive(Component)]
+pub struct ScreenShake {
+    pub trauma: f32,
+    pub offset: Vec2,
+}
+
+// powerup
+// Extra Life powerup with enhanced effects
+#[derive(Component)]
+pub struct ExtraLifePowerUp {
+    pub collected: bool,
+    pub pulse_timer: f32,
+}
+
+
+#[derive(Component)]
+pub struct CellWallTimerText;
+
+// lighting test
+#[derive(Component)]
+pub struct ExplosionLight {
+    pub color: Color,
+    pub intensity: f32,
+    pub radius: f32,
+    pub timer: f32,
+    pub max_time: f32,
+    pub falloff: f32,
+}
+
+// better explosions
+#[derive(Component, Clone)]
+pub struct EnhancedExplosion {
+    pub timer: f32,
+    pub max_time: f32,
+    pub intensity: f32,
+    pub explosion_type: ExplosionType,
+    pub layers: Vec<ExplosionLayer>,
+    pub light_id: Option<Entity>, // For future lighting system
+}
+
+#[derive(Component, Clone)]
+pub struct ExplosionLayer {
+    pub phase: ExplosionPhase,
+    pub delay: f32,
+    pub duration: f32,
+    pub particle_count: u32,
+    pub color_start: Color,
+    pub color_end: Color,
+    pub size_range: (f32, f32),
+    pub velocity_range: (Vec2, Vec2),
+    pub completed: bool,
+}
+
+#[derive(Clone)]
+pub enum ExplosionPhase {
+    Shockwave,    // Fast expanding ring
+    CoreBlast,    // Central explosion
+    Debris,       // Scattered fragments
+    Afterglow,    // Lingering particles
+    Membrane,     // Biological cell rupture
+}
+
+#[derive(Clone)]
+pub enum ExplosionType {
+    Standard,
+    Biological { toxin_release: bool, membrane_rupture: bool },
+    Chemical { ph_change: f32, oxygen_release: f32 },
+    Electrical { arc_count: u32, chain_range: f32 },
+    Thermal { heat_wave: bool, temperature: f32 },
+}
+
+impl From<&Enemy> for ExplosionType {
+    fn from(enemy: &Enemy) -> Self {
+        match enemy.enemy_type {
+            EnemyType::InfectedMacrophage => ExplosionType::Biological { 
+                toxin_release: true, 
+                membrane_rupture: true 
+            },
+            EnemyType::BiofilmColony => ExplosionType::Chemical { 
+                ph_change: -1.2, 
+                oxygen_release: 0.4 
+            },
+            EnemyType::AggressiveBacteria => ExplosionType::Biological { 
+                toxin_release: enemy.chemical_signature.releases_toxins, 
+                membrane_rupture: false 
+            },
+            EnemyType::ParasiticProtozoa => ExplosionType::Biological { 
+                toxin_release: false, 
+                membrane_rupture: true 
+            },
+            _ => ExplosionType::Standard,
+        }
+    }
+}
+
+
 #[derive(Component)]
 pub struct FlashEffect {
     pub timer: f32,
     pub duration: f32,
     pub original_color: Color,
+    pub flash_color: Color,
 }
 
 #[derive(Component)]
@@ -646,21 +739,4 @@ pub struct MiniExplosion {
 }
 
 #[derive(Component)]
-pub struct ScreenShake {
-    pub trauma: f32,
-    pub offset: Vec2,
-}
-
-// powerup
-#[derive(Component)]
-pub struct ExtraLifePowerUp;
-
-#[derive(Component)]
-pub struct CellWallTimerText;
-
-// lighting test
-#[derive(Component)]
-pub struct ExplosionLight {
-    pub timer: f32,
-    pub max_time: f32,
-}
+pub struct LightGlowSprite;

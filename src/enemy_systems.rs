@@ -742,7 +742,7 @@ fn sample_ph_toxicity(chemical_env: &ChemicalEnvironment, position: Vec2) -> f32
 pub fn formation_coordination_system(
     mut commands: Commands,
     mut colony_query: Query<(Entity, &Transform, &mut ColonyCommander)>,
-    mut member_query: Query<(Entity, &mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
+    mut member_query: Query<(&mut Enemy, &ColonyMember, &Transform), Without<ColonyCommander>>,
     player_query: Query<&Transform, (With<Player>, Without<Enemy>, Without<ColonyCommander>)>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
@@ -755,68 +755,26 @@ pub fn formation_coordination_system(
                 // Execute coordination patterns
                 if colony.coordination_pattern.execute(colony.chemical_timer) {
                     match &colony.coordination_pattern {
-                        CoordinationPattern::ChemicalSignaling { interval } => {
-                            // All members shoot in coordinated burst
-                            for &member_entity in &colony.members {
-                                if let Ok((_, _, member, member_transform)) = member_query.get(member_entity) {
-                                    let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
-                                    
-                                    commands.spawn((
-                                        Sprite {
-                                            image: assets.projectile_texture.clone(),
-                                            color: Color::srgb(0.8, 0.9, 0.3),
-                                            ..default()
-                                        },
-                                        Transform::from_translation(member_transform.translation),
-                                        Projectile {
-                                            velocity: direction * 420.0,
-                                            damage: 25,
-                                            friendly: false,
-                                            organic_trail: true,
-                                        },
-                                        Collider { radius: 5.0 },
-                                    ));
-                                }
-                            }
+                        CoordinationPattern::ChemicalSignaling { .. } => {
+                            execute_chemical_signaling(&mut commands, &assets, &colony, &member_query, player_transform);
                         }
                         
                         CoordinationPattern::SwarmBehavior { swarm_size, .. } => {
-                            // Rapid-fire barrage from swarm members
-                            let workers: Vec<_> = colony.members.iter().take(*swarm_size as usize).collect();
-                            for &member_entity in workers {
-                                if let Ok((_, _, _, member_transform)) = member_query.get(member_entity) {
-                                    let direction = (player_transform.translation.truncate() - member_transform.translation.truncate()).normalize_or_zero();
-                                    
-                                    // Spawn 3 projectiles per swarm member
-                                    for i in 0..3 {
-                                        let spread = (i as f32 - 1.0) * 0.3;
-                                        let spread_dir = Vec2::new(
-                                            direction.x * spread.cos() - direction.y * spread.sin(),
-                                            direction.x * spread.sin() + direction.y * spread.cos(),
-                                        );
-                                        
-                                        commands.spawn((
-                                            Sprite {
-                                                image: assets.projectile_texture.clone(),
-                                                color: Color::srgb(0.7, 0.5, 1.0),
-                                                ..default()
-                                            },
-                                            Transform::from_translation(member_transform.translation),
-                                            Projectile {
-                                                velocity: spread_dir * 400.0,
-                                                damage: 18,
-                                                friendly: false,
-                                                organic_trail: true,
-                                            },
-                                            Collider { radius: 4.0 },
-                                        ));
-                                    }
-                                }
-                            }
+                            execute_swarm_behavior(&mut commands, &assets, &colony, &member_query, player_transform, *swarm_size);
                         }
                         
-                        _ => {} // Other patterns already implemented
+                        CoordinationPattern::BiofilmFormation { member_count, rotation_speed } => {
+                            let rotation_offset = colony.chemical_timer * rotation_speed;
+                            execute_biofilm_formation(&mut commands, &assets, commander_transform, *member_count, rotation_offset);
+                        }
+                        
+                        CoordinationPattern::PheromoneTrail { .. } => {
+                            execute_pheromone_trail(&mut commands, &assets, &colony, &member_query, player_transform);
+                        }
                     }
+                    
+                    // Execute biological maneuvers
+                    execute_biological_maneuvers(&mut commands, &colony, &mut member_query, time.delta_secs());
                 }
             }
         }

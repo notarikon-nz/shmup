@@ -1,10 +1,7 @@
 use bevy::prelude::*;
-use bevy::render::camera::ScalingMode;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
-use crate::enemy_types::*;
-use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 
 pub fn spawn_extra_life_powerup(
     mut commands: Commands,
@@ -30,7 +27,6 @@ pub fn spawn_extra_life_powerup(
                     ..default()
                 },
                 Transform::from_xyz(x_position, 420.0, 0.0),
-                ExtraLifePowerUp,
                 Collider { radius: 10.0 },
                 PowerUp {
                     power_type: PowerUpType::CellularRegeneration { amount: 0 }, // Dummy type

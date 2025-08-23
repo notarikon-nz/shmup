@@ -414,32 +414,394 @@ pub fn enemy_shooting(
 // Enhanced explosion system with organic effects
 pub fn update_explosions(
     mut commands: Commands,
-    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite)>,
+    mut explosion_query: Query<(Entity, &mut EnhancedExplosion, &mut Transform, &mut Sprite)>,
+    assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
-    for (entity, mut explosion, mut transform, mut sprite) in explosion_query.iter_mut() {
-        explosion.timer += time.delta_secs();
-        
-        let progress = explosion.timer / explosion.max_time;
-        if progress >= 1.0 {
-            commands.entity(entity).despawn();
-            continue;
+    if let Some(assets) = assets {
+        for (entity, mut explosion, mut transform, mut sprite) in explosion_query.iter_mut() {
+            explosion.timer += time.delta_secs();
+            
+            if explosion.timer >= explosion.max_time {
+                commands.entity(entity).despawn();
+                continue;
+            }
+            
+            let explosion_clone = explosion.clone();
+            // Process each explosion layer
+            for layer in &mut explosion.layers {
+                if !layer.completed && explosion_clone.timer >= layer.delay {
+                    let layer_progress = (explosion_clone.timer - layer.delay) / layer.duration;
+                    
+                    if layer_progress >= 1.0 {
+                        layer.completed = true;
+                        continue;
+                    }
+                    
+                    match layer.phase {
+                        ExplosionPhase::Shockwave => {
+                            update_shockwave_layer(&mut commands, &assets, &transform, layer, layer_progress, &explosion_clone.explosion_type);
+                        }
+                        ExplosionPhase::CoreBlast => {
+                            update_core_blast_layer(&mut commands, &assets, &transform, layer, layer_progress, explosion_clone.intensity);
+                        }
+                        ExplosionPhase::Debris => {
+                            update_debris_layer(&mut commands, &assets, &transform, layer, layer_progress, &explosion_clone.explosion_type);
+                        }
+                        ExplosionPhase::Afterglow => {
+                            update_afterglow_layer(&mut commands, &assets, &transform, layer, layer_progress);
+                        }
+                        ExplosionPhase::Membrane => {
+                            update_membrane_layer(&mut commands, &assets, &transform, layer, layer_progress);
+                        }
+                    }
+                }
+            }
+            
+            // Update main explosion sprite opacity
+            let global_progress = explosion.timer / explosion.max_time;
+            sprite.color.set_alpha(0.8 * (1.0 - global_progress).powi(2));
         }
-        
-        // Organic expansion pattern
-        let scale = if explosion.organic {
-            // Pulsing organic expansion
-            let pulse = (progress * std::f32::consts::PI * 3.0).sin() * 0.2;
-            1.0 + (progress * explosion.intensity * 2.0) + pulse
-        } else {
-            // Standard expansion
-            1.0 + progress * explosion.intensity * 2.0
-        };
-        
-        transform.scale = Vec3::splat(scale);
-        sprite.color.set_alpha(1.0 - progress);
     }
 }
+
+// Create layered explosion based on type
+fn create_explosion_layers(explosion_type: &ExplosionType, intensity: f32) -> Vec<ExplosionLayer> {
+    match explosion_type {
+        ExplosionType::Biological { toxin_release, membrane_rupture } => {
+            let mut layers = vec![
+                // Membrane rupture (immediate)
+                ExplosionLayer {
+                    phase: ExplosionPhase::Membrane,
+                    delay: 0.0,
+                    duration: 0.2,
+                    particle_count: (25.0 * intensity) as u32,
+                    color_start: Color::srgb(0.9, 1.0, 0.8),
+                    color_end: Color::srgba(0.4, 0.8, 0.6, 0.0),
+                    size_range: (2.0, 8.0),
+                    velocity_range: (Vec2::new(-150.0, -150.0), Vec2::new(150.0, 150.0)),
+                    completed: false,
+                },
+                // Core biological explosion
+                ExplosionLayer {
+                    phase: ExplosionPhase::CoreBlast,
+                    delay: 0.05,
+                    duration: 0.4,
+                    particle_count: (40.0 * intensity) as u32,
+                    color_start: Color::srgb(0.8, 0.9, 0.4),
+                    color_end: Color::srgba(0.2, 0.6, 0.3, 0.0),
+                    size_range: (1.0, 6.0),
+                    velocity_range: (Vec2::new(-200.0, -200.0), Vec2::new(200.0, 200.0)),
+                    completed: false,
+                },
+                // Cellular debris
+                ExplosionLayer {
+                    phase: ExplosionPhase::Debris,
+                    delay: 0.1,
+                    duration: 0.8,
+                    particle_count: (15.0 * intensity) as u32,
+                    color_start: Color::srgb(0.6, 0.8, 0.5),
+                    color_end: Color::srgba(0.3, 0.5, 0.4, 0.0),
+                    size_range: (0.5, 3.0),
+                    velocity_range: (Vec2::new(-100.0, -50.0), Vec2::new(100.0, 50.0)),
+                    completed: false,
+                },
+            ];
+            
+            if *toxin_release {
+                layers.push(ExplosionLayer {
+                    phase: ExplosionPhase::Afterglow,
+                    delay: 0.3,
+                    duration: 1.2,
+                    particle_count: (8.0 * intensity) as u32,
+                    color_start: Color::srgb(0.9, 0.4, 0.6),
+                    color_end: Color::srgba(0.7, 0.3, 0.4, 0.0),
+                    size_range: (3.0, 12.0),
+                    velocity_range: (Vec2::new(-50.0, -25.0), Vec2::new(50.0, 25.0)),
+                    completed: false,
+                });
+            }
+            
+            layers
+        }
+        
+        ExplosionType::Chemical { ph_change, oxygen_release } => {
+            vec![
+                ExplosionLayer {
+                    phase: ExplosionPhase::Shockwave,
+                    delay: 0.0,
+                    duration: 0.15,
+                    particle_count: (30.0 * intensity) as u32,
+                    color_start: if *ph_change < 0.0 { Color::srgb(1.0, 0.3, 0.3) } else { Color::srgb(0.3, 0.3, 1.0) },
+                    color_end: Color::srgba(0.8, 0.8, 0.8, 0.0),
+                    size_range: (1.0, 4.0),
+                    velocity_range: (Vec2::new(-300.0, -300.0), Vec2::new(300.0, 300.0)),
+                    completed: false,
+                },
+                ExplosionLayer {
+                    phase: ExplosionPhase::Afterglow,
+                    delay: 0.2,
+                    duration: 2.0,
+                    particle_count: (12.0 * intensity) as u32,
+                    color_start: Color::srgb(0.7, 0.9, 0.8),
+                    color_end: Color::srgba(0.3, 0.7, 0.6, 0.0),
+                    size_range: (4.0, 16.0),
+                    velocity_range: (Vec2::new(-30.0, -30.0), Vec2::new(30.0, 30.0)),
+                    completed: false,
+                },
+            ]
+        }
+        
+        _ => {
+            vec![
+                ExplosionLayer {
+                    phase: ExplosionPhase::CoreBlast,
+                    delay: 0.0,
+                    duration: 0.5,
+                    particle_count: (20.0 * intensity) as u32,
+                    color_start: Color::srgb(1.0, 0.8, 0.4),
+                    color_end: Color::srgba(1.0, 0.4, 0.2, 0.0),
+                    size_range: (1.0, 5.0),
+                    velocity_range: (Vec2::new(-180.0, -180.0), Vec2::new(180.0, 180.0)),
+                    completed: false,
+                },
+            ]
+        }
+    }
+}
+
+// Layer update functions
+fn update_shockwave_layer(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+    explosion_type: &ExplosionType,
+) {
+    if progress < 0.1 { // Only spawn particles early in shockwave
+        let ring_particles = 12;
+        for i in 0..ring_particles {
+            let angle = (i as f32 / ring_particles as f32) * std::f32::consts::TAU;
+            let radius = 20.0 + progress * 100.0;
+            let position = transform.translation + Vec3::new(
+                angle.cos() * radius,
+                angle.sin() * radius,
+                0.1,
+            );
+            
+            let velocity = Vec2::from_angle(angle) * 250.0;
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.particle_texture.clone(),
+                    color: layer.color_start,
+                    custom_size: Some(Vec2::splat(3.0)),
+                    ..default()
+                },
+                Transform::from_translation(position),
+                Particle {
+                    velocity,
+                    lifetime: 0.0,
+                    max_lifetime: 0.3,
+                    size: 3.0,
+                    fade_rate: 3.0,
+                    bioluminescent: matches!(explosion_type, ExplosionType::Biological { .. }),
+                    drift_pattern: DriftPattern::Pulsing,
+                },
+            ));
+        }
+    }
+}
+
+fn update_core_blast_layer(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+    intensity: f32,
+) {
+    if progress < 0.2 { // Spawn core particles early
+        let count = (layer.particle_count as f32 * (1.0 - progress * 5.0)).max(0.0) as u32;
+        
+        for i in 0..count.min(8) { // Limit per frame
+            let angle = (i as f32 / count as f32) * std::f32::consts::TAU + progress * 10.0;
+            let speed = 80.0 + progress * 120.0;
+            let velocity = Vec2::from_angle(angle) * speed;
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.particle_texture.clone(),
+                    color: layer.color_start,
+                    custom_size: Some(Vec2::splat(4.0)),
+                    ..default()
+                },
+                Transform::from_translation(transform.translation),
+                Particle {
+                    velocity,
+                    lifetime: 0.0,
+                    max_lifetime: 0.6,
+                    size: 4.0 * intensity,
+                    fade_rate: 1.5,
+                    bioluminescent: true,
+                    drift_pattern: DriftPattern::Spiraling,
+                },
+                BioluminescentParticle {
+                    base_color: layer.color_start,
+                    pulse_frequency: 6.0,
+                    pulse_intensity: 0.8,
+                    organic_motion: OrganicMotion {
+                        undulation_speed: 3.0,
+                        response_to_current: 0.2,
+                    },
+                },
+            ));
+        }
+    }
+}
+
+fn update_debris_layer(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+    explosion_type: &ExplosionType,
+) {
+    if progress < 0.3 {
+        let debris_color = match explosion_type {
+            ExplosionType::Biological { .. } => Color::srgb(0.7, 0.8, 0.6),
+            ExplosionType::Chemical { .. } => Color::srgb(0.8, 0.9, 0.5),
+            _ => Color::srgb(0.6, 0.6, 0.6),
+        };
+        
+        for i in 0..(layer.particle_count / 8).min(4) {
+            let angle = (i as f32 * 1.7) + progress * 8.0;
+            let distance = 25.0 + progress * 40.0;
+            let velocity = Vec2::from_angle(angle) * (60.0 + progress * 80.0);
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.particle_texture.clone(),
+                    color: debris_color,
+                    custom_size: Some(Vec2::splat(2.0)),
+                    ..default()
+                },
+                Transform::from_translation(transform.translation + Vec3::new(
+                    angle.cos() * distance,
+                    angle.sin() * distance,
+                    0.0,
+                )),
+                Particle {
+                    velocity,
+                    lifetime: 0.0,
+                    max_lifetime: 1.5,
+                    size: 2.0,
+                    fade_rate: 0.8,
+                    bioluminescent: false,
+                    drift_pattern: DriftPattern::Brownian,
+                },
+            ));
+        }
+    }
+}
+
+fn update_afterglow_layer(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+) {
+    if progress < 0.4 {
+        for i in 0..(layer.particle_count / 10).min(3) {
+            let velocity = Vec2::new(
+                (progress * 50.0 + i as f32 * 20.0).sin() * 30.0,
+                (progress * 40.0 + i as f32 * 15.0).cos() * 25.0,
+            );
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.particle_texture.clone(),
+                    color: layer.color_start,
+                    custom_size: Some(Vec2::splat(6.0)),
+                    ..default()
+                },
+                Transform::from_translation(transform.translation),
+                Particle {
+                    velocity,
+                    lifetime: 0.0,
+                    max_lifetime: 3.0,
+                    size: 6.0,
+                    fade_rate: 0.4,
+                    bioluminescent: true,
+                    drift_pattern: DriftPattern::Floating,
+                },
+                BioluminescentParticle {
+                    base_color: layer.color_start,
+                    pulse_frequency: 1.0,
+                    pulse_intensity: 0.6,
+                    organic_motion: OrganicMotion {
+                        undulation_speed: 1.5,
+                        response_to_current: 0.9,
+                    },
+                },
+            ));
+        }
+    }
+}
+
+fn update_membrane_layer(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+) {
+    if progress < 0.15 {
+        // Membrane fragments with organic shapes
+        for i in 0..6 {
+            let angle = (i as f32 / 6.0) * std::f32::consts::TAU;
+            let fragment_size = 4.0 + (i % 3) as f32 * 2.0;
+            let velocity = Vec2::from_angle(angle) * (120.0 + progress * 100.0);
+            
+            commands.spawn((
+                Sprite {
+                    image: assets.particle_texture.clone(),
+                    color: Color::srgb(0.8, 1.0, 0.9),
+                    custom_size: Some(Vec2::splat(fragment_size)),
+                    ..default()
+                },
+                Transform::from_translation(transform.translation + Vec3::new(
+                    angle.cos() * 15.0,
+                    angle.sin() * 15.0,
+                    0.1,
+                )),
+                Particle {
+                    velocity,
+                    lifetime: 0.0,
+                    max_lifetime: 1.0,
+                    size: fragment_size,
+                    fade_rate: 1.2,
+                    bioluminescent: true,
+                    drift_pattern: DriftPattern::Floating,
+                },
+                BioluminescentParticle {
+                    base_color: Color::srgb(0.8, 1.0, 0.9),
+                    pulse_frequency: 4.0,
+                    pulse_intensity: 0.4,
+                    organic_motion: OrganicMotion {
+                        undulation_speed: 2.5,
+                        response_to_current: 0.8,
+                    },
+                },
+            ));
+        }
+    }
+}
+
+
 
 // Enhanced particle emitter with biological particles
 pub fn update_particle_emitters(
@@ -551,52 +913,100 @@ pub fn handle_player_hit(
 pub fn spawn_explosion_system(
     mut commands: Commands,
     mut explosion_events: EventReader<SpawnExplosion>,
-    mut particle_events: EventWriter<SpawnParticles>,
+    mut shake_events: EventWriter<AddScreenShake>,
     assets: Option<Res<GameAssets>>,
 ) {
     if let Some(assets) = assets {
         for event in explosion_events.read() {
-            let (color, particle_count, size_mult, is_organic) = match &event.enemy_type {
-                Some(EnemyType::InfectedMacrophage) => (Color::srgb(1.0, 0.2, 0.8), 35, 1.8, true),
-                Some(EnemyType::ParasiticProtozoa) => (Color::srgb(0.7, 0.9, 0.4), 25, 1.4, true),
-                Some(EnemyType::AggressiveBacteria) => (Color::srgb(1.0, 0.4, 0.4), 20, 1.2, true),
-                Some(EnemyType::BiofilmColony) => (Color::srgb(0.6, 0.8, 0.3), 30, 1.6, true),
-                _ => (Color::srgb(0.8, 1.0, 1.0), 15, 1.0, true),
+            let explosion_type = match &event.enemy_type {
+                Some(EnemyType::InfectedMacrophage) => ExplosionType::Biological { 
+                    toxin_release: true, 
+                    membrane_rupture: true 
+                },
+                Some(EnemyType::BiofilmColony) => ExplosionType::Chemical { 
+                    ph_change: -1.5, 
+                    oxygen_release: 0.3 
+                },
+                Some(EnemyType::AggressiveBacteria) => ExplosionType::Biological { 
+                    toxin_release: true, 
+                    membrane_rupture: false 
+                },
+                _ => ExplosionType::Standard,
             };
-
-            commands.spawn((
+            
+            let layers = create_explosion_layers(&explosion_type, event.intensity);
+            let shake_amount = calculate_shake_amount(&explosion_type, event.intensity);
+            
+            shake_events.write(AddScreenShake { amount: shake_amount });
+            
+            // Spawn main explosion entity
+            let explosion_entity = commands.spawn((
                 Sprite {
                     image: assets.explosion_texture.clone(),
-                    color,
+                    color: Color::srgba(1.0, 1.0, 1.0, 0.0), // Start transparent
                     ..default()
                 },
-                Transform::from_translation(event.position.with_z(-1.0)), // Behind gameplay
-                Explosion {
+                Transform::from_translation(event.position),
+                EnhancedExplosion {
                     timer: 0.0,
-                    max_time: 0.7 * size_mult,
-                    intensity: event.intensity * size_mult,
-                    organic: is_organic,
+                    max_time: 1.5,
+                    intensity: event.intensity,
+                    explosion_type: explosion_type.clone(),
+                    layers,
+                    light_id: None, // Will be set by lighting system
                 },
-            ));
-
-            // Organic explosion particles
-            particle_events.write(SpawnParticles {
-                position: event.position,
-                count: particle_count,
-                config: ParticleConfig {
-                    color_start: color,
-                    color_end: Color::srgba(color.to_srgba().red, color.to_srgba().green * 0.5, 0.1, 0.0),
-                    velocity_range: (Vec2::new(-180.0, -180.0), Vec2::new(180.0, 180.0)),
-                    lifetime_range: (0.4, 1.2),
-                    size_range: (0.3 * size_mult, 1.2 * size_mult),
-                    gravity: Vec2::new(0.0, -30.0),
-                    organic_motion: is_organic,
-                    bioluminescence: if is_organic { 0.8 } else { 0.3 },
-                },
-            });
+            )).id();
+            
+            // Create initial shockwave
+            spawn_shockwave(&mut commands, &assets, event.position, event.intensity, &explosion_type);
         }
     }
 }
+
+// Calculate screen shake based on explosion properties
+fn calculate_shake_amount(explosion_type: &ExplosionType, intensity: f32) -> f32 {
+    let base_shake = intensity * 0.3;
+    
+    match explosion_type {
+        ExplosionType::Biological { membrane_rupture: true, .. } => base_shake * 1.5,
+        ExplosionType::Chemical { .. } => base_shake * 1.2,
+        ExplosionType::Electrical { .. } => base_shake * 0.8,
+        ExplosionType::Thermal { .. } => base_shake * 1.3,
+        _ => base_shake,
+    }
+}
+
+// Spawn shockwave effect
+fn spawn_shockwave(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    position: Vec3,
+    intensity: f32,
+    explosion_type: &ExplosionType,
+) {
+    let ring_color = match explosion_type {
+        ExplosionType::Biological { .. } => Color::srgb(0.4, 1.0, 0.8),
+        ExplosionType::Chemical { .. } => Color::srgb(0.9, 0.9, 0.3),
+        ExplosionType::Electrical { .. } => Color::srgb(0.3, 0.8, 1.0),
+        _ => Color::srgb(1.0, 0.8, 0.4),
+    };
+    
+    commands.spawn((
+        Sprite {
+            image: assets.explosion_texture.clone(),
+            color: Color::srgba(ring_color.to_srgba().red, ring_color.to_srgba().green, ring_color.to_srgba().blue, 0.6),
+            custom_size: Some(Vec2::splat(20.0)),
+            ..default()
+        },
+        Transform::from_translation(position),
+        MiniExplosion {
+            timer: 0.0,
+            max_time: 0.4,
+            size: intensity,
+        },
+    ));
+}
+
 
 // Spawning Systems
 pub fn spawn_enemies(
@@ -1097,13 +1507,14 @@ pub fn enemy_flash_system(
         if let Ok(enemy_sprite) = enemy_query.get(event.entity) {
             commands.entity(event.entity).insert(FlashEffect {
                 timer: 0.0,
-                duration: 0.1,
+                duration: 0.15,
                 original_color: enemy_sprite.color,
+                flash_color: Color::srgb(1.0, 1.0, 1.0),
             });
         }
     }
     
-    // Update existing flashes
+    // Update flashes with organic pulsing
     for (entity, mut flash, mut sprite) in flash_query.iter_mut() {
         flash.timer += time.delta_secs();
         
@@ -1111,9 +1522,15 @@ pub fn enemy_flash_system(
             sprite.color = flash.original_color;
             commands.entity(entity).remove::<FlashEffect>();
         } else {
-            // Flash white
-            let flash_intensity = 1.0 - (flash.timer / flash.duration);
-            sprite.color = Color::srgb(1.0, 1.0, 1.0).mix(&flash.original_color, flash_intensity * 0.7);
+            let progress = flash.timer / flash.duration;
+            // Organic flash curve - sharp peak, gentle falloff
+            let flash_intensity = if progress < 0.3 {
+                1.0 - (progress / 0.3)
+            } else {
+                ((1.0 - progress) / 0.7).powi(2)
+            };
+            
+            sprite.color = flash.flash_color.mix(&flash.original_color, flash_intensity);
         }
     }
 }
@@ -1149,87 +1566,230 @@ pub fn screen_shake_system(
         shake_resource.trauma = (shake_resource.trauma + event.amount).min(shake_resource.max_trauma);
     }
     
-    // Decay trauma
+    // Decay trauma with organic falloff
     shake_resource.trauma = (shake_resource.trauma - shake_resource.decay_rate * time.delta_secs()).max(0.0);
     
-    // Apply shake to camera
+    // Apply enhanced shake to camera
     if let Ok(mut camera_transform) = camera_query.single_mut() {
         if shake_resource.trauma > 0.0 {
-            let shake = shake_resource.trauma * shake_resource.trauma; // Square for smoother falloff
-            let offset_x = (time.elapsed_secs() * 50.0).sin() * shake * shake_resource.shake_intensity;
-            let offset_y = (time.elapsed_secs() * 40.0).cos() * shake * shake_resource.shake_intensity;
+            let shake = shake_resource.trauma.powi(2); // Quadratic falloff
             
-            camera_transform.translation.x = offset_x;
-            camera_transform.translation.y = offset_y;
+            // Multi-frequency shake for more organic feel
+            let time_factor = time.elapsed_secs();
+            let shake_x = (time_factor * 47.3).sin() * shake * shake_resource.shake_intensity
+                + (time_factor * 23.1).sin() * shake * shake_resource.shake_intensity * 0.5;
+            let shake_y = (time_factor * 34.7).cos() * shake * shake_resource.shake_intensity
+                + (time_factor * 18.9).cos() * shake * shake_resource.shake_intensity * 0.5;
+            
+            // Rotation shake for impact feel
+            let rotation_shake = (time_factor * 15.6).sin() * shake * shake_resource.rotation_factor;
+            
+            camera_transform.translation.x = shake_x;
+            camera_transform.translation.y = shake_y;
+            camera_transform.rotation = Quat::from_rotation_z(rotation_shake);
         } else {
             camera_transform.translation.x = 0.0;
             camera_transform.translation.y = 0.0;
+            camera_transform.rotation = Quat::IDENTITY;
         }
     }
 }
 
+// fn spawn_mini_explosion(
 pub fn spawn_mini_explosions_on_collision(
-    mut commands: Commands,
-    projectile_query: Query<&Transform, With<Projectile>>,
-    mut collision_events: EventReader<SpawnExplosion>,
-    assets: Option<Res<GameAssets>>,
+    commands: &mut Commands,
+    assets: &GameAssets,
+    position: Vec3,
+    intensity: f32,
 ) {
-    if let Some(assets) = assets {
-        for event in collision_events.read() {
-            commands.spawn((
-                Sprite {
-                    image: assets.explosion_texture.clone(),
-                    color: Color::srgb(1.0, 0.8, 0.4),
-                    custom_size: Some(Vec2::splat(8.0)),
-                    ..default()
-                },
-                Transform::from_translation(event.position),
-                MiniExplosion {
-                    timer: 0.0,
-                    max_time: 0.3,
-                    size: 1.0,
-                },
-            ));
-        }
-    }
-}
-pub fn explosion_lighting_system(
-    mut commands: Commands,
-    explosion_query: Query<&Transform, Added<Explosion>>,
-    time: Res<Time>,
-) {
-    for transform in explosion_query.iter() {
+    // Main mini explosion
+    commands.spawn((
+        Sprite {
+            image: assets.explosion_texture.clone(),
+            color: Color::srgb(1.0, 0.8, 0.4),
+            custom_size: Some(Vec2::splat(8.0 * intensity)),
+            ..default()
+        },
+        Transform::from_translation(position),
+        MiniExplosion {
+            timer: 0.0,
+            max_time: 0.25,
+            size: intensity,
+        },
+    ));
+    
+    // Spawn micro particles for detail
+    for i in 0..6 {
+        let angle = (i as f32 / 6.0) * std::f32::consts::TAU;
+        let velocity = Vec2::from_angle(angle) * (80.0 + intensity * 40.0);
+        
         commands.spawn((
-            PointLight {
-                color: Color::srgb(1.0, 0.6, 0.2),
-                intensity: 2000.0,
-                radius: 150.0,
-                range: 3.0,
-                shadows_enabled: true,
-                affects_lightmapped_mesh_diffuse: false,
-                shadow_depth_bias: 0.08,
-                shadow_normal_bias: 0.6,
-                shadow_map_near_z: 0.1,
+            Sprite {
+                image: assets.particle_texture.clone(),
+                color: Color::srgb(1.0, 0.9, 0.6),
+                custom_size: Some(Vec2::splat(2.0)),
+                ..default()
             },
-            Transform::from_translation(transform.translation),
-            ExplosionLight { timer: 0.0, max_time: 0.5 },
+            Transform::from_translation(position),
+            Particle {
+                velocity,
+                lifetime: 0.0,
+                max_lifetime: 0.4,
+                size: 2.0,
+                fade_rate: 2.5,
+                bioluminescent: true,
+                drift_pattern: DriftPattern::Pulsing,
+            },
         ));
     }
 }
 
-pub fn update_explosion_lights(
+pub fn update_enhanced_mini_explosions(
     mut commands: Commands,
-    mut light_query: Query<(Entity, &mut ExplosionLight, &mut PointLight)>,
+    mut mini_explosion_query: Query<(Entity, &mut MiniExplosion, &mut Transform, &mut Sprite)>,
     time: Res<Time>,
 ) {
-    for (entity, mut light, mut point_light) in light_query.iter_mut() {
+    for (entity, mut explosion, mut transform, mut sprite) in mini_explosion_query.iter_mut() {
+        explosion.timer += time.delta_secs();
+        
+        if explosion.timer >= explosion.max_time {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        
+        let progress = explosion.timer / explosion.max_time;
+        
+        // Organic expansion with slight irregularity
+        let base_scale = explosion.size * (1.0 + progress * 2.5);
+        let organic_variation = (progress * 20.0).sin() * 0.1;
+        let scale = base_scale * (1.0 + organic_variation);
+        
+        transform.scale = Vec3::splat(scale);
+        
+        // Color transition with organic fade
+        let alpha = (1.0 - progress).powi(2);
+        let color_shift = progress * 0.3;
+        sprite.color = Color::srgba(
+            1.0 - color_shift,
+            0.8 + color_shift * 0.2,
+            0.4 + color_shift * 0.4,
+            alpha
+        );
+        
+        // Slight organic rotation
+        transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 2.0);
+    }
+}
+
+pub fn explosion_lighting_system(
+    mut commands: Commands,
+    newly_spawned: Query<(Entity, &Transform, &EnhancedExplosion), Added<EnhancedExplosion>>,
+    mut existing_explosions: Query<&mut EnhancedExplosion, Without<Transform>>,
+) {
+    // Spawn lights for new explosions
+    for (explosion_entity, transform, explosion) in newly_spawned.iter() {
+        let (light_color, intensity, radius) = match &explosion.explosion_type {
+            ExplosionType::Biological { .. } => (Color::srgb(0.4, 1.0, 0.8), 1500.0, 120.0),
+            ExplosionType::Chemical { .. } => (Color::srgb(0.9, 0.9, 0.3), 2000.0, 150.0),
+            ExplosionType::Electrical { .. } => (Color::srgb(0.3, 0.8, 1.0), 1800.0, 100.0),
+            _ => (Color::srgb(1.0, 0.6, 0.3), 1200.0, 100.0),
+        };
+        
+        let light_entity = commands.spawn((
+            ExplosionLight {
+                color: light_color,
+                intensity,
+                radius,
+                timer: 0.0,
+                max_time: explosion.max_time,
+                falloff: 2.0,
+            },
+            Transform::from_translation(transform.translation),
+        )).id();
+        
+        // Link light to explosion - update in separate system or use commands
+        commands.entity(explosion_entity).insert(LinkedExplosionLight(light_entity));
+    }
+}
+
+// Add this component to link lights to explosions
+#[derive(Component)]
+pub struct LinkedExplosionLight(pub Entity);
+
+
+pub fn update_explosion_lights(
+    mut commands: Commands,
+    mut light_query: Query<(Entity, &mut ExplosionLight)>,
+    time: Res<Time>,
+) {
+    for (entity, mut light) in light_query.iter_mut() {
         light.timer += time.delta_secs();
         
         if light.timer >= light.max_time {
             commands.entity(entity).despawn();
         } else {
-            let fade = 1.0 - (light.timer / light.max_time);
-            point_light.intensity = 2000.0 * fade * fade;
+            // Organic light fade with multiple falloff curves
+            let progress = light.timer / light.max_time;
+            let fade_curve = if progress < 0.1 {
+                // Quick bright flash
+                1.0 - (progress / 0.1) * 0.3
+            } else if progress < 0.4 {
+                // Sustained glow
+                0.7 - ((progress - 0.1) / 0.3) * 0.3
+            } else {
+                // Slow organic fade
+                0.4 * (1.0 - ((progress - 0.4) / 0.6)).powi(3)
+            };
+            
+            light.intensity = light.intensity * fade_curve;
+            light.radius = light.radius * (0.8 + fade_curve * 0.2);
         }
+    }
+}
+
+
+
+pub fn update_cell_wall_timer_ui(
+    cell_wall_query: Query<&CellWallReinforcement>,
+    mut timer_text_query: Query<&mut Text, With<CellWallTimerText>>,
+) {
+    if let Ok(mut text) = timer_text_query.single_mut() {
+        if let Ok(cell_wall) = cell_wall_query.single() {
+            let remaining = cell_wall.timer.max(0.0);
+            let color_intensity = if remaining < 3.0 { "⚠️" } else { "🛡️" };
+            **text = format!("{} Cell Wall: {:.1}s", color_intensity, remaining);
+        } else {
+            **text = String::new();
+        }
+    }
+}
+
+// TO DO
+
+
+// Update your main collision system to use enhanced explosions
+pub fn replace_explosion_events_with_enhanced(
+    mut explosion_events: EventReader<SpawnExplosion>,
+    mut enhanced_explosion_events: EventWriter<SpawnEnhancedExplosion>,
+) {
+    for event in explosion_events.read() {
+        enhanced_explosion_events.write(SpawnEnhancedExplosion {
+            position: event.position,
+            intensity: event.intensity,
+            explosion_type: event.enemy_type.as_ref().map(|e| {
+                // Convert enemy type to explosion type
+                match e {
+                    EnemyType::InfectedMacrophage => ExplosionType::Biological { 
+                        toxin_release: true, 
+                        membrane_rupture: true 
+                    },
+                    EnemyType::BiofilmColony => ExplosionType::Chemical { 
+                        ph_change: -1.5, 
+                        oxygen_release: 0.3 
+                    },
+                    _ => ExplosionType::Standard,
+                }
+            }).unwrap_or(ExplosionType::Standard),
+        });
     }
 }

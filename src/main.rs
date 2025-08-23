@@ -13,7 +13,7 @@ mod weapon_systems;
 mod currency_systems;
 mod biological_systems; 
 mod audio; 
-mod powerup_systems;
+mod lighting;
 
 use components::*;
 use resources::*;
@@ -25,7 +25,7 @@ use weapon_systems::*;
 use currency_systems::*;
 use biological_systems::*; 
 use audio::*;
-use powerup_systems::*;
+use lighting::*;
 
 /*
     // SPRITE LIST
@@ -70,6 +70,7 @@ fn main() {
         .add_event::<PlayerHit>()
         .add_event::<AddScreenShake>()
         .add_event::<EnemyHit>()
+        .add_event::<SpawnEnhancedExplosion>()
 
         .add_systems(Startup, (
             setup_camera, 
@@ -101,6 +102,20 @@ fn main() {
             link_symbiotic_pairs,
             spawn_evolution_chambers, 
         ).run_if(in_state(GameState::Playing)))
+
+        .add_systems(Update, (
+            // spawn_enhanced_explosion_system,
+            // enhanced_projectile_collision_system,
+            update_cell_wall_timer_ui,
+            update_evolution_ui,
+
+            spawn_extra_life_powerups,
+            extra_life_collection_system,
+            update_dynamic_lights,
+            render_light_effects,
+        ).run_if(in_state(GameState::Playing)))
+
+
         // Second Update group - projectile and movement systems
         .add_systems(Update, (
             move_projectiles,
@@ -199,6 +214,7 @@ fn main() {
             handle_restart_input,
             // 
             debug_atp_spawner,
+            debug_spawn_evolution_chamber,
         ).run_if(in_state(GameState::Playing)))
         .add_systems(OnEnter(GameState::GameOver), (save_high_score_system, setup_game_over_ui).chain())
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
@@ -415,8 +431,8 @@ pub fn setup_biological_ui(mut commands: Commands) {
         Text::new(""),
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(250.0),
-            bottom: Val::Px(70.0),
+            left: Val::Px(20.0),
+            bottom: Val::Px(130.0),
             ..default()
         },
         TextFont { font_size: 16.0, ..default() },
@@ -1088,11 +1104,42 @@ pub fn debug_atp_spawner(
                         custom_size: Some(Vec2::splat(18.0)),
                         ..default()
                     },
-                    Transform::from_translation(player_transform.translation + Vec3::new(50.0, 0.0, 0.0)),
-                    ATP { amount: 10 },
+                    Transform::from_translation(player_transform.translation + Vec3::new(32.0, 0.0, 0.0)),
+                    ATP { amount: 1000 },
                     Collider { radius: 9.0 },
                 ));
             }
+        }
+    }
+}
+
+
+pub fn debug_spawn_evolution_chamber(
+    mut commands: Commands,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    assets: Option<Res<GameAssets>>,
+) {
+    if keyboard.just_pressed(KeyCode::F3) {
+        if let Some(assets) = assets {
+            commands.spawn((
+                Sprite {
+                    image: assets.enemy_texture.clone(),
+                    color: Color::srgb(0.3, 0.9, 0.6),
+                    custom_size: Some(Vec2::splat(60.0)),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, -100.0, 0.0), // Near player for testing
+                EvolutionChamber,
+                BioluminescentParticle {
+                    base_color: Color::srgb(0.3, 0.9, 0.6),
+                    pulse_frequency: 1.0,
+                    pulse_intensity: 0.6,
+                    organic_motion: OrganicMotion {
+                        undulation_speed: 0.8,
+                        response_to_current: 0.2,
+                    },
+                },
+            ));
         }
     }
 }
