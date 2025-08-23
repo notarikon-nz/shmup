@@ -117,6 +117,7 @@ fn main() {
             update_spawner_enemies,
             update_formations,
             formation_coordination_system,
+            procedural_colony_spawning,
         ).run_if(in_state(GameState::Playing)))
         // Fourth Update group - collision and interaction systems
         .add_systems(Update, (            

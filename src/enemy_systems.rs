@@ -1023,3 +1023,162 @@ pub fn link_symbiotic_pairs(
         }
     }
 }
+
+pub fn procedural_colony_spawning(
+    mut commands: Commands,
+    mut enemy_spawner: ResMut<EnemySpawner>,
+    mut spawn_events: EventWriter<SpawnEnemy>,
+    ecosystem: Res<EcosystemState>,
+    time: Res<Time>,
+    mut colony_timer: Local<f32>,
+) {
+    *colony_timer += time.delta_secs();
+    
+    // Spawn colonies every 25 seconds after wave 60
+    if enemy_spawner.wave_timer > 60.0 && *colony_timer >= 25.0 {
+        *colony_timer = 0.0;
+        
+        let base_x = (time.elapsed_secs() * 40.0).sin() * 200.0;
+        let pattern_type = match (time.elapsed_secs() as u32 / 25) % 4 {
+            0 => spawn_biofilm_colony(&mut commands, &mut spawn_events, base_x),
+            1 => spawn_linear_chain(&mut commands, &mut spawn_events, base_x),
+            2 => spawn_circular_cluster(&mut commands, &mut spawn_events, base_x),
+            _ => spawn_hunting_pack(&mut commands, &mut spawn_events, base_x),
+        };
+        
+        enemy_spawner.enemies_spawned += pattern_type;
+    }
+}
+
+fn spawn_biofilm_colony(
+    commands: &mut Commands,
+    spawn_events: &mut EventWriter<SpawnEnemy>,
+    base_x: f32,
+) -> u32 {
+    let colony_id = (base_x * 1000.0) as u32;
+    
+    // Central biofilm node
+    spawn_events.write(SpawnEnemy {
+        position: Vec3::new(base_x, 420.0, 0.0),
+        ai_type: EnemyAI::Turret { rotation: 0.0, shoot_timer: 0.0, detection_range: 250.0 },
+        enemy_type: EnemyType::BiofilmColony,
+    });
+    
+    // Spawn colony leader
+    let leader_entity = commands.spawn((
+        Transform::from_xyz(base_x, 420.0, 0.0),
+        ColonyLeader {
+            colony_id,
+            members: Vec::new(),
+            pattern_timer: 0.0,
+            pattern_type: ColonyPattern::BiofilmFormation,
+            chemical_communication: true,
+        },
+        ColonyCommander {
+            colony_id,
+            members: Vec::new(),
+            coordination_pattern: CoordinationPattern::ChemicalSignaling { interval: 2.0 },
+            chemical_timer: 0.0,
+        },
+    )).id();
+    
+    // Surrounding defensive cells in organic cluster
+    for layer in 0..3 {
+        let cells_in_layer = 3 + layer;
+        for i in 0..cells_in_layer {
+            let angle = (i as f32 / cells_in_layer as f32) * std::f32::consts::TAU;
+            let radius = 40.0 + layer as f32 * 25.0;
+            let pos = Vec2::from_angle(angle) * radius;
+            
+            spawn_events.write(SpawnEnemy {
+                position: Vec3::new(base_x + pos.x, 420.0 + pos.y, 0.0),
+                ai_type: EnemyAI::Formation {
+                    formation_id: colony_id,
+                    position_in_formation: pos,
+                    leader_offset: Vec2::ZERO,
+                    formation_timer: 0.0,
+                },
+                enemy_type: EnemyType::SwarmCell,
+            });
+        }
+    }
+    
+    12 // Total enemies spawned
+}
+
+fn spawn_linear_chain(
+    commands: &mut Commands,
+    spawn_events: &mut EventWriter<SpawnEnemy>,
+    base_x: f32,
+) -> u32 {
+    let colony_id = (base_x * 1001.0) as u32;
+    
+    // Chain of 6 cells with undulating movement
+    for i in 0..6 {
+        let y_offset = i as f32 * 35.0;
+        spawn_events.write(SpawnEnemy {
+            position: Vec3::new(base_x, 420.0 - y_offset, 0.0),
+            ai_type: EnemyAI::Formation {
+                formation_id: colony_id,
+                position_in_formation: Vec2::new(0.0, -(i as f32 * 35.0)),
+                leader_offset: Vec2::ZERO,
+                formation_timer: i as f32 * 0.2, // Staggered timing
+            },
+            enemy_type: EnemyType::AggressiveBacteria,
+        });
+    }
+    
+    6
+}
+
+fn spawn_circular_cluster(
+    commands: &mut Commands,
+    spawn_events: &mut EventWriter<SpawnEnemy>,
+    base_x: f32,
+) -> u32 {
+    let colony_id = (base_x * 1002.0) as u32;
+    
+    // Circular formation with synchronized movement
+    for i in 0..8 {
+        let angle = (i as f32 / 8.0) * std::f32::consts::TAU;
+        let radius = 60.0;
+        let pos = Vec2::from_angle(angle) * radius;
+        
+        spawn_events.write(SpawnEnemy {
+            position: Vec3::new(base_x + pos.x, 420.0 + pos.y, 0.0),
+            ai_type: EnemyAI::Formation {
+                formation_id: colony_id,
+                position_in_formation: pos,
+                leader_offset: Vec2::ZERO,
+                formation_timer: 0.0,
+            },
+            enemy_type: EnemyType::SwarmCell,
+        });
+    }
+    
+    8
+}
+
+fn spawn_hunting_pack(
+    commands: &mut Commands,
+    spawn_events: &mut EventWriter<SpawnEnemy>,
+    base_x: f32,
+) -> u32 {
+    // Pack of chemotaxis hunters
+    for i in 0..4 {
+        let offset = Vec2::new((i as f32 - 1.5) * 40.0, (i % 2) as f32 * 30.0);
+        
+        spawn_events.write(SpawnEnemy {
+            position: Vec3::new(base_x + offset.x, 420.0 + offset.y, 0.0),
+            ai_type: EnemyAI::Chemotaxis {
+                target_chemical: ChemicalType::PlayerPheromones,
+                sensitivity: 1.8,
+                current_direction: Vec2::new(0.0, -1.0),
+            },
+            enemy_type: EnemyType::ParasiticProtozoa,
+        });
+    }
+    
+    4
+}
+
