@@ -120,7 +120,7 @@ pub fn move_atp(
     fluid_environment: Res<FluidEnvironment>,
     time: Res<Time>,
 ) {
-    for (mut transform, mut bio_particle) in atp_query.iter_mut() {
+    for (mut transform, bio_particle) in atp_query.iter_mut() {
         // Gentle downward drift
         transform.translation.y -= 80.0 * time.delta_secs();
 
@@ -145,7 +145,7 @@ pub fn move_atp(
 
 // Evolution Chamber interaction (renamed from upgrade_station_interaction)
 pub fn evolution_chamber_interaction(
-    mut commands: Commands,
+    commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
     mut player_query: Query<(&Transform, &mut ATP, &mut EvolutionSystem, &mut CellularUpgrades), With<Player>>,
@@ -381,7 +381,7 @@ pub fn update_temporary_evolution_effects(
 // Spawn evolution power-ups with biological themes
 pub fn spawn_evolution_powerups(
     mut commands: Commands,
-    mut enemy_spawner: ResMut<EnemySpawner>,
+    enemy_spawner: ResMut<EnemySpawner>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
@@ -751,7 +751,7 @@ pub fn collect_atp_with_energy_transfer(
 // Spawn evolution chambers with organic growth patterns
 pub fn spawn_evolution_chambers(
     mut commands: Commands,
-    mut enemy_spawner: ResMut<EnemySpawner>,
+    enemy_spawner: ResMut<EnemySpawner>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
@@ -834,9 +834,6 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
         Vec2::ZERO
     }
 }
-
-
-
 
 pub fn spawn_extra_life_powerups(
     mut commands: Commands,

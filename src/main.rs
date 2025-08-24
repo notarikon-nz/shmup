@@ -21,6 +21,7 @@ mod high_scores;
 mod powerup_systems;
 mod user_interface;
 mod debug;
+mod achievements;
 
 use components::*;
 use resources::*;
@@ -39,6 +40,7 @@ use tidal_mechanics::*;
 use high_scores::*;
 use powerup_systems::{spawn_powerup_system};
 use user_interface::*;
+use achievements::*;
 use debug::*;
 
 fn main() {
@@ -67,6 +69,7 @@ fn main() {
         .init_resource::<EcosystemState>()
         .init_resource::<ScreenShakeResource>()
         .init_resource::<TidalState>()
+        .init_resource::<AchievementManager>()
 
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
@@ -84,13 +87,15 @@ fn main() {
             setup_biological_background, 
             spawn_biological_player, 
             load_biological_assets, 
-            setup_biological_ui.after(load_biological_assets), 
+            load_game_fonts,
+            setup_biological_ui.after(load_game_fonts),
             load_high_scores_from_file,
             init_particle_pool,
             init_fluid_environment, 
             init_chemical_zones,
             init_current_generator,
             // init_tidal_state, // do we need this?
+            
             start_ambient_music.after(load_biological_assets),
         ))
         .add_systems(Update, fps_system)
@@ -107,11 +112,11 @@ fn main() {
             spawn_biological_powerups, 
             spawn_evolution_powerups, 
 
+            // track_achievements_system,
+
             link_symbiotic_pairs,
             spawn_evolution_chambers, 
 
-            // environmental
-            corrupted_coral_system,
         ).run_if(in_state(GameState::Playing)))
 
         // Improved Enemy AI 
@@ -119,8 +124,15 @@ fn main() {
 
             // predator_prey_system, // accesses component(s) Transform in a way that conflicts with a previous system parameter
             adaptive_difficulty_system,
-            ecosystem_balance_system,
             chemical_trail_system,
+            chemical_trail_following,
+            ecosystem_balance_system,
+            enhanced_coral_system,
+            contamination_visualization_system,
+            microscopic_debris_system,
+            bioluminescent_warning_system,
+            environmental_narrative_system,
+
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (
@@ -131,7 +143,10 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
 
         // Fifth Update group - effect and cleanup systems
-        .add_systems(Update, (                
+        .add_systems(Update, (        
+            performance_optimization_system,
+            
+            
             update_biological_effects,
             update_temporary_evolution_effects,
             consolidated_explosion_system, 
@@ -545,6 +560,14 @@ pub fn reset_biological_game_state(
         ));
     }
 }
+
+pub fn load_game_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let fonts = GameFonts {
+        default_font: asset_server.load("fonts/planetary_contact.ttf"),
+    };
+    commands.insert_resource(fonts);
+}
+
 
 // New biological movement system
 pub fn biological_movement_system(

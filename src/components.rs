@@ -892,13 +892,81 @@ pub struct AdaptiveDifficulty {
 
 // Environmental storytelling components
 #[derive(Component)]
-pub struct CorruptedCoral {
+pub struct EnhancedCoral {
+    pub coral_type: CoralType,
+    pub health: f32,
     pub corruption_level: f32,
     pub spread_rate: f32,
     pub bioluminescent_warning: bool,
     pub original_color: Color,
     pub size: Vec2,
+    pub gameplay_effect: CoralEffect,
+    pub influence_radius: f32,
+    pub last_spawn_time: f32,
 }
+
+#[derive(Clone)]
+pub enum CoralType {
+    // Beneficial corals
+    FilterFeeder {        // Cleans chemical contamination
+        purification_rate: f32,
+        ph_stabilization: f32,
+    },
+    OxygenProducer {      // Increases local oxygen levels
+        oxygen_output: f32,
+        photosynthesis_rate: f32,
+    },
+    SymbioticReef {       // Provides healing and ATP
+        healing_rate: f32,
+        atp_generation: f32,
+    },
+    
+    // Neutral/environmental corals
+    BarrierReef {         // Physical obstacles that provide cover
+        structural_integrity: f32,
+        provides_cover: bool,
+    },
+    BioluminescentBeacon { // Navigation aids and early warning
+        pulse_frequency: f32,
+        detection_range: f32,
+    },
+    
+    // Corrupted/hostile corals
+    CorruptedColony {     // Spawns toxins and hostile microbes
+        toxin_production: f32,
+        spawn_hostiles: bool,
+    },
+    AcidicFormation {     // Lowers local pH, damages nearby entities
+        acid_strength: f32,
+        corrosion_rate: f32,
+    },
+    ParasiticGrowth {     // Drains health and ATP from nearby player
+        drain_rate: f32,
+        infection_chance: f32,
+    },
+}
+
+#[derive(Clone)]
+pub enum CoralEffect {
+    Beneficial {
+        healing_per_second: f32,
+        atp_per_second: f32,
+        ph_stabilization: f32,
+        oxygen_boost: f32,
+    },
+    Neutral {
+        provides_cover: bool,
+        navigation_aid: bool,
+    },
+    Harmful {
+        damage_per_second: f32,
+        ph_reduction: f32,
+        spawns_enemies: f32, // Spawn rate
+        corruption_spread: f32,
+    },
+}
+
+
 
 #[derive(Component)]
 pub struct ContaminationCloud {
@@ -952,5 +1020,13 @@ pub enum WarningPattern {
 }
 
 
+// USER INTERFACE
+
 #[derive(Component)]
 pub struct EnvironmentText;
+
+#[derive(Component)]
+pub struct EcosystemStatusText;
+
+#[derive(Component)]
+pub struct ContaminationWarningText;

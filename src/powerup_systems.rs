@@ -5,7 +5,7 @@ use crate::events::*;
 
 pub fn spawn_extra_life_powerup(
     mut commands: Commands,
-    mut enemy_spawner: ResMut<EnemySpawner>,
+    enemy_spawner: ResMut<EnemySpawner>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
     mut life_spawn_timer: Local<f32>,

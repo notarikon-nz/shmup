@@ -1,16 +1,14 @@
 use bevy::prelude::*;
-use bevy::window::WindowResolution;
-use bevy::sprite::Anchor;
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin};
 
 use crate::components::*;
 use crate::resources::*;
 use crate::systems::*;
-use crate::events::*;
-use crate::high_scores::*;
 
 // Biological UI setup with updated terminology
-pub fn setup_biological_ui(mut commands: Commands) {
+pub fn setup_biological_ui(
+    mut commands: Commands,
+    fonts: Res<GameFonts>,
+) {
     // Cellular integrity bar (health bar)
     commands.spawn((
         Node {
@@ -50,7 +48,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             bottom: Val::Px(20.0),
             ..default()
         },
-        TextFont { font_size: 20.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 20.0, ..default() },
         TextColor(Color::srgb(0.8, 1.0, 0.9)),
         LivesText,
     ));
@@ -64,7 +64,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(20.0),
             ..default()
         },
-        TextFont { font_size: 24.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 24.0, ..default() },
         TextColor(Color::srgb(0.8, 1.0, 0.9)),
         ScoreText,
     ));
@@ -78,7 +80,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(50.0),
             ..default()
         },
-        TextFont { font_size: 16.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.6, 0.8, 0.7)),
         HighScoreText,
     ));
@@ -92,7 +96,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(20.0),
             ..default()
         },
-        TextFont { font_size: 18.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 18.0, ..default() },
         TextColor(Color::srgb(1.0, 1.0, 0.3)),
         ATPText,
     ));
@@ -106,7 +112,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(50.0),
             ..default()
         },
-        TextFont { font_size: 16.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.7, 1.0, 0.7)),
         EvolutionText,
     ));
@@ -120,7 +128,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(110.0),
             ..default()
         },
-        TextFont { font_size: 14.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 14.0, ..default() },
         TextColor(Color::srgb(0.6, 0.9, 1.0)),
         TidalStatusText,
     ));
@@ -134,7 +144,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             bottom: Val::Px(20.0),
             ..default()
         },
-        TextFont { font_size: 16.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.8, 0.8, 1.0)),
         SporeText,
     ));
@@ -148,7 +160,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             bottom: Val::Px(100.0),
             ..default()
         },
-        TextFont { font_size: 12.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 12.0, ..default() },
         TextColor(Color::srgb(0.5, 0.7, 0.6)),
         ControlsText,
     ));
@@ -162,7 +176,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(80.0),
             ..default()
         },
-        TextFont { font_size: 18.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 18.0, ..default() },
         TextColor(Color::srgb(1.0, 0.8, 0.2)),
         MultiplierText,
     ));
@@ -176,7 +192,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             top: Val::Px(80.0),
             ..default()
         },
-        TextFont { font_size: 14.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 14.0, ..default() },
         TextColor(Color::srgb(0.6, 0.9, 0.8)),
         EnvironmentText,
     ));
@@ -190,7 +208,9 @@ pub fn setup_biological_ui(mut commands: Commands) {
             bottom: Val::Px(130.0),
             ..default()
         },
-        TextFont { font_size: 16.0, ..default() },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 16.0, ..default() },
         TextColor(Color::srgb(0.4, 1.0, 0.8)),
         CellWallTimerText,
     ));
@@ -204,12 +224,46 @@ pub fn setup_biological_ui(mut commands: Commands) {
             ..default()
         },
         TextFont { 
+            font: fonts.default_font.clone(),
             font_size: 18.0, // Increased size
             ..default() 
         },
         TextColor(Color::srgb(0.9, 1.0, 0.9)), // Brighter color
         FpsText,
     ));  
+
+    // Add ecosystem health indicator
+    commands.spawn((
+        Text::new("🌊 Ecosystem: Healthy"),
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(20.0),
+            bottom: Val::Px(80.0),
+            ..default()
+        },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 16.0, ..default() },
+        TextColor(Color::srgb(0.4, 1.0, 0.6)),
+        EcosystemStatusText,
+    ));
+    
+    // Add contamination warning
+    commands.spawn((
+        Text::new(""),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            top: Val::Px(140.0),
+            ..default()
+        },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 14.0, ..default() },
+        TextColor(Color::srgb(1.0, 0.8, 0.3)),
+        ContaminationWarningText,
+    ));
+
 }
 
 // Enhanced UI update system with biological terminology
@@ -217,6 +271,8 @@ pub fn update_biological_ui(
     game_score: Res<GameScore>,
     player_query: Query<(&Player, &ATP, &EvolutionSystem)>,
     environment: Res<ChemicalEnvironment>,
+    ecosystem: Res<EcosystemState>,
+    chemical_environment: Res<ChemicalEnvironment>,    
     mut atp_query: Query<&mut Text, (With<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
     mut evolution_query: Query<&mut Text, (With<EvolutionText>, Without<ATPText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
     mut spore_query: Query<&mut Text, (With<SporeText>, Without<ATPText>, Without<EvolutionText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
@@ -225,6 +281,8 @@ pub fn update_biological_ui(
     mut multiplier_query: Query<&mut Text, (With<MultiplierText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<LivesText>, Without<EnvironmentText>)>,
     mut lives_query: Query<&mut Text, (With<LivesText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<EnvironmentText>)>,
     mut environment_query: Query<&mut Text, (With<EnvironmentText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
+    mut ecosystem_text_query: Query<&mut Text, (With<EcosystemStatusText>, Without<ContaminationWarningText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
+    mut contamination_text_query: Query<&mut Text, (With<ContaminationWarningText>, Without<EcosystemStatusText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
 ) {
     if let Ok((player, atp, evolution_system)) = player_query.single() {
         // Update ATP display
@@ -275,6 +333,40 @@ pub fn update_biological_ui(
             environment.base_oxygen * 100.0
         );
     }
+
+    // Update ecosystem status
+    if let Ok(mut ecosystem_text) = ecosystem_text_query.single_mut() {
+        let status = if ecosystem.health > 0.8 {
+            "Ecosystem: Thriving"
+        } else if ecosystem.health > 0.6 {
+            "Ecosystem: Stable"
+        } else if ecosystem.health > 0.4 {
+            "Ecosystem: Stressed"
+        } else if ecosystem.health > 0.2 {
+            "Ecosystem: Degraded"
+        } else {
+            "Ecosystem: Critical"
+        };
+        **ecosystem_text = status.to_string();
+    }
+    
+    // Update contamination warnings
+    if let Ok(mut contamination_text) = contamination_text_query.single_mut() {
+        let avg_ph = chemical_environment.ph_zones.iter()
+            .map(|z| z.ph_level * z.intensity)
+            .sum::<f32>() / chemical_environment.ph_zones.len().max(1) as f32;
+            
+        if avg_ph < 5.5 {
+            **contamination_text = "ACIDIC CONTAMINATION DETECTED".to_string();
+        } else if avg_ph > 8.5 {
+            **contamination_text = "ALKALINE CONTAMINATION DETECTED".to_string();
+        } else if ecosystem.infection_level > 0.7 {
+            **contamination_text = "HIGH PATHOGEN CONCENTRATION".to_string();
+        } else {
+            **contamination_text = String::new();
+        }
+    }
+
 }
 
 pub fn update_cell_wall_timer_ui(
@@ -300,7 +392,7 @@ pub fn update_tidal_ui(
     if let Ok(mut text) = tidal_text_query.single_mut() {
         let tide_strength = tidal_physics.tide_level.sin();
         let status = if tidal_physics.king_tide_active {
-            "🌊 KING TIDE! 🌊"
+            "KING TIDE!"
         } else if tide_strength > 0.8 {
             "Tide: High"
         } else if tide_strength < -0.8 {
@@ -317,6 +409,7 @@ pub fn update_tidal_ui(
 pub fn setup_game_over_ui(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
+    fonts: Res<GameFonts>,
 ) {
     save_high_score(&mut game_score);
     
@@ -335,7 +428,9 @@ pub fn setup_game_over_ui(
     )).with_children(|parent| {
         parent.spawn((
             Text::new("GAME OVER"),
-            TextFont { font_size: 48.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 48.0, ..default() },
             TextColor(Color::srgb(1.0, 0.3, 0.3)),
             GameOverText,
             Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
@@ -352,7 +447,9 @@ pub fn setup_game_over_ui(
         let high_score = game_score.high_scores.first().unwrap_or(&0);
         parent.spawn((
             Text::new(format!("High Score: {}", high_score)),
-            TextFont { font_size: 20.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 20.0, ..default() },
             TextColor(Color::srgb(0.8, 0.8, 0.8)),
             Node { margin: UiRect::bottom(Val::Px(30.0)), ..default() },
         ));
@@ -372,14 +469,18 @@ pub fn setup_game_over_ui(
         )).with_children(|button| {
             button.spawn((
                 Text::new("RESTART"),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont { 
+                    font: fonts.default_font.clone(),
+                    font_size: 20.0, ..default() },
                 TextColor(Color::WHITE),
             ));
         });
         
         parent.spawn((
             Text::new("Press R to restart or click button above"),
-            TextFont { font_size: 16.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 16.0, ..default() },
             TextColor(Color::srgb(0.7, 0.7, 0.7)),
         ));
     });
@@ -396,7 +497,10 @@ pub fn cleanup_game_over_ui(
     }
 }
 
-pub fn setup_pause_ui(mut commands: Commands) {
+pub fn setup_pause_ui(
+    mut commands: Commands,
+    fonts: Res<GameFonts>,
+) {
     commands.spawn((
         Node {
             width: Val::Percent(100.0),
@@ -412,14 +516,18 @@ pub fn setup_pause_ui(mut commands: Commands) {
     )).with_children(|parent| {
         parent.spawn((
             Text::new("PAUSED"),
-            TextFont { font_size: 64.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 64.0, ..default() },
             TextColor(Color::WHITE),
             Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
         ));
         
         parent.spawn((
             Text::new("Press ESC to resume"),
-            TextFont { font_size: 24.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 24.0, ..default() },
             TextColor(Color::srgb(0.8, 0.8, 0.8)),
         ));
     });
@@ -436,7 +544,11 @@ pub fn cleanup_pause_ui(
     }
 }
 
-fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
+fn spawn_evolution_ui(
+    commands: &mut Commands, 
+    atp_amount: u32,
+    fonts: Res<GameFonts>,
+) {
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -453,15 +565,19 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
         EvolutionUI,
     )).with_children(|parent| {
         parent.spawn((
-            Text::new("🧬 EVOLUTION CHAMBER"),
-            TextFont { font_size: 22.0, ..default() },
+            Text::new("EVOLUTION CHAMBER"),
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 22.0, ..default() },
             TextColor(Color::srgb(0.3, 1.0, 0.7)),
             Node { margin: UiRect::bottom(Val::Px(10.0)), ..default() },
         ));
 
         parent.spawn((
             Text::new(format!("ATP Available: {}⚡", atp_amount)),
-            TextFont { font_size: 16.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 16.0, ..default() },
             TextColor(Color::srgb(1.0, 1.0, 0.4)),
             Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() },
         ));
@@ -471,55 +587,55 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
             (
                 "1 - Membrane Reinforcement (10 ATP)",
                 10,
-                "🧱 Increases projectile damage by 20%",
+                "Increases projectile damage by 20%",
                 "Strengthens cellular membrane for more effective attacks"
             ),
             (
                 "2 - Metabolic Enhancement (15 ATP)",
                 15,
-                "⚡ +30% movement speed & fire rate",
+                "+30% movement speed & fire rate",
                 "Optimizes ATP synthesis for faster cellular processes"
             ),
             (
                 "3 - Cellular Integrity (20 ATP)",
                 20,
-                "❤️ +25 Maximum Health Points",
+                "+25 Maximum Health Points",
                 "Reinforces cell structure - increases total health capacity"
             ),
             (
                 "4 - Enzyme Production (25 ATP)",
                 25,
-                "🧪 Immunity to environmental toxins",
+                "Immunity to environmental toxins",
                 "Develops extremophile traits for hostile environments"
             ),
             (
                 "5 - Bioluminescence (30 ATP)",
                 30,
-                "💡 Enhanced coordination abilities",
+                "Enhanced coordination abilities",
                 "Enables biofilm formation for defensive structures"
             ),
             (
                 "6 - Emergency Spore (20 ATP)",
                 20,
-                "💥 +1 Emergency reproductive blast",
+                "+1 Emergency reproductive blast",
                 "Develops additional spore for area-effect emergency defense"
             ),
             (
                 "7 - Pseudopod Network (50 ATP)",
                 50,
-                "🕷️ Multi-directional tendril weapon",
+                "Multi-directional tendril weapon",
                 "Evolves spread-shot capability with 5 organic projectiles"
             ),
             (
                 "8 - Symbiotic Hunters (75 ATP)",
                 75,
-                "🎯 Homing cooperative organisms",
+                "Homing cooperative organisms",
                 "Self-guided missiles with blast radius and target tracking"
             ),
             (
                 "9 - Bioluminescent Beam (100 ATP)",
                 100,
-                "🌟 Concentrated energy discharge",
+                "Concentrated energy discharge",
                 "Sustained beam weapon with charging mechanism"
             ),
         ];
@@ -533,14 +649,18 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
 
             parent.spawn((
                 Text::new(title),
-                TextFont { font_size: 14.0, ..default() },
+                TextFont { 
+                    font: fonts.default_font.clone(),
+                    font_size: 14.0, ..default() },
                 TextColor(color),
                 Node { margin: UiRect::bottom(Val::Px(2.0)), ..default() },
             ));
 
             parent.spawn((
                 Text::new(effect),
-                TextFont { font_size: 12.0, ..default() },
+                TextFont { 
+                    font: fonts.default_font.clone(),
+                    font_size: 12.0, ..default() },
                 TextColor(Color::srgb(0.8, 0.9, 0.8)),
                 Node {
                     margin: UiRect::bottom(Val::Px(1.0)),
@@ -550,15 +670,19 @@ fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32) {
 
             parent.spawn((
                 Text::new(description),
-                TextFont { font_size: 10.0, ..default() },
+                TextFont { 
+                    font: fonts.default_font.clone(),
+                    font_size: 10.0, ..default() },
                 TextColor(Color::srgb(0.6, 0.7, 0.6)),
                 Node { margin: UiRect::bottom(Val::Px(8.0)), ..default() },
             ));
         }
 
         parent.spawn((
-            Text::new("💡 Tip: Stand near chamber and press number keys to evolve"),
-            TextFont { font_size: 12.0, ..default() },
+            Text::new("Tip: Stand near chamber and press number keys to evolve"),
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 12.0, ..default() },
             TextColor(Color::srgb(0.6, 0.9, 0.8)),
             Node { margin: UiRect::top(Val::Px(10.0)), ..default() },
         ));
@@ -571,6 +695,7 @@ pub fn update_evolution_ui(
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
     player_query: Query<(&Transform, &ATP), With<Player>>,
     existing_ui_query: Query<Entity, (With<EvolutionUI>, Without<AlreadyDespawned>)>,
+    fonts: Res<GameFonts>,
 ) {
     if let Ok((player_transform, atp)) = player_query.single() {
         let near_chamber = chamber_query.iter().any(|chamber_transform| {
@@ -580,7 +705,7 @@ pub fn update_evolution_ui(
         if near_chamber {
             // Show evolution UI if not already showing
             if existing_ui_query.is_empty() {
-                spawn_evolution_ui(&mut commands, atp.amount);
+                spawn_evolution_ui(&mut commands, atp.amount, fonts);
             }
         } else {
             // Hide evolution UI if showing
@@ -597,6 +722,7 @@ pub fn update_evolution_ui(
 pub fn enhanced_game_over_ui(
     mut commands: Commands,
     game_score: Res<GameScore>,
+    fonts: Res<GameFonts>,
 ) {
     let high_score_data = game_score.high_score_data.as_ref().unwrap();
     let is_new_high_score = game_score.current > game_score.high_scores.first().cloned().unwrap_or(0);
@@ -617,8 +743,10 @@ pub fn enhanced_game_over_ui(
         // Title with special effect for new high score
         if is_new_high_score {
             parent.spawn((
-                Text::new("🏆 NEW HIGH SCORE! 🏆"),
-                TextFont { font_size: 52.0, ..default() },
+                Text::new("NEW HIGH SCORE!"),
+                TextFont { 
+                    font: fonts.default_font.clone(),
+                    font_size: 52.0, ..default() },
                 TextColor(Color::srgb(1.0, 0.8, 0.2)),
                 Node { margin: UiRect::bottom(Val::Px(10.0)), ..default() },
             ));
@@ -626,7 +754,9 @@ pub fn enhanced_game_over_ui(
         
         parent.spawn((
             Text::new("CELLULAR BREAKDOWN"),
-            TextFont { font_size: 42.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 42.0, ..default() },
             TextColor(if is_new_high_score { Color::srgb(1.0, 0.8, 0.2) } else { Color::srgb(1.0, 0.3, 0.3) }),
             Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
         ));
@@ -634,29 +764,37 @@ pub fn enhanced_game_over_ui(
         // Current game stats
         parent.spawn((
             Text::new(format!("Final Score: {}", game_score.current)),
-            TextFont { font_size: 28.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 28.0, ..default() },
             TextColor(Color::WHITE),
             Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() },
         ));
         
         parent.spawn((
             Text::new(format!("ATP Collected: {}", game_score.total_atp_collected)),
-            TextFont { font_size: 20.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 20.0, ..default() },
             TextColor(Color::srgb(1.0, 1.0, 0.4)),
             Node { margin: UiRect::bottom(Val::Px(10.0)), ..default() },
         ));
         
         parent.spawn((
             Text::new(format!("Organisms Defeated: {}", game_score.enemies_defeated)),
-            TextFont { font_size: 20.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 20.0, ..default() },
             TextColor(Color::srgb(0.8, 1.0, 0.8)),
             Node { margin: UiRect::bottom(Val::Px(30.0)), ..default() },
         ));
         
         // High score table
         parent.spawn((
-            Text::new("🧬 EVOLUTION HALL OF FAME 🧬"),
-            TextFont { font_size: 24.0, ..default() },
+            Text::new("EVOLUTION HALL OF FAME"),
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 24.0, ..default() },
             TextColor(Color::srgb(0.6, 1.0, 0.8)),
             Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() },
         ));
@@ -677,7 +815,9 @@ pub fn enhanced_game_over_ui(
                     entry.evolution_type,
                     entry.date
                 )),
-                TextFont { font_size: 16.0, ..default() },
+                TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 16.0, ..default() },
                 TextColor(rank_color),
                 Node { margin: UiRect::bottom(Val::Px(5.0)), ..default() },
             ));
@@ -686,12 +826,14 @@ pub fn enhanced_game_over_ui(
         // Overall stats
         parent.spawn((
             Text::new(format!(
-                "📈 Total Games: {} | Longest Survival: {:.0}s | Best Evolution: {}",
+                "Total Games: {} | Longest Survival: {:.0}s | Best Evolution: {}",
                 high_score_data.total_games_played,
                 high_score_data.longest_survival_time,
                 high_score_data.best_evolution_reached
             )),
-            TextFont { font_size: 14.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 14.0, ..default() },
             TextColor(Color::srgb(0.6, 0.8, 0.6)),
             Node { margin: UiRect::all(Val::Px(20.0)), ..default() },
         ));
@@ -712,14 +854,18 @@ pub fn enhanced_game_over_ui(
         )).with_children(|button| {
             button.spawn((
                 Text::new("EVOLVE AGAIN"),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 20.0, ..default() },
                 TextColor(Color::WHITE),
             ));
         });
         
         parent.spawn((
             Text::new("Press R to restart or click button above"),
-            TextFont { font_size: 16.0, ..default() },
+            TextFont { 
+                font: fonts.default_font.clone(),
+                font_size: 16.0, ..default() },
             TextColor(Color::srgb(0.7, 0.7, 0.7)),
         ));
     });

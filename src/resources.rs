@@ -1,6 +1,13 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// FONT
+#[derive(Resource)]
+pub struct GameFonts {
+    pub default_font: Handle<Font>,
+}
+
+
 #[derive(Resource)]
 pub struct GameAssets {
     // Player & General

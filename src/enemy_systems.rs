@@ -281,7 +281,7 @@ fn apply_chemical_effects(
 
 // Spawner enemy behavior with biological reproduction
 pub fn update_spawner_enemies(
-    mut commands: Commands,
+    commands: Commands,
     mut spawner_query: Query<(Entity, &Transform, &mut Enemy)>,
     mut spawn_events: EventWriter<SpawnEnemy>,
     assets: Option<Res<GameAssets>>,
@@ -1156,7 +1156,7 @@ pub fn predator_prey_system(
     time: Res<Time>,
 ) {
     if let Ok(player_transform) = player_query.single() {
-        for (mut predator_transform, mut predator_enemy, behavior) in predator_query.iter_mut() {
+        for (mut predator_transform, predator_enemy, behavior) in predator_query.iter_mut() {
             let mut hunting_target: Option<Vec3> = None;
             let mut fleeing_from: Option<Vec3> = None;
             
@@ -1379,7 +1379,7 @@ pub fn ecosystem_balance_system(
 
 // Adaptive difficulty system
 pub fn adaptive_difficulty_system(
-    mut commands: Commands,
+    commands: Commands,
     mut adaptive_query: Query<(Entity, &mut AdaptiveDifficulty, &mut Enemy)>,
     player_query: Query<(&Player, &EvolutionSystem, &Health)>,
     mut spawn_events: EventWriter<SpawnEnemy>,

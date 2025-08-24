@@ -35,7 +35,7 @@ pub fn update_dynamic_lights(
     mut light_query: Query<(&mut DynamicLight2D, &mut Transform), With<ExplosionLight>>,
     time: Res<Time>,
 ) {
-    for (mut light, mut transform) in light_query.iter_mut() {
+    for (mut light, transform) in light_query.iter_mut() {
         let light_c = light.clone();
         // Organic light pulsing
         if let Some(mut pulse) = light_c.organic_pulse {
@@ -61,7 +61,7 @@ pub fn update_dynamic_lights(
 pub fn render_light_effects(
     mut commands: Commands,
     light_query: Query<(&DynamicLight2D, &Transform), Without<LightGlowSprite>>,
-    mut glow_query: Query<(&mut Sprite, &mut Transform), (With<LightGlowSprite>, Without<DynamicLight2D>)>,
+    glow_query: Query<(&mut Sprite, &mut Transform), (With<LightGlowSprite>, Without<DynamicLight2D>)>,
     assets: Option<Res<GameAssets>>,
 ) {
     if let Some(assets) = assets {

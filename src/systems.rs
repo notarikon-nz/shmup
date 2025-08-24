@@ -320,12 +320,12 @@ pub fn enemy_shooting(
 pub fn handle_player_hit(
     mut commands: Commands,
     mut player_hit_events: EventReader<PlayerHit>,
-    mut player_query: Query<(Entity, &mut Health, &mut Player, Option<&CellWallReinforcement>), With<Player>>,
+    mut player_query: Query<(Entity, &mut Health, &mut Player, &CellularUpgrades, Option<&CellWallReinforcement>), With<Player>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     for event in player_hit_events.read() {
-        if let Ok((player_entity, mut health, mut player, cell_wall)) = player_query.single_mut() {
+        if let Ok((player_entity, mut health, mut player, upgrades, cell_wall)) = player_query.single_mut() {
             // Skip damage if cell wall is active or invincible
             if cell_wall.is_some() || player.invincible_timer > 0.0 {
                 continue;
@@ -345,8 +345,8 @@ pub fn handle_player_hit(
                 player.lives -= 1;
                 
                 if player.lives > 0 {
-                    // Cellular regeneration
-                    health.0 = 100;
+                    // FIXED: Restore health to upgraded maximum, not just 100
+                    health.0 = upgrades.max_health;
                     player.invincible_timer = 3.0;
                 } else {
                     // Final cellular breakdown
@@ -359,6 +359,7 @@ pub fn handle_player_hit(
         }
     }
 }
+
 
 
 
@@ -621,6 +622,7 @@ pub fn collision_system(
     mut enemy_hit_events: EventWriter<EnemyHit>,
     mut game_score: ResMut<GameScore>,
     time: Res<Time>,
+    fonts: Res<GameFonts>,
 
     projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<AlreadyDespawned>>,
     mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<AlreadyDespawned>)>,
@@ -698,7 +700,9 @@ pub fn collision_system(
                     
                     commands.spawn((
                         Text2d::new(format!("{}", final_damage)),
-                        TextFont { font_size, ..default() },
+                        TextFont { 
+                            font: fonts.default_font.clone(),
+                            font_size, ..default() },
                         TextColor(text_color),
                         Transform::from_translation(enemy_transform.translation + Vec3::new(0.0, 25.0, 1.0)),
                         DamageText {
@@ -921,3 +925,24 @@ pub fn screen_shake_system(
     }
 }
 
+
+
+
+pub fn performance_optimization_system(
+    mut commands: Commands,
+    entity_query: Query<Entity, (Or<(With<Particle>, With<Enemy>, With<Projectile>)>, Without<AlreadyDespawned>)>,
+    camera_query: Query<&Transform, With<Camera2d>>,
+) {
+    if let Ok(camera_transform) = camera_query.single() {
+        let mut entities_processed = 0;
+        const MAX_ENTITIES_PER_FRAME: usize = 100;
+        
+        for entity in entity_query.iter() {
+            // Could add distance culling here for very far entities
+            entities_processed += 1;
+            if entities_processed >= MAX_ENTITIES_PER_FRAME {
+                break;
+            }
+        }
+    }
+}

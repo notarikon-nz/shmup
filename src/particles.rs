@@ -120,7 +120,7 @@ pub fn unified_particle_system(
 
     {
         let mut bio_particles = particle_queries.p1();
-        for (mut transform, mut sprite, mut bio_particle) in bio_particles.iter_mut() {
+        for (mut transform, mut sprite, bio_particle) in bio_particles.iter_mut() {
             // Distance-based intensity
             let distance_to_player = transform.translation.distance(player_pos);
             let proximity_boost = (200.0 - distance_to_player.min(200.0)) / 200.0;
@@ -334,6 +334,30 @@ pub fn spawn_particles_system(
                         },
                     });
                 }
+            }
+        }
+    }
+}
+
+
+pub fn particle_cleanup(
+    mut commands: Commands,
+    particle_query: Query<(Entity, &Particle), (With<Particle>, Without<AlreadyDespawned>)>,
+    time: Res<Time>,
+) {
+    let current_time = time.elapsed_secs();
+    let mut cleanup_count = 0;
+    
+    for (entity, particle) in particle_query.iter() {
+        if particle.lifetime >= particle.max_lifetime {
+            commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
+            cleanup_count += 1;
+            
+            // Limit cleanup per frame to prevent frame drops
+            if cleanup_count >= 50 {
+                break;
             }
         }
     }

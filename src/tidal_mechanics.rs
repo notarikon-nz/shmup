@@ -55,8 +55,6 @@ pub fn advanced_tidal_system(
     }
     
 
-    /*
-
     // Apply tidal effects to environment
     apply_tidal_effects(
         &tidal_physics,
@@ -67,7 +65,6 @@ pub fn advanced_tidal_system(
         time.delta_secs(),
     );
     
-    */ 
     // Visual camera effects for dramatic tides
     if let Ok(mut camera_transform) = camera_query.single_mut() {
         let tide_sway = tide_strength * 2.0;
@@ -98,55 +95,129 @@ fn trigger_king_tide(
 
 fn apply_tidal_effects(
     tidal_physics: &TidalPoolPhysics,
-    fluid_environment: &mut FluidEnvironment,
-    current_generator: &mut CurrentGenerator,
-    chemical_environment: &mut ChemicalEnvironment,
+    mut fluid_environment: &mut FluidEnvironment,
+    mut current_generator: &mut CurrentGenerator,
+    mut chemical_environment: &mut ChemicalEnvironment,
     tide_strength: f32,
     delta_time: f32,
 ) {
-    // 1. CURRENT REVERSAL based on tide
-    let tide_direction = if tide_strength > 0.0 { 1.0 } else { -1.0 };
+    // 1. CURRENT FIELD UPDATES - Modify the flow field, not direct positions
+    let tide_direction_multiplier = if tide_strength > 0.0 { 1.0 } else { -1.0 };
     
-    // Reverse major currents during tide changes
-    for current in &mut current_generator.major_currents {
-        let base_strength = current.strength;
-        current.strength = base_strength * tide_direction * (1.0 + tide_strength.abs());
-        
-        // King tide: Chaotic currents
-        if tidal_physics.king_tide_active {
-            let chaos = (tidal_physics.king_tide_timer * 8.0).sin();
-            current.strength *= 1.0 + chaos * 0.5;
+    // Update the current field instead of directly moving entities
+    for y in 0..fluid_environment.grid_size {
+        for x in 0..fluid_environment.grid_size {
+            let index = y * fluid_environment.grid_size + x;
+            if index < fluid_environment.current_field.len() {
+                // Apply gentle tidal influence to current field
+                let tidal_current = Vec2::new(
+                    tide_strength * 15.0 * tide_direction_multiplier, // Much gentler - was causing entities to fly off
+                    tide_strength * 5.0, // Vertical component
+                );
+                
+                // Blend with existing current instead of overriding
+                fluid_environment.current_field[index] = 
+                    fluid_environment.current_field[index] * 0.7 + tidal_current * 0.3;
+            }
         }
     }
     
-    // 2. TURBULENCE increases with tide intensity
+    // 2. TURBULENCE - Safe to modify
     fluid_environment.turbulence_intensity = 0.3 + tide_strength.abs() * 0.4;
     if tidal_physics.king_tide_active {
-        fluid_environment.turbulence_intensity *= 2.0;
+        fluid_environment.turbulence_intensity *= 1.5; // Reduced from 2.0
     }
     
-    // 3. CHEMICAL ZONES shift with tides
+    // 3. CHEMICAL ZONES - Gentle movement instead of aggressive pushing
     for zone in &mut chemical_environment.ph_zones {
-        // Tides carry chemical zones
-        zone.position.x += tide_strength * 20.0 * delta_time;
-        zone.position.y += (tide_strength * 0.5).sin() * 10.0 * delta_time;
+        // Much gentler zone movement - was causing zones to fly off screen
+        let gentle_drift = Vec2::new(
+            tide_strength * 8.0 * delta_time, // Reduced from 20.0
+            (tide_strength * 0.3).sin() * 3.0 * delta_time, // Reduced from 10.0
+        );
         
-        // pH becomes more extreme during king tides
+        zone.position += gentle_drift;
+        
+        // Keep zones within reasonable bounds
+        zone.position.x = zone.position.x.clamp(-800.0, 800.0);
+        zone.position.y = zone.position.y.clamp(-400.0, 400.0);
+        
+        // pH intensity changes - this is safe
         if tidal_physics.king_tide_active {
-            let intensity_boost = 1.0 + tidal_physics.king_tide_intensity * 0.2;
-            zone.intensity = (zone.intensity * intensity_boost).min(1.5);
+            let intensity_boost = 1.0 + tidal_physics.king_tide_intensity * 0.1; // Reduced from 0.2
+            zone.intensity = (zone.intensity * intensity_boost).min(1.2); // Reduced max from 1.5
         }
     }
     
-    // 4. THERMAL VENTS respond to tidal pressure
+    // 4. OXYGEN ZONES - Apply similar gentle movement
+    for oxygen_zone in &mut chemical_environment.oxygen_zones {
+        let gentle_drift = Vec2::new(
+            tide_strength * 6.0 * delta_time,
+            (tide_strength * 0.4).cos() * 4.0 * delta_time,
+        );
+        
+        oxygen_zone.position += gentle_drift;
+        
+        // Keep oxygen zones in bounds
+        oxygen_zone.position.x = oxygen_zone.position.x.clamp(-800.0, 800.0);
+        oxygen_zone.position.y = oxygen_zone.position.y.clamp(-400.0, 400.0);
+        
+        // Tidal effects on oxygen levels
+        if tidal_physics.king_tide_active {
+            oxygen_zone.oxygen_level *= 0.95; // Slight depletion during king tides
+            oxygen_zone.depletion_rate *= 1.1; // Faster depletion
+        }
+    }
+    
+    // 5. THERMAL VENTS - Only modify strength, not position
     for vent in &mut current_generator.thermal_vents {
         if tidal_physics.king_tide_active {
-            vent.strength *= 1.5; // King tides increase thermal activity
-            vent.active = true; // All vents activate
+            vent.strength *= 1.2; // Reduced from 1.5
+            vent.active = true;
         } else {
-            // Normal tides modulate activity
-            let activity_mod = 0.8 + tide_strength.abs() * 0.4;
+            // Gentle modulation instead of aggressive changes
+            let activity_mod = 0.9 + tide_strength.abs() * 0.2; // Reduced range
             vent.strength *= activity_mod;
+        }
+        
+        // Clamp vent strength to prevent extreme values
+        vent.strength = vent.strength.clamp(50.0, 300.0);
+    }
+    
+    // 6. MAJOR CURRENTS - Fix the main problem - don't make currents too strong
+    for current in &mut current_generator.major_currents {
+        let base_strength = 100.0; // Set a reasonable base strength
+        current.strength = base_strength * tide_direction_multiplier * (1.0 + tide_strength.abs() * 0.3); // Much gentler
+        
+        // King tide: Moderate chaos instead of extreme
+        if tidal_physics.king_tide_active {
+            let chaos = (tidal_physics.king_tide_timer * 4.0).sin(); // Reduced frequency
+            current.strength *= 1.0 + chaos * 0.2; // Reduced chaos from 0.5
+        }
+        
+        // Clamp current strength to prevent entities flying off screen
+        current.strength = current.strength.clamp(-200.0, 200.0);
+    }
+    
+    // 7. TIDAL PHASE EFFECTS - New: Different effects based on tide phase
+    match tidal_physics.tide_level.sin() {
+        t if t > 0.8 => {
+            // High tide - stronger currents, more active chemistry
+            fluid_environment.turbulence_intensity *= 1.1;
+            for zone in &mut chemical_environment.ph_zones {
+                zone.intensity *= 1.05;
+            }
+        }
+        t if t < -0.8 => {
+            // Low tide - calmer waters, more concentrated chemicals
+            fluid_environment.turbulence_intensity *= 0.9;
+            for zone in &mut chemical_environment.ph_zones {
+                zone.radius *= 0.95; // Slightly smaller but more intense
+                zone.intensity *= 1.1;
+            }
+        }
+        _ => {
+            // Transitional tides - normal behavior
         }
     }
 }
@@ -163,7 +234,7 @@ pub fn process_tidal_events(
     for event in tidal_events.read() {
         match event {
             TidalEvent::KingTideBegin { intensity, duration } => {
-                println!("🌊 KING TIDE EVENT! Intensity: {:.1}", intensity);
+                println!("KING TIDE EVENT! Intensity: {:.1}", intensity);
                 
                 // Spawn tidal debris and special enemies
                 spawn_tidal_debris(&mut commands, &assets, *intensity);

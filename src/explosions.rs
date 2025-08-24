@@ -36,8 +36,13 @@ pub fn consolidated_explosion_system(
             
             shake_events.write(AddScreenShake { amount: shake_amount });
             
-            // Spawn unified explosion entity
-            commands.spawn((
+            // Get explosion color for lighting
+            let light_color = get_explosion_light_color(&explosion_type);
+            let light_intensity = 2000.0 * event.intensity;
+            let light_range = 80.0 * event.intensity;
+            
+            // Spawn unified explosion entity with enhanced lighting
+            let explosion_entity = commands.spawn((
                 Sprite {
                     image: assets.explosion_texture.clone(),
                     color: get_explosion_color(&explosion_type),
@@ -53,21 +58,26 @@ pub fn consolidated_explosion_system(
                     layers,
                     current_layer_index: 0,
                 },
+                // FIXED: Add PointLight for enhanced visual effect
                 PointLight {
-                    color: Color::WHITE,
-                    intensity: 4000.0,
-                    range: 64.0,
-                    radius: 128.0,
+                    color: light_color,
+                    intensity: light_intensity,
+                    range: light_range,
+                    radius: light_range * 0.8,
                     shadows_enabled: false,
                     affects_lightmapped_mesh_diffuse: false,
-                    shadow_depth_bias: 0.08,
-                    shadow_normal_bias: 0.6,
-                    shadow_map_near_z: 0.1,
-                },                
-            ));
+                    shadow_depth_bias: 0.0,
+                    shadow_map_near_z: 0.0,
+                    shadow_normal_bias: 0.0,
+
+                },
+            )).id();
+            
+            // Link light to explosion for cleanup
+            commands.entity(explosion_entity).insert(LinkedExplosionLight(explosion_entity));
         }
         
-        // Update existing explosions
+        // Update existing explosions with dynamic lighting
         for (entity, mut explosion, mut transform, mut sprite) in explosion_query.iter_mut() {
             explosion.timer += time.delta_secs();
             
@@ -126,6 +136,17 @@ pub fn consolidated_explosion_system(
     }
 }
 
+// Helper function for explosion light colors
+fn get_explosion_light_color(explosion_type: &ExplosionType) -> Color {
+    match explosion_type {
+        ExplosionType::Biological { .. } => Color::srgb(0.4, 1.0, 0.6),
+        ExplosionType::Chemical { .. } => Color::srgb(0.8, 0.8, 0.2),
+        ExplosionType::Electrical { .. } => Color::srgb(0.2, 0.6, 1.0),
+        ExplosionType::Thermal { .. } => Color::srgb(1.0, 0.4, 0.1),
+        _ => Color::srgb(1.0, 0.6, 0.2),
+    }
+}
+
 // New mini blast layer to replace MiniExplosion
 fn update_mini_blast_layer(
     commands: &mut Commands,
@@ -175,7 +196,7 @@ fn get_explosion_color(explosion_type: &ExplosionType) -> Color {
 
 // Update create_explosion_layers to include MiniBlast for small explosions
 fn create_explosion_layers(explosion_type: &ExplosionType, intensity: f32) -> Vec<ExplosionLayer> {
-    let mut layers = match explosion_type {
+    let layers = match explosion_type {
         ExplosionType::Biological { toxin_release, membrane_rupture } => {
             let mut bio_layers = vec![
                 ExplosionLayer {

@@ -372,6 +372,46 @@ fn find_nearest_enemy(
         .map(|(entity, _)| entity)
 }
 
+/*
+    enemy_query: &Query<(Entity, &Transform, &Enemy), (With<Enemy>, Without<MissileProjectile>, Without<SporeWave>, Without<LaserBeam>, Without<ToxinCloudEffect>)>,
+    player_pos: Vec3,
+    prefer_dangerous: bool,
+) -> Option<Entity> {
+    let mut candidates: Vec<(Entity, f32, f32)> = enemy_query
+        .iter()
+        .map(|(entity, transform, enemy)| {
+            let distance = transform.translation.distance(player_pos);
+            let danger_score = match enemy.enemy_type {
+                EnemyType::InfectedMacrophage => 5.0,
+                EnemyType::ParasiticProtozoa => 3.0,
+                EnemyType::BiofilmColony => 4.0,
+                EnemyType::AggressiveBacteria => 2.0,
+                EnemyType::SuicidalSpore => 4.5,
+                _ => 1.0,
+            };
+            (entity, distance, danger_score)
+        })
+        .collect();
+    
+    if prefer_dangerous {
+        // Sort by danger score first, then distance
+        candidates.sort_by(|a, b| {
+            let danger_cmp = b.2.partial_cmp(&a.2).unwrap();
+            if danger_cmp == std::cmp::Ordering::Equal {
+                a.1.partial_cmp(&b.1).unwrap()
+            } else {
+                danger_cmp
+            }
+        });
+    } else {
+        // Sort by distance only
+        candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    }
+    
+    candidates.first().map(|(entity, _, _)| *entity)
+}
+*/
+
 // ===== PREVIOUS FILE =====
 
 // Enhanced biological shooting system
