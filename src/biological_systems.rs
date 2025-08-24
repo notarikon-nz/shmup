@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use rand::*;
 use crate::components::*;
 use crate::resources::*;
 use std::f32::consts::{PI, TAU};
@@ -996,5 +997,136 @@ pub fn toxic_aura_animation (
                 }
             }
         }
+    }
+}
+
+// Corrupted coral system
+pub fn corrupted_coral_system(
+    mut commands: Commands,
+    mut coral_query: Query<(&mut CorruptedCoral, &mut Sprite, &mut Transform)>,
+    chemical_environment: Res<ChemicalEnvironment>,
+    ecosystem: Res<EcosystemState>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    *spawn_timer += time.delta_secs();
+    
+    // Update existing coral
+    for (mut coral, mut sprite, mut transform) in coral_query.iter_mut() {
+        // Corruption spreads based on ecosystem health
+        let corruption_factor = 1.0 - ecosystem.health;
+        coral.corruption_level += coral.spread_rate * corruption_factor * time.delta_secs();
+        coral.corruption_level = coral.corruption_level.clamp(0.0, 1.0);
+        
+        // Visual corruption effects
+        let corruption_color = Color::srgb(
+            coral.original_color.to_srgba().red * (1.0 - coral.corruption_level * 0.7),
+            coral.original_color.to_srgba().green * (1.0 - coral.corruption_level * 0.9),
+            coral.original_color.to_srgba().blue * (1.0 - coral.corruption_level * 0.5),
+        );
+        sprite.color = corruption_color;
+        
+        // Size changes with corruption
+        let size_factor = 1.0 + coral.corruption_level * 0.3; // Corrupted growth
+        transform.scale = Vec3::new(size_factor, size_factor, 1.0);
+        
+        // Warning bioluminescence
+        if coral.bioluminescent_warning && coral.corruption_level > 0.3 {
+            let warning_pulse = (time.elapsed_secs() * 4.0 * coral.corruption_level).sin();
+            let warning_alpha = 0.5 + warning_pulse * 0.3 * coral.corruption_level;
+            sprite.color = Color::srgba(
+                corruption_color.to_srgba().red,
+                corruption_color.to_srgba().green,
+                corruption_color.to_srgba().blue,
+                warning_alpha,
+            );
+        }
+        
+        // Spawn toxin particles from heavily corrupted coral
+        if coral.corruption_level > 0.7 && (time.elapsed_secs() % 2.0) < 0.1 {
+            if let Some(assets) = &assets {
+                for i in 0..3 {
+                    let angle = (i as f32 / 3.0) * std::f32::consts::TAU;
+                    let offset = Vec2::from_angle(angle) * 20.0;
+                    
+                    commands.spawn((
+                        Sprite {
+                            image: assets.particle_texture.clone(),
+                            color: Color::srgb(0.8, 0.3, 0.3),
+                            custom_size: Some(Vec2::splat(3.0)),
+                            ..default()
+                        },
+                        Transform::from_translation(transform.translation + offset.extend(0.0)),
+                        Particle {
+                            velocity: offset * 0.5,
+                            lifetime: 0.0,
+                            max_lifetime: 4.0,
+                            size: 3.0,
+                            fade_rate: 0.6,
+                            bioluminescent: false,
+                            drift_pattern: DriftPattern::Floating,
+                        },
+                        MicroscopicDebris {
+                            debris_type: DebrisType::ChemicalResidue {
+                                compound_type: "Coral Bleaching Agent".to_string(),
+                            },
+                            story_fragment: "Coral bleached by chemical runoff...".to_string(),
+                            age: 0.0,
+                            reveal_distance: 50.0,
+                        },
+                    ));
+                }
+            }
+        }
+    }
+    
+    // Spawn new coral formations
+    if *spawn_timer >= 30.0 {
+        *spawn_timer = 0.0;
+        spawn_coral_formation(&mut commands, &assets, &ecosystem);
+    }
+}
+
+fn spawn_coral_formation(
+    commands: &mut Commands,
+    assets: &Option<Res<GameAssets>>,
+    ecosystem: &EcosystemState,
+) {
+    if let Some(assets) = assets {
+        // Random position for coral
+        let x = (rand::random::<f32>() - 0.5) * 1000.0;
+        let y = (rand::random::<f32>() - 0.5) * 500.0;
+        
+        // Coral health based on ecosystem state
+        let initial_corruption = (1.0 - ecosystem.health) * 0.4;
+        
+        let coral_colors = [
+            Color::srgb(1.0, 0.5, 0.3),  // Orange
+            Color::srgb(0.8, 0.3, 0.8),  // Purple
+            Color::srgb(0.3, 0.8, 0.6),  // Teal
+            Color::srgb(0.9, 0.7, 0.2),  // Yellow
+        ];
+        
+        let index = (rand::random::<u32>() as usize) % coral_colors.len();
+        let coral_color = coral_colors[index];
+        
+        commands.spawn((
+            Sprite {
+                image: assets.enemy_texture.clone(),
+                color: coral_color,
+                custom_size: Some(Vec2::splat(40.0 + rand::random::<f32>() * 20.0)),
+                ..default()
+            },
+            Transform::from_xyz(x, y, -0.8),
+            CorruptedCoral {
+                corruption_level: initial_corruption,
+                spread_rate: 0.05 + rand::random::<f32>() * 0.03,
+                bioluminescent_warning: rand::random::<bool>(),
+                original_color: coral_color,
+                size: Vec2::splat(40.0),
+            },
+            ParallaxLayer { speed: 0.2, depth: -0.8 },
+        ));
     }
 }

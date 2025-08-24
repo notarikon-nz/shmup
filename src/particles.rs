@@ -22,10 +22,10 @@ pub fn unified_particle_system(
             &mut Transform,
             &mut Sprite,
             &mut BioluminescentParticle
-        ), (With<BioluminescentParticle>, Without<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>)>,
+        ), (With<BioluminescentParticle>, Without<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<AlreadyDespawned>)>,
 
         // Query 2: Particle emitters
-        Query<(&Transform, &mut ParticleEmitter), Without<Particle>>,
+        Query<(&Transform, &mut ParticleEmitter), (Without<Particle>, Without<AlreadyDespawned>)>,
 
         // Query 3: Thermal particles
         Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite), (With<ThermalParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<AlreadyDespawned>)>,

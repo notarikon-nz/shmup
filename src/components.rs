@@ -836,3 +836,117 @@ pub struct JuvenileWiggle {
     pub wiggle_speed: f32,
     pub amplitude: f32,
 }
+
+
+// Improved Enemy AI
+#[derive(Component, Clone)]
+pub struct PredatorPreyBehavior {
+    pub predator_types: Vec<EnemyType>,
+    pub prey_types: Vec<EnemyType>,
+    pub hunt_range: f32,
+    pub flee_range: f32,
+    pub hunting_speed_bonus: f32,
+    pub fear_intensity: f32,
+}
+
+#[derive(Component)]
+pub struct ChemicalTrail {
+    pub trail_type: ChemicalTrailType,
+    pub strength: f32,
+    pub decay_rate: f32,
+    pub creation_timer: f32,
+}
+
+#[derive(Clone)]
+pub enum ChemicalTrailType {
+    PlayerPheromone,
+    BloodTrail,
+    ToxinTrail,
+    FoodTrail,
+    AlarmPheromone,
+}
+
+#[derive(Component)]
+pub struct EcosystemRole {
+    pub role: EcosystemRoleType,
+    pub influence_radius: f32,
+    pub balance_factor: f32,
+}
+
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub enum EcosystemRoleType {
+    Apex,          // Top predator, low spawn rate
+    Primary,       // Main threat, normal spawn rate
+    Secondary,     // Support enemy, higher spawn rate
+    Decomposer,    // Cleanup crew, spawn after deaths
+    Symbiont,      // Beneficial when not hostile
+}
+
+#[derive(Component)]
+pub struct AdaptiveDifficulty {
+    pub threat_level: f32,
+    pub adaptation_rate: f32,
+    pub player_evolution_response: f32,
+}
+
+
+// Environmental storytelling components
+#[derive(Component)]
+pub struct CorruptedCoral {
+    pub corruption_level: f32,
+    pub spread_rate: f32,
+    pub bioluminescent_warning: bool,
+    pub original_color: Color,
+    pub size: Vec2,
+}
+
+#[derive(Component)]
+pub struct ContaminationCloud {
+    pub toxicity_level: f32,
+    pub expansion_rate: f32,
+    pub source_type: ContaminationType,
+    pub warning_intensity: f32,
+}
+
+#[derive(Clone)]
+pub enum ContaminationType {
+    IndustrialWaste,
+    BiologicalToxin,
+    RadioactiveSeepage,
+    ChemicalSpill,
+    PlasticPollution,
+}
+
+#[derive(Component)]
+pub struct MicroscopicDebris {
+    pub debris_type: DebrisType,
+    pub story_fragment: String,
+    pub age: f32,
+    pub reveal_distance: f32,
+}
+
+#[derive(Clone)]
+pub enum DebrisType {
+    PlasticFragment { size: f32, color: Color },
+    MetalParticle { oxidation_level: f32 },
+    ChemicalResidue { compound_type: String },
+    BiologicalRemains { species: String, decay_level: f32 },
+    SyntheticFiber { material: String, weathering: f32 },
+}
+
+#[derive(Component)]
+pub struct BioluminescentWarning {
+    pub pattern_type: WarningPattern,
+    pub intensity: f32,
+    pub pulse_frequency: f32,
+    pub danger_level: f32,
+}
+
+#[derive(Clone)]
+pub enum WarningPattern {
+    RadialPulse,      // Danger spreading outward
+    DirectionalStrobe, // Directional hazard warning
+    ColorShift,       // Chemical change indicator
+    FlashingGrid,     // Systematic contamination
+    ChaotticFlicker,  // Ecosystem breakdown
+}

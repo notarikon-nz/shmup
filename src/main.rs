@@ -104,6 +104,18 @@ fn main() {
 
             link_symbiotic_pairs,
             spawn_evolution_chambers, 
+
+            // environmental
+            corrupted_coral_system,
+        ).run_if(in_state(GameState::Playing)))
+
+        // Improved Enemy AI 
+        .add_systems(Update, (
+
+            // predator_prey_system, // accesses component(s) Transform in a way that conflicts with a previous system parameter
+            adaptive_difficulty_system,
+            ecosystem_balance_system,
+            chemical_trail_system,
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (

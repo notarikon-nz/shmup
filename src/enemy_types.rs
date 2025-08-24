@@ -19,7 +19,7 @@ pub struct ChemicalSignature {
     pub releases_toxins: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum EnemyType {
     // Updated names for biological theme
     ViralParticle,          // Basic

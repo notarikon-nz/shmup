@@ -3,6 +3,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use std::collections::HashMap;
 
 // Enhanced enemy movement system with biological behaviors
 pub fn move_enemies(
@@ -101,12 +102,13 @@ pub fn move_enemies(
                 }
             },
             
-            EnemyAI::Formation { formation_id, position_in_formation, leader_offset, formation_timer } => {
+            EnemyAI::Formation { formation_id: _, position_in_formation, leader_offset, formation_timer } => {
                 *formation_timer += time.delta_secs();
                 
                 // Find colony leader position
                 let leader_pos = colony_leader_query.iter()
                     .find(|leader_transform| {
+                        // PLACEHOLDER
                         // In a real implementation, you'd match formation_id
                         true
                     })
@@ -285,7 +287,7 @@ pub fn update_spawner_enemies(
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
 ) {
-    for (entity, transform, mut enemy) in spawner_query.iter_mut() {
+    for (_entity, transform, mut enemy) in spawner_query.iter_mut() {
 
         let enemy_clone = enemy.clone();
 
@@ -1142,5 +1144,394 @@ fn spawn_hunting_pack(
     }
     
     4
+}
+
+// Enhanced Enemy AI
+
+// Enhanced predator-prey system
+pub fn predator_prey_system(
+    mut predator_query: Query<(&mut Transform, &mut Enemy, &PredatorPreyBehavior), Without<AlreadyDespawned>>,
+    prey_query: Query<(Entity, &Transform, &Enemy), (With<Enemy>, Without<PredatorPreyBehavior>, Without<AlreadyDespawned>)>,
+    player_query: Query<&Transform, With<Player>>,
+    time: Res<Time>,
+) {
+    if let Ok(player_transform) = player_query.single() {
+        for (mut predator_transform, mut predator_enemy, behavior) in predator_query.iter_mut() {
+            let mut hunting_target: Option<Vec3> = None;
+            let mut fleeing_from: Option<Vec3> = None;
+            
+            // Look for prey and predators
+            for (prey_entity, prey_transform, prey_enemy) in prey_query.iter() {
+                let distance = predator_transform.translation.distance(prey_transform.translation);
+                
+                // Check if this enemy is prey for us
+                if behavior.prey_types.contains(&prey_enemy.enemy_type) && distance < behavior.hunt_range {
+                    if hunting_target.is_none() || distance < predator_transform.translation.distance(hunting_target.unwrap()) {
+                        hunting_target = Some(prey_transform.translation);
+                    }
+                }
+                
+                // Check if this enemy is a predator to us
+                if behavior.predator_types.contains(&prey_enemy.enemy_type) && distance < behavior.flee_range {
+                    fleeing_from = Some(prey_transform.translation);
+                    break; // Flee immediately
+                }
+            }
+            
+            // Execute behavior
+            if let Some(flee_pos) = fleeing_from {
+                // FLEE BEHAVIOR - Move away from predators
+                let flee_direction = (predator_transform.translation - flee_pos).normalize();
+                let panic_speed = predator_enemy.speed * (1.0 + behavior.fear_intensity);
+                predator_transform.translation += flee_direction * panic_speed * time.delta_secs();
+                
+                // Panic rotation
+                predator_transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 8.0);
+                
+            } else if let Some(hunt_pos) = hunting_target {
+                // HUNT BEHAVIOR - Chase prey
+                let hunt_direction = (hunt_pos - predator_transform.translation).normalize();
+                let hunt_speed = predator_enemy.speed * behavior.hunting_speed_bonus;
+                predator_transform.translation += hunt_direction * hunt_speed * time.delta_secs();
+                
+                // Face target
+                let angle = hunt_direction.y.atan2(hunt_direction.x) - std::f32::consts::FRAC_PI_2;
+                predator_transform.rotation = Quat::from_rotation_z(angle);
+                
+            } else {
+                // NEUTRAL BEHAVIOR - Hunt player if no specific prey
+                let player_distance = predator_transform.translation.distance(player_transform.translation);
+                if player_distance < behavior.hunt_range * 1.5 {
+                    let player_direction = (player_transform.translation - predator_transform.translation).normalize();
+                    predator_transform.translation += player_direction * predator_enemy.speed * time.delta_secs();
+                }
+            }
+        }
+    }
+}
+
+// Chemical trail system
+pub fn chemical_trail_system(
+    mut commands: Commands,
+    player_query: Query<&Transform, With<Player>>,
+    mut trail_query: Query<(Entity, &mut ChemicalTrail, &Transform), Without<Player>>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut player_trail_timer: Local<f32>,
+) {
+    // Player creates pheromone trail
+    if let Ok(player_transform) = player_query.single() {
+        *player_trail_timer += time.delta_secs();
+        
+        if *player_trail_timer >= 0.2 {
+            *player_trail_timer = 0.0;
+            
+            if let Some(assets) = &assets {
+                commands.spawn((
+                    Sprite {
+                        image: assets.particle_texture.clone(),
+                        color: Color::srgba(0.8, 0.4, 1.0, 0.3),
+                        custom_size: Some(Vec2::splat(6.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(player_transform.translation - Vec3::new(0.0, 20.0, 0.1)),
+                    ChemicalTrail {
+                        trail_type: ChemicalTrailType::PlayerPheromone,
+                        strength: 1.0,
+                        decay_rate: 0.4,
+                        creation_timer: time.elapsed_secs(),
+                    },
+                    Particle {
+                        velocity: Vec2::ZERO,
+                        lifetime: 0.0,
+                        max_lifetime: 5.0,
+                        size: 6.0,
+                        fade_rate: 0.6,
+                        bioluminescent: true,
+                        drift_pattern: DriftPattern::Floating,
+                    },
+                ));
+            }
+        }
+    }
+    
+    // Update existing trails
+    for (trail_entity, mut trail, trail_transform) in trail_query.iter_mut() {
+        trail.strength -= trail.decay_rate * time.delta_secs();
+        
+        if trail.strength <= 0.0 {
+            commands.entity(trail_entity)
+                .insert(AlreadyDespawned)
+                .despawn();
+        }
+    }
+}
+
+// Trail following behavior
+pub fn chemical_trail_following(
+    mut enemy_query: Query<(&mut Transform, &mut Enemy), (With<Enemy>, Without<ChemicalTrail>)>,
+    trail_query: Query<(&Transform, &ChemicalTrail), (With<ChemicalTrail>, Without<Enemy>)>,
+    time: Res<Time>,
+) {
+    for (mut enemy_transform, mut enemy) in enemy_query.iter_mut() {
+        // Only certain AI types follow trails
+        match &enemy.ai_type {
+            EnemyAI::Chemotaxis { .. } | EnemyAI::Linear { .. } => {
+                let mut strongest_trail: Option<(Vec3, f32)> = None;
+                
+                // Find strongest nearby trail
+                for (trail_transform, trail) in trail_query.iter() {
+                    let distance = enemy_transform.translation.distance(trail_transform.translation);
+                    
+                    if distance < 80.0 {
+                        let influence = trail.strength / (distance + 1.0);
+                        
+                        if strongest_trail.is_none() || influence > strongest_trail.unwrap().1 {
+                            strongest_trail = Some((trail_transform.translation, influence));
+                        }
+                    }
+                }
+                
+                // Follow strongest trail
+                if let Some((trail_pos, influence)) = strongest_trail {
+                    if influence > 0.1 {
+                        
+                        let trail_direction = (trail_pos - enemy_transform.translation).normalize();
+                        let follow_strength = (influence * 60.0).min(enemy.speed * 0.7);
+                        enemy_transform.translation += trail_direction * follow_strength * time.delta_secs();
+                        
+                        // downgrade from Vec3 to Vec2 with .truncate() opposite of .extend(0.0)
+                        let trail_direction = trail_direction.truncate();
+                        // Update AI direction if applicable
+                        match &mut enemy.ai_type {
+                            EnemyAI::Chemotaxis { current_direction, .. } => {
+                                *current_direction = (*current_direction + trail_direction * 0.3).normalize();
+                            }
+                            EnemyAI::Linear { direction } => {
+                                *direction = (*direction + trail_direction * 0.1).normalize();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// Ecosystem balance system
+pub fn ecosystem_balance_system(
+    mut enemy_spawner: ResMut<EnemySpawner>,
+    mut ecosystem: ResMut<EcosystemState>,
+    enemy_query: Query<(&Enemy, &EcosystemRole)>,
+    player_query: Query<(&Player, &EvolutionSystem)>,
+    time: Res<Time>,
+) {
+    // Count ecosystem roles
+    let mut role_counts = HashMap::new();
+    let mut total_balance = 0.0;
+    
+    for (enemy, role) in enemy_query.iter() {
+        let count = role_counts.entry(role.role.clone()).or_insert(0u32);
+        *count += 1;
+        total_balance += role.balance_factor;
+    }
+    
+    // Calculate ecosystem pressure
+    let apex_count = *role_counts.get(&EcosystemRoleType::Apex).unwrap_or(&0);
+    let primary_count = *role_counts.get(&EcosystemRoleType::Primary).unwrap_or(&0);
+    let secondary_count = *role_counts.get(&EcosystemRoleType::Secondary).unwrap_or(&0);
+    
+    // Adjust spawn rates based on balance
+    let balance_factor = (total_balance / (enemy_query.iter().count() as f32 + 1.0)).clamp(0.3, 3.0);
+    
+    // Too many apex predators slow spawning
+    if apex_count > 3 {
+        enemy_spawner.spawn_timer *= 1.5;
+    }
+    
+    // Too few primary threats speed up spawning
+    if primary_count < 2 && enemy_spawner.wave_timer > 10.0 {
+        enemy_spawner.spawn_timer *= 0.7;
+    }
+    
+    // Update ecosystem health
+    let ideal_apex_ratio = 0.1;
+    let ideal_primary_ratio = 0.4;
+    let ideal_secondary_ratio = 0.5;
+    
+    let total_enemies = enemy_query.iter().count() as f32 + 1.0;
+    let apex_ratio = apex_count as f32 / total_enemies;
+    let primary_ratio = primary_count as f32 / total_enemies;
+    let secondary_ratio = secondary_count as f32 / total_enemies;
+    
+    let balance_score : f32 = 1.0 - (
+        (apex_ratio - ideal_apex_ratio).abs() +
+        (primary_ratio - ideal_primary_ratio).abs() +
+        (secondary_ratio - ideal_secondary_ratio).abs()
+    ) / 3.0;
+    
+    ecosystem.health = balance_score.clamp(0.0, 1.0);
+    ecosystem.population_balance.pathogenic_threats = primary_count + apex_count;
+    ecosystem.population_balance.beneficial_microbes = secondary_count;
+}
+
+// Adaptive difficulty system
+pub fn adaptive_difficulty_system(
+    mut commands: Commands,
+    mut adaptive_query: Query<(Entity, &mut AdaptiveDifficulty, &mut Enemy)>,
+    player_query: Query<(&Player, &EvolutionSystem, &Health)>,
+    mut spawn_events: EventWriter<SpawnEnemy>,
+    ecosystem: Res<EcosystemState>,
+    time: Res<Time>,
+) {
+    if let Ok((player, evolution, health)) = player_query.single() {
+        // Calculate player strength
+        let evolution_level = match evolution.primary_evolution {
+            EvolutionType::CytoplasmicSpray { .. } => 1.0,
+            EvolutionType::PseudopodNetwork { .. } => 2.0,
+            EvolutionType::BioluminescentBeam { .. } => 3.0,
+            EvolutionType::SymbioticHunters { .. } => 4.0,
+            EvolutionType::EnzymeBurst { .. } => 3.5,
+            EvolutionType::ToxinCloud { .. } => 4.5,
+            EvolutionType::ElectricDischarge { .. } => 5.0,
+        };
+        
+        let player_strength = evolution_level * (health.0 as f32 / 100.0) * (player.lives as f32 * 0.3 + 0.7);
+        
+        // Adapt enemy difficulty
+        for (enemy_entity, mut adaptive, mut enemy) in adaptive_query.iter_mut() {
+            let target_threat = player_strength * 0.8; // Enemies should be slightly weaker
+            let threat_difference = target_threat - adaptive.threat_level;
+            
+            // Gradual adaptation
+            adaptive.threat_level += threat_difference * adaptive.adaptation_rate * time.delta_secs();
+            
+            // Apply adaptations
+            if adaptive.threat_level > 1.5 {
+                enemy.speed *= 1.0 + (adaptive.threat_level - 1.5) * 0.1;
+                enemy.health = (enemy.health as f32 * (1.0 + (adaptive.threat_level - 1.5) * 0.15)) as i32;
+            }
+            
+            // Spawn additional threats if player is too strong
+            if player_strength > 4.0 && (time.elapsed_secs() % 15.0) < 0.1 {
+                let threat_type = if player_strength > 6.0 {
+                    EnemyType::InfectedMacrophage
+                } else {
+                    EnemyType::ParasiticProtozoa
+                };
+                
+                spawn_events.write(SpawnEnemy {
+                    position: Vec3::new(
+                        (time.elapsed_secs() * 100.0).sin() * 300.0,
+                        450.0,
+                        0.0
+                    ),
+                    ai_type: EnemyAI::Chemotaxis {
+                        target_chemical: ChemicalType::PlayerPheromones,
+                        sensitivity: 2.0,
+                        current_direction: Vec2::new(0.0, -1.0),
+                    },
+                    enemy_type: threat_type,
+                });
+            }
+        }
+    }
+}
+
+// Initialize enhanced AI components
+pub fn setup_enhanced_enemy_ai() -> impl Bundle {
+    (
+        PredatorPreyBehavior {
+            predator_types: vec![EnemyType::InfectedMacrophage],
+            prey_types: vec![EnemyType::ViralParticle, EnemyType::Offspring],
+            hunt_range: 150.0,
+            flee_range: 200.0,
+            hunting_speed_bonus: 1.3,
+            fear_intensity: 0.8,
+        },
+        EcosystemRole {
+            role: EcosystemRoleType::Primary,
+            influence_radius: 100.0,
+            balance_factor: 1.0,
+        },
+        AdaptiveDifficulty {
+            threat_level: 1.0,
+            adaptation_rate: 0.5,
+            player_evolution_response: 1.2,
+        },
+    )
+}
+
+// Predator-prey relationships configuration
+impl EnemyType {
+    pub fn get_predator_prey_behavior(&self) -> Option<PredatorPreyBehavior> {
+        match self {
+            EnemyType::InfectedMacrophage => Some(PredatorPreyBehavior {
+                predator_types: vec![], // Apex predator
+                prey_types: vec![EnemyType::ViralParticle, EnemyType::AggressiveBacteria, EnemyType::Offspring],
+                hunt_range: 180.0,
+                flee_range: 50.0, // Rarely flees
+                hunting_speed_bonus: 1.4,
+                fear_intensity: 0.2,
+            }),
+            EnemyType::ParasiticProtozoa => Some(PredatorPreyBehavior {
+                predator_types: vec![EnemyType::InfectedMacrophage],
+                prey_types: vec![EnemyType::ViralParticle, EnemyType::SwarmCell],
+                hunt_range: 120.0,
+                flee_range: 150.0,
+                hunting_speed_bonus: 1.2,
+                fear_intensity: 0.6,
+            }),
+            EnemyType::AggressiveBacteria => Some(PredatorPreyBehavior {
+                predator_types: vec![EnemyType::InfectedMacrophage, EnemyType::ParasiticProtozoa],
+                prey_types: vec![EnemyType::ViralParticle],
+                hunt_range: 100.0,
+                flee_range: 120.0,
+                hunting_speed_bonus: 1.1,
+                fear_intensity: 0.7,
+            }),
+            EnemyType::SwarmCell => Some(PredatorPreyBehavior {
+                predator_types: vec![EnemyType::ParasiticProtozoa, EnemyType::InfectedMacrophage],
+                prey_types: vec![EnemyType::Offspring],
+                hunt_range: 80.0,
+                flee_range: 100.0,
+                hunting_speed_bonus: 1.0,
+                fear_intensity: 0.5,
+            }),
+            _ => None,
+        }
+    }
+    
+    pub fn get_ecosystem_role(&self) -> EcosystemRole {
+        match self {
+            EnemyType::InfectedMacrophage => EcosystemRole {
+                role: EcosystemRoleType::Apex,
+                influence_radius: 200.0,
+                balance_factor: 3.0,
+            },
+            EnemyType::ParasiticProtozoa | EnemyType::BiofilmColony => EcosystemRole {
+                role: EcosystemRoleType::Primary,
+                influence_radius: 120.0,
+                balance_factor: 2.0,
+            },
+            EnemyType::AggressiveBacteria | EnemyType::SwarmCell => EcosystemRole {
+                role: EcosystemRoleType::Secondary,
+                influence_radius: 80.0,
+                balance_factor: 1.0,
+            },
+            EnemyType::Offspring => EcosystemRole {
+                role: EcosystemRoleType::Decomposer,
+                influence_radius: 40.0,
+                balance_factor: 0.3,
+            },
+            _ => EcosystemRole {
+                role: EcosystemRoleType::Secondary,
+                influence_radius: 60.0,
+                balance_factor: 1.0,
+            },
+        }
+    }
 }
 

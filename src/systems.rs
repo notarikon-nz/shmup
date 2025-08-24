@@ -483,7 +483,7 @@ pub fn handle_player_hit(
 
 // Spawning Systems
 pub fn spawn_enemies(
-    mut commands: Commands,
+    _commands: Commands,
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut spawn_events: EventWriter<SpawnEnemy>,
     time: Res<Time>,
@@ -744,7 +744,7 @@ pub fn collision_system(
     mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<AlreadyDespawned>)>,
     player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>)>,
 ) {
-    if let Ok((player_entity, player_transform, player_collider, player, crit_stats)) = player_query.single() {
+    if let Ok((_, player_transform, player_collider, player, crit_stats)) = player_query.single() {
         // Skip if invincible
         if player.invincible_timer > 0.0 { return; }
         
