@@ -852,7 +852,7 @@ pub fn pheromone_communication_system(
 
 pub fn cell_division_system(
     mut commands: Commands,
-    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &Health)>,
+    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &Health), Without<AlreadyDespawned>>,
     mut spawn_events: EventWriter<SpawnEnemy>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
@@ -908,7 +908,9 @@ pub fn cell_division_system(
                     }
                     
                     // Original cell dies after division
-                    commands.entity(enemy_entity).despawn();
+                    commands.entity(enemy_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
                 }
             }
         }
@@ -917,7 +919,7 @@ pub fn cell_division_system(
 
 pub fn symbiotic_pair_system(
     mut commands: Commands,
-    pair_query: Query<(Entity, &Transform, &Enemy, &Health)>,
+    pair_query: Query<(Entity, &Transform, &Enemy, &Health), Without<AlreadyDespawned>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
     // Collect all symbiotic pair data
@@ -941,7 +943,9 @@ pub fn symbiotic_pair_system(
                     intensity: 1.2,
                     enemy_type: None,
                 });
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }

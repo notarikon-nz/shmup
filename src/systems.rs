@@ -131,7 +131,7 @@ pub fn cleanup_offscreen(
         if transform.translation.y < -450.0 || transform.translation.y > 550.0 ||
            transform.translation.x < -750.0 || transform.translation.x > 750.0 {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
+                .try_insert(AlreadyDespawned)
                 .despawn();
         }
     }
@@ -198,7 +198,7 @@ pub fn check_game_over(
             });
             
             commands.entity(player_entity)
-                .insert(AlreadyDespawned)
+                .try_insert(AlreadyDespawned)
                 .despawn();
             next_state.set(GameState::GameOver);
         }
@@ -282,7 +282,7 @@ pub fn cleanup_game_over_ui(
 ) {
     for entity in game_over_query.iter() {
         commands.entity(entity)
-            .insert(AlreadyDespawned)
+            .try_insert(AlreadyDespawned)
             .despawn();
     }
 }
@@ -350,7 +350,7 @@ pub fn cleanup_pause_ui(
 ) {
     for entity in pause_query.iter() {
         commands.entity(entity)
-            .insert(AlreadyDespawned)
+            .try_insert(AlreadyDespawned)
             .despawn();
     }
 }
@@ -469,7 +469,7 @@ pub fn handle_player_hit(
                 } else {
                     // Final cellular breakdown
                     commands.entity(player_entity)
-                        .insert(AlreadyDespawned)
+                        .try_insert(AlreadyDespawned)
                         .despawn();
                     next_state.set(GameState::GameOver);
                 }
@@ -770,7 +770,7 @@ pub fn collision_system(
                 });
                 
                 commands.entity(proj_entity)
-                    .insert(AlreadyDespawned)
+                    .try_insert(AlreadyDespawned)
                     .despawn();
             }
         }
@@ -826,7 +826,7 @@ pub fn collision_system(
                     ));
                     
                     commands.entity(proj_entity)
-                        .insert(AlreadyDespawned)
+                        .try_insert(AlreadyDespawned)
                         .despawn();
                     
                     if enemy_health.0 <= 0 {
@@ -847,7 +847,7 @@ pub fn collision_system(
                             enemy_type: Some(enemy_type.clone()),
                         });
                         commands.entity(enemy_entity)
-                            .insert(AlreadyDespawned)
+                            .try_insert(AlreadyDespawned)
                             .despawn();
 
                         // stats tracking
@@ -881,7 +881,7 @@ pub fn collision_system(
                         enemy_type: None,
                     });
                     commands.entity(enemy_entity)
-                        .insert(AlreadyDespawned)
+                        .try_insert(AlreadyDespawned)
                         .despawn();
                 }
             }
@@ -928,7 +928,7 @@ pub fn damage_text_system(
         
         if damage_text.timer <= 0.0 {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
+                .try_insert(AlreadyDespawned)
                 .despawn();
                 
         }

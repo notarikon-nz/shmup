@@ -8,7 +8,7 @@ use crate::enemy_types::*;
 pub fn atp_pickup_system(
     mut commands: Commands,
     // FIXED: Separate the ATP pickup query from player query
-    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>)>,
+    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>, Without<AlreadyDespawned>)>,
     mut player_query: Query<(&Transform, &Collider, &mut ATP), With<Player>>,
     mut game_score: ResMut<GameScore>,
 ) {
@@ -19,7 +19,9 @@ pub fn atp_pickup_system(
                 // Collect ATP with organic absorption effect
                 player_atp.amount += atp_component.amount;
                 game_score.current += atp_component.amount * 10; // ATP also gives points
-                commands.entity(atp_entity).despawn();
+                commands.entity(atp_entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
 
                 // stats tracking
                 game_score.total_atp_collected += atp_component.amount as u64;
@@ -231,7 +233,7 @@ pub fn evolution_chamber_interaction(
 // Evolution power-up collection
 pub fn evolution_powerup_collection(
     mut commands: Commands,
-    powerup_query: Query<(Entity, &Transform, &Collider, &EvolutionPowerUp)>,
+    powerup_query: Query<(Entity, &Transform, &Collider, &EvolutionPowerUp), Without<AlreadyDespawned>>,
     mut player_query: Query<(Entity, &Transform, &Collider, &mut EvolutionSystem), With<Player>>,
 ) {
     if let Ok((player_entity, player_transform, player_collider, mut evolution_system)) = player_query.single_mut() {
@@ -298,7 +300,9 @@ pub fn evolution_powerup_collection(
                     }
                 }
 
-                commands.entity(powerup_entity).despawn();
+                commands.entity(powerup_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }
@@ -499,8 +503,8 @@ pub fn spawn_biological_powerups(
 pub fn handle_biological_powerup_collection(
     mut commands: Commands,
     powerup_query: Query<(Entity, &Transform, &Collider, &PowerUp)>,
-    extra_life_query: Query<(Entity, &Transform, &Collider), With<ExtraLifePowerUp>>,
-    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health, &mut Player), With<Player>>,
+    extra_life_query: Query<(Entity, &Transform, &Collider), (With<ExtraLifePowerUp>,Without<AlreadyDespawned>)>,
+    mut player_query: Query<(Entity, &Transform, &Collider, &mut Health, &mut Player), (With<Player>,Without<AlreadyDespawned>)>,
     mut particle_events: EventWriter<SpawnParticles>,
     assets: Option<Res<GameAssets>>,
 ) {
@@ -645,7 +649,9 @@ pub fn handle_biological_powerup_collection(
                     }
                 }
 
-                commands.entity(powerup_entity).despawn();
+                commands.entity(powerup_entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
             }
         }
 
@@ -654,7 +660,9 @@ pub fn handle_biological_powerup_collection(
             let distance = player_transform.translation.distance(life_transform.translation);
             if distance < player_collider.radius + life_collider.radius {
                 player.lives += 1;
-                commands.entity(life_entity).despawn();
+                commands.entity(life_entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }
@@ -733,7 +741,7 @@ pub fn collect_atp_with_energy_transfer(
                 game_score.current += atp_component.amount * 12; // Slightly higher points for biological energy
 
                 commands.entity(atp_entity)
-                    .insert(AlreadyDespawned)
+                    .try_insert(AlreadyDespawned)
                     .despawn();
             }
         }
@@ -814,7 +822,7 @@ pub fn update_evolution_ui(
     mut commands: Commands,
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
     player_query: Query<(&Transform, &ATP), With<Player>>,
-    existing_ui_query: Query<Entity, (With<EvolutionUI>,Without<AlreadyDespawned>)>,
+    existing_ui_query: Query<Entity, (With<EvolutionUI>, Without<AlreadyDespawned>)>,
 ) {
     if let Ok((player_transform, atp)) = player_query.single() {
         let near_chamber = chamber_query.iter().any(|chamber_transform| {
@@ -829,7 +837,9 @@ pub fn update_evolution_ui(
         } else {
             // Hide evolution UI if showing
             for entity in existing_ui_query.iter() {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }
@@ -1060,7 +1070,9 @@ pub fn extra_life_collection_system(
                 // Positive screen shake
                 shake_events.write(AddScreenShake { amount: 0.3 });
 
-                commands.entity(life_entity).despawn();
+                commands.entity(life_entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }

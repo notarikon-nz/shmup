@@ -15,7 +15,7 @@ pub fn unified_particle_system(
             &mut Particle,
             &mut Sprite,
             Option<&BioluminescentParticle>
-        ), (With<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>)>,
+        ), (With<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<AlreadyDespawned>)>,
 
         // Query 1: Standalone bioluminescent particles
         Query<(
@@ -28,10 +28,10 @@ pub fn unified_particle_system(
         Query<(&Transform, &mut ParticleEmitter), Without<Particle>>,
 
         // Query 3: Thermal particles
-        Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite), (With<ThermalParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>)>,
+        Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite), (With<ThermalParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<AlreadyDespawned>)>,
 
         // Query 4: Pheromone particles
-        Query<(Entity, &mut Transform, &mut PheromoneParticle, &mut Sprite), (With<PheromoneParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<ThermalParticle>)>,
+        Query<(Entity, &mut Transform, &mut PheromoneParticle, &mut Sprite), (With<PheromoneParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<AlreadyDespawned>)>,
     )>,
 
     // Separate player query
@@ -50,7 +50,9 @@ pub fn unified_particle_system(
             particle.lifetime += time.delta_secs();
 
             if particle.lifetime >= particle.max_lifetime {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
                 continue;
             }
 
@@ -216,7 +218,9 @@ pub fn unified_particle_system(
 
             // FIXED: Check both heat intensity AND lifetime for despawning
             if thermal.heat_intensity <= 0.0 || thermal.lifetime >= thermal.max_lifetime {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
 
@@ -257,7 +261,9 @@ pub fn unified_particle_system(
             transform.scale = Vec3::splat(expansion);
 
             if pheromone.strength <= 0.0 {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }

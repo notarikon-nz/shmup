@@ -312,14 +312,16 @@ pub fn update_king_tide(
 // Update tidal debris
 pub fn update_tidal_debris(
     mut commands: Commands,
-    mut debris_query: Query<(Entity, &mut Transform, &mut TidalDebris)>,
+    mut debris_query: Query<(Entity, &mut Transform, &mut TidalDebris), Without<AlreadyDespawned>>,
     time: Res<Time>,
 ) {
     for (entity, mut transform, mut debris) in debris_query.iter_mut() {
         debris.lifetime += time.delta_secs();
         
         if debris.lifetime >= debris.max_lifetime {
-            commands.entity(entity).despawn();
+            commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
             continue;
         }
         

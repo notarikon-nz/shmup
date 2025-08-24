@@ -699,7 +699,7 @@ pub fn reset_biological_game_state(
     mut fluid_environment: ResMut<FluidEnvironment>,
     mut chemical_environment: ResMut<ChemicalEnvironment>,
     // Despawn all game entities
-    (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, With<Projectile>>),
+    (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, (With<Projectile>, Without<AlreadyDespawned>)>),
     explosion_query: Query<Entity, With<Explosion>>,
     (powerup_query,weapon_powerup_query): (Query<Entity, With<PowerUp>>, Query<Entity, With<EvolutionPowerUp>>),
     (currency_entity_query, upgrade_station_query): (Query<Entity, (With<ATP>, Without<Player>)>, Query<Entity, With<EvolutionChamber>>),
@@ -727,7 +727,9 @@ pub fn reset_biological_game_state(
         .chain(smart_bomb_query.iter())
         .chain(player_query.iter())
         .chain(upgrade_ui_query.iter()) {
-        commands.entity(entity).despawn();
+        commands.entity(entity)
+            .insert(AlreadyDespawned)
+            .despawn();
     }
     
     // Reset resources
@@ -831,7 +833,7 @@ pub fn biological_movement_system(
 // Enhanced particle system for organic effects
 pub fn update_organic_particles(
     mut commands: Commands,
-    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite, Option<&BioluminescentParticle>)>,
+    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite, Option<&BioluminescentParticle>), Without<AlreadyDespawned>>,
     fluid_environment: Res<FluidEnvironment>,
     time: Res<Time>,
 ) {
@@ -839,7 +841,9 @@ pub fn update_organic_particles(
         particle.lifetime += time.delta_secs();
         
         if particle.lifetime >= particle.max_lifetime {
-            commands.entity(entity).despawn();
+            commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
             continue;
         }
 
@@ -974,7 +978,7 @@ pub fn update_biological_effects(
     mut commands: Commands,
     mut player_query: Query<(Entity, &mut Player, &Transform), With<Player>>,
     mut cell_wall_query: Query<(Entity, &mut CellWallReinforcement)>,
-    mut cell_wall_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<CellWallVisual>, Without<Player>)>,
+    mut cell_wall_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<CellWallVisual>, Without<Player>, Without<AlreadyDespawned>)>,
     mut flagella_query: Query<(Entity, &mut FlagellaBoost)>,
     mut symbiotic_query: Query<(Entity, &mut SymbioticMultiplier)>,
     mut mitochondria_query: Query<(Entity, &mut MitochondriaOvercharge)>,
@@ -1034,7 +1038,9 @@ pub fn update_biological_effects(
         } else {
             // Remove cell wall visual when expired
             for (cell_wall_visual_entity, _, _) in cell_wall_visual_query.iter() {
-                commands.entity(cell_wall_visual_entity).despawn();
+                commands.entity(cell_wall_visual_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }

@@ -50,7 +50,7 @@ pub fn spawn_extra_life_powerup(
 // 7. Extra Life Collection
 pub fn collect_extra_life(
     mut commands: Commands,
-    extra_life_query: Query<(Entity, &Transform, &Collider), With<ExtraLifePowerUp>>,
+    extra_life_query: Query<(Entity, &Transform, &Collider), (With<ExtraLifePowerUp>, Without<AlreadyDespawned>)>,
     mut player_query: Query<(&Transform, &Collider, &mut Player)>,
     mut particle_events: EventWriter<SpawnParticles>,
 ) {
@@ -76,7 +76,9 @@ pub fn collect_extra_life(
                     },
                 });
 
-                commands.entity(life_entity).despawn();
+                commands.entity(life_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }

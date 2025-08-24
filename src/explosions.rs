@@ -6,7 +6,7 @@ use crate::enemy_types::*;
 
 pub fn consolidated_explosion_system(
     mut commands: Commands,
-    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite)>,
+    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), Without<AlreadyDespawned>>,
     mut explosion_events: EventReader<SpawnExplosion>,
     mut shake_events: EventWriter<AddScreenShake>,
     assets: Option<Res<GameAssets>>,
@@ -53,6 +53,17 @@ pub fn consolidated_explosion_system(
                     layers,
                     current_layer_index: 0,
                 },
+                PointLight {
+                    color: Color::WHITE,
+                    intensity: 4000.0,
+                    range: 64.0,
+                    radius: 128.0,
+                    shadows_enabled: false,
+                    affects_lightmapped_mesh_diffuse: false,
+                    shadow_depth_bias: 0.08,
+                    shadow_normal_bias: 0.6,
+                    shadow_map_near_z: 0.1,
+                },                
             ));
         }
         
@@ -61,7 +72,9 @@ pub fn consolidated_explosion_system(
             explosion.timer += time.delta_secs();
             
             if explosion.timer >= explosion.max_time {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
             

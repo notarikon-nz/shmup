@@ -127,7 +127,9 @@ pub fn unified_weapon_update_system(
             laser.timer += time.delta_secs();
             
             if laser.timer >= laser.max_duration {
-                commands.entity(entity).despawn();
+                commands.entity(entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
             
@@ -178,7 +180,9 @@ pub fn unified_weapon_update_system(
             spore.timer += time.delta_secs();
             
             if spore.timer >= spore.max_time {
-                commands.entity(spore_entity).despawn();
+                commands.entity(spore_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
             
@@ -234,7 +238,9 @@ pub fn unified_weapon_update_system(
                             intensity: 1.8,
                             enemy_type: None,
                         });
-                        commands.entity(enemy_entity).despawn();
+                        commands.entity(enemy_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                     }
                 }
             }
@@ -248,7 +254,9 @@ pub fn unified_weapon_update_system(
             cloud.timer += time.delta_secs();
             
             if cloud.timer >= cloud.max_duration {
-                commands.entity(cloud_entity).despawn();
+                commands.entity(cloud_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
             
@@ -273,7 +281,9 @@ pub fn unified_weapon_update_system(
                             intensity: 0.8,
                             enemy_type: None,
                         });
-                        commands.entity(enemy_entity).despawn();
+                        commands.entity(enemy_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                     }
                 }
             }
@@ -287,7 +297,9 @@ pub fn unified_weapon_update_system(
             arc.timer += time.delta_secs();
             
             if arc.timer >= arc.max_duration {
-                commands.entity(arc_entity).despawn();
+                commands.entity(arc_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                 continue;
             }
             
@@ -334,7 +346,9 @@ pub fn unified_weapon_update_system(
                             intensity: 1.2,
                             enemy_type: None,
                         });
-                        commands.entity(target_entity).despawn();
+                        commands.entity(target_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
                     }
                 }
             }
