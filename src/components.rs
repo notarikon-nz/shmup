@@ -950,3 +950,7 @@ pub enum WarningPattern {
     FlashingGrid,     // Systematic contamination
     ChaotticFlicker,  // Ecosystem breakdown
 }
+
+
+#[derive(Component)]
+pub struct EnvironmentText;

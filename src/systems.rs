@@ -128,8 +128,8 @@ pub fn cleanup_offscreen(
     )>,
 ) {
     for (entity, transform) in query.iter() {
-        if transform.translation.y < -450.0 || transform.translation.y > 550.0 ||
-           transform.translation.x < -750.0 || transform.translation.x > 750.0 {
+        if transform.translation.y < -800.0 || transform.translation.y > 800.0 ||
+           transform.translation.x < -800.0 || transform.translation.x > 800.0 {
             commands.entity(entity)
                 .try_insert(AlreadyDespawned)
                 .despawn();
@@ -205,87 +205,7 @@ pub fn check_game_over(
     }
 }
 
-pub fn setup_game_over_ui(
-    mut commands: Commands,
-    mut game_score: ResMut<GameScore>,
-) {
-    save_high_score(&mut game_score);
-    
-    commands.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            position_type: PositionType::Absolute,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        GameOverUI,
-    )).with_children(|parent| {
-        parent.spawn((
-            Text::new("GAME OVER"),
-            TextFont { font_size: 48.0, ..default() },
-            TextColor(Color::srgb(1.0, 0.3, 0.3)),
-            GameOverText,
-            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
-        ));
-        
-        parent.spawn((
-            Text::new(format!("Final Score: {}", game_score.current)),
-            TextFont { font_size: 24.0, ..default() },
-            TextColor(Color::WHITE),
-            FinalScoreText,
-            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
-        ));
-        
-        let high_score = game_score.high_scores.first().unwrap_or(&0);
-        parent.spawn((
-            Text::new(format!("High Score: {}", high_score)),
-            TextFont { font_size: 20.0, ..default() },
-            TextColor(Color::srgb(0.8, 0.8, 0.8)),
-            Node { margin: UiRect::bottom(Val::Px(30.0)), ..default() },
-        ));
-        
-        parent.spawn((
-            Button,
-            Node {
-                width: Val::Px(200.0),
-                height: Val::Px(50.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                margin: UiRect::bottom(Val::Px(10.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgb(0.2, 0.6, 0.2)),
-            RestartButton,
-        )).with_children(|button| {
-            button.spawn((
-                Text::new("RESTART"),
-                TextFont { font_size: 20.0, ..default() },
-                TextColor(Color::WHITE),
-            ));
-        });
-        
-        parent.spawn((
-            Text::new("Press R to restart or click button above"),
-            TextFont { font_size: 16.0, ..default() },
-            TextColor(Color::srgb(0.7, 0.7, 0.7)),
-        ));
-    });
-}
 
-pub fn cleanup_game_over_ui(
-    mut commands: Commands,
-    game_over_query: Query<Entity, (With<GameOverUI>, Without<AlreadyDespawned>)>,
-) {
-    for entity in game_over_query.iter() {
-        commands.entity(entity)
-            .try_insert(AlreadyDespawned)
-            .despawn();
-    }
-}
 
 pub fn handle_restart_input(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -315,45 +235,7 @@ pub fn handle_restart_button(
     }
 }
 
-pub fn setup_pause_ui(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            position_type: PositionType::Absolute,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
-        PauseOverlay,
-    )).with_children(|parent| {
-        parent.spawn((
-            Text::new("PAUSED"),
-            TextFont { font_size: 64.0, ..default() },
-            TextColor(Color::WHITE),
-            Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
-        ));
-        
-        parent.spawn((
-            Text::new("Press ESC to resume"),
-            TextFont { font_size: 24.0, ..default() },
-            TextColor(Color::srgb(0.8, 0.8, 0.8)),
-        ));
-    });
-}
 
-pub fn cleanup_pause_ui(
-    mut commands: Commands,
-    pause_query: Query<Entity, (With<PauseOverlay>, Without<AlreadyDespawned>)>,
-) {
-    for entity in pause_query.iter() {
-        commands.entity(entity)
-            .try_insert(AlreadyDespawned)
-            .despawn();
-    }
-}
 
 // ===== SYSTEMS THAT NEED BIOLOGICAL UPDATES =====
 
@@ -1039,39 +921,3 @@ pub fn screen_shake_system(
     }
 }
 
-pub fn update_cell_wall_timer_ui(
-    cell_wall_query: Query<&CellWallReinforcement>,
-    mut timer_text_query: Query<&mut Text, With<CellWallTimerText>>,
-) {
-    if let Ok(mut text) = timer_text_query.single_mut() {
-        if let Ok(cell_wall) = cell_wall_query.single() {
-            let remaining = cell_wall.timer.max(0.0);
-            let color_intensity = if remaining < 3.0 { "⚠️" } else { "🛡️" };
-            **text = format!("{} Cell Wall: {:.1}s", color_intensity, remaining);
-        } else {
-            **text = String::new();
-        }
-    }
-}
-
-// Tidal UI
-pub fn update_tidal_ui(
-    tidal_physics: Res<TidalPoolPhysics>,
-    mut tidal_text_query: Query<&mut Text, With<TidalStatusText>>,
-) {
-    if let Ok(mut text) = tidal_text_query.single_mut() {
-        let tide_strength = tidal_physics.tide_level.sin();
-        let status = if tidal_physics.king_tide_active {
-            "🌊 KING TIDE! 🌊"
-        } else if tide_strength > 0.8 {
-            "Tide: High"
-        } else if tide_strength < -0.8 {
-            "Tide: Low"
-        } else if tide_strength > 0.0 {
-            "Tide: Rising"
-        } else {
-            "Tide: Falling"
-        };
-        **text = status.to_string();
-    }
-}

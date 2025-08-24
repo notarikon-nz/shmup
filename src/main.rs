@@ -19,6 +19,8 @@ mod particles;
 mod tidal_mechanics;
 mod high_scores;
 mod powerup_systems;
+mod user_interface;
+mod debug;
 
 use components::*;
 use resources::*;
@@ -36,6 +38,8 @@ use particles::*;
 use tidal_mechanics::*;
 use high_scores::*;
 use powerup_systems::{spawn_powerup_system};
+use user_interface::*;
+use debug::*;
 
 fn main() {
     App::new()
@@ -50,6 +54,7 @@ fn main() {
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep water blue-black
+
         .init_resource::<InputState>()
         .init_resource::<EnemySpawner>()
         .init_resource::<GameScore>()
@@ -119,10 +124,6 @@ fn main() {
         ).run_if(in_state(GameState::Playing)))
 
         .add_systems(Update, (
-            update_cell_wall_timer_ui,
-            update_evolution_ui,
-            update_tidal_ui,
-
             spawn_extra_life_powerups,
             extra_life_collection_system,
             update_dynamic_lights,
@@ -232,12 +233,19 @@ fn main() {
             spawn_atp_on_death,
             handle_player_hit,
             update_health_bar,
-            update_biological_ui,
-            update_evolution_ui,
             check_game_over,
             handle_restart_input,
         ).run_if(in_state(GameState::Playing)))
 
+        // User Interface
+        .add_systems(Update, (
+
+            update_cell_wall_timer_ui,
+            update_evolution_ui,
+            update_tidal_ui,
+            update_biological_ui,
+
+        ).run_if(in_state(GameState::Playing)))
         // Debug Systems
         .add_systems(Update, (
             debug_atp_spawner,
@@ -305,208 +313,7 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
     ));
 }
 
-// Biological UI setup with updated terminology
-pub fn setup_biological_ui(mut commands: Commands) {
-    // Cellular integrity bar (health bar)
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            bottom: Val::Px(60.0),
-            width: Val::Px(204.0),
-            height: Val::Px(24.0),
-            border: UiRect::all(Val::Px(2.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgb(0.1, 0.2, 0.3)),
-        BorderColor(Color::srgb(0.4, 0.8, 0.6)),
-        HealthBar,
-    ));
-    
-    // Cellular integrity fill
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(22.0),
-            bottom: Val::Px(62.0),
-            width: Val::Px(200.0),
-            height: Val::Px(20.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgb(0.2, 0.8, 0.4)), // Healthy green
-        HealthBarFill,
-    ));
 
-    // Lives text
-    commands.spawn((
-        Text::new("Lives: 3"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            bottom: Val::Px(20.0),
-            ..default()
-        },
-        TextFont { font_size: 20.0, ..default() },
-        TextColor(Color::srgb(0.8, 1.0, 0.9)),
-        LivesText,
-    ));
-
-    // Score text
-    commands.spawn((
-        Text::new("Score: 0"),
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(20.0),
-            ..default()
-        },
-        TextFont { font_size: 24.0, ..default() },
-        TextColor(Color::srgb(0.8, 1.0, 0.9)),
-        ScoreText,
-    ));
-    
-    // High score text
-    commands.spawn((
-        Text::new("High: 0"),
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(50.0),
-            ..default()
-        },
-        TextFont { font_size: 16.0, ..default() },
-        TextColor(Color::srgb(0.6, 0.8, 0.7)),
-        HighScoreText,
-    ));
-
-    // ATP text (currency)
-    commands.spawn((
-        Text::new("ATP: 0⚡"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(20.0),
-            ..default()
-        },
-        TextFont { font_size: 18.0, ..default() },
-        TextColor(Color::srgb(1.0, 1.0, 0.3)),
-        ATPText,
-    ));
-
-    // Evolution info text
-    commands.spawn((
-        Text::new("Evolution: Cytoplasmic Spray"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(50.0),
-            ..default()
-        },
-        TextFont { font_size: 16.0, ..default() },
-        TextColor(Color::srgb(0.7, 1.0, 0.7)),
-        EvolutionText,
-    ));
-
-    // Tidal State
-    commands.spawn((
-        Text::new("Tide: Normal"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(110.0),
-            ..default()
-        },
-        TextFont { font_size: 14.0, ..default() },
-        TextColor(Color::srgb(0.6, 0.9, 1.0)),
-        TidalStatusText,
-    ));
-
-    // Emergency spore counter
-    commands.spawn((
-        Text::new("Emergency Spores: 3"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(250.0),
-            bottom: Val::Px(20.0),
-            ..default()
-        },
-        TextFont { font_size: 16.0, ..default() },
-        TextColor(Color::srgb(0.8, 0.8, 1.0)),
-        SporeText,
-    ));
-
-    // Controls help
-    commands.spawn((
-        Text::new("SPACE: Emergency Spore | Near Evolution Chamber: 1-9 to evolve"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            bottom: Val::Px(100.0),
-            ..default()
-        },
-        TextFont { font_size: 12.0, ..default() },
-        TextColor(Color::srgb(0.5, 0.7, 0.6)),
-        ControlsText,
-    ));
-
-    // Symbiotic multiplier text
-    commands.spawn((
-        Text::new(""),
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(80.0),
-            ..default()
-        },
-        TextFont { font_size: 18.0, ..default() },
-        TextColor(Color::srgb(1.0, 0.8, 0.2)),
-        MultiplierText,
-    ));
-
-    // Environmental status (new)
-    commands.spawn((
-        Text::new("pH: 7.0 | O₂: Normal"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            top: Val::Px(80.0),
-            ..default()
-        },
-        TextFont { font_size: 14.0, ..default() },
-        TextColor(Color::srgb(0.6, 0.9, 0.8)),
-        EnvironmentText,
-    ));
-
-    // set up cellwall timer
-    commands.spawn((
-        Text::new(""),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            bottom: Val::Px(130.0),
-            ..default()
-        },
-        TextFont { font_size: 16.0, ..default() },
-        TextColor(Color::srgb(0.4, 1.0, 0.8)),
-        CellWallTimerText,
-    ));
-
-    commands.spawn((
-        Text::new("FPS: --"),
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            bottom: Val::Px(20.0), // Changed from bottom: Val::Px(40.0)
-            ..default()
-        },
-        TextFont { 
-            font_size: 18.0, // Increased size
-            ..default() 
-        },
-        TextColor(Color::srgb(0.9, 1.0, 0.9)), // Brighter color
-        FpsText,
-    ));  
-}
 
 // New biological background with organic elements
 pub fn setup_biological_background(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -635,70 +442,7 @@ pub fn init_chemical_zones(mut commands: Commands) {
     });
 }
 
-// Enhanced UI update system with biological terminology
-pub fn update_biological_ui(
-    game_score: Res<GameScore>,
-    player_query: Query<(&Player, &ATP, &EvolutionSystem)>,
-    environment: Res<ChemicalEnvironment>,
-    mut atp_query: Query<&mut Text, (With<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut evolution_query: Query<&mut Text, (With<EvolutionText>, Without<ATPText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut spore_query: Query<&mut Text, (With<SporeText>, Without<ATPText>, Without<EvolutionText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut score_query: Query<&mut Text, (With<ScoreText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut high_score_query: Query<&mut Text, (With<HighScoreText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<MultiplierText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut multiplier_query: Query<&mut Text, (With<MultiplierText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<LivesText>, Without<EnvironmentText>)>,
-    mut lives_query: Query<&mut Text, (With<LivesText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<EnvironmentText>)>,
-    mut environment_query: Query<&mut Text, (With<EnvironmentText>, Without<ATPText>, Without<EvolutionText>, Without<SporeText>, Without<ScoreText>, Without<HighScoreText>, Without<MultiplierText>, Without<LivesText>)>,
-) {
-    if let Ok((player, atp, evolution_system)) = player_query.single() {
-        // Update ATP display
-        if let Ok(mut atp_text) = atp_query.single_mut() {
-            **atp_text = format!("ATP: {}⚡", atp.amount);
-        }
-        
-        // Update evolution display
-        if let Ok(mut evolution_text) = evolution_query.single_mut() {
-            **evolution_text = format!("Evolution: {}", evolution_system.primary_evolution.get_display_name());
-        }
-        
-        // Update emergency spore counter
-        if let Ok(mut spore_text) = spore_query.single_mut() {
-            **spore_text = format!("Emergency Spores: {}", evolution_system.emergency_spores);
-        }
-        
-        // Update lives
-        if let Ok(mut lives_text) = lives_query.single_mut() {
-            **lives_text = format!("Lives: {}", player.lives);
-        }
-    }
-    
-    // Update score
-    if let Ok(mut score_text) = score_query.single_mut() {
-        **score_text = format!("Score: {}", game_score.current);
-    }
-    
-    // Update high score
-    if let Ok(mut high_score_text) = high_score_query.single_mut() {
-        let high_score = game_score.high_scores.first().unwrap_or(&0);
-        **high_score_text = format!("High: {}", high_score);
-    }
 
-    // Update symbiotic multiplier
-    if let Ok(mut multiplier_text) = multiplier_query.single_mut() {
-        if game_score.score_multiplier > 1.0 {
-            **multiplier_text = format!("{}x Symbiosis ({:.1}s)", game_score.score_multiplier, game_score.multiplier_timer);
-        } else {
-            **multiplier_text = String::new(); // This should clear it
-        }
-    }
-
-    // Update environment status
-    if let Ok(mut env_text) = environment_query.single_mut() {
-        **env_text = format!("pH: {:.1} | O₂: {:.0}%", 
-            environment.base_ph, 
-            environment.base_oxygen * 100.0
-        );
-    }
-}
 
 // Enhanced game reset with biological state
 pub fn reset_biological_game_state(
@@ -1142,18 +886,7 @@ fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec
     }
 }
 
-// New UI component markers
-#[derive(Component)]
-pub struct ATPText;
 
-#[derive(Component)]
-pub struct EvolutionText;
-
-#[derive(Component)]
-pub struct SporeText;
-
-#[derive(Component)]
-pub struct EnvironmentText;
 
 // fix for the fluid_dynamics_system panic
 pub fn init_current_generator(mut commands: Commands) {
@@ -1161,76 +894,3 @@ pub fn init_current_generator(mut commands: Commands) {
 }
 
 
-pub fn debug_atp_spawner(
-    mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    player_query: Query<&Transform, With<Player>>,
-    assets: Option<Res<GameAssets>>,
-) {
-    if keyboard.just_pressed(KeyCode::F2) {
-        if let Ok(player_transform) = player_query.single() {
-            if let Some(assets) = assets {
-                commands.spawn((
-                    Sprite {
-                        image: assets.multiplier_powerup_texture.clone(),
-                        color: Color::srgb(1.0, 1.0, 0.3),
-                        custom_size: Some(Vec2::splat(18.0)),
-                        ..default()
-                    },
-                    Transform::from_translation(player_transform.translation + Vec3::new(32.0, 0.0, 0.0)),
-                    ATP { amount: 1000 },
-                    Collider { radius: 9.0 },
-                ));
-            }
-        }
-    }
-}
-
-
-pub fn debug_spawn_evolution_chamber(
-    mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    assets: Option<Res<GameAssets>>,
-) {
-    if keyboard.just_pressed(KeyCode::F3) {
-        if let Some(assets) = assets {
-            commands.spawn((
-                Sprite {
-                    image: assets.enemy_texture.clone(),
-                    color: Color::srgb(0.3, 0.9, 0.6),
-                    custom_size: Some(Vec2::splat(60.0)),
-                    ..default()
-                },
-                Transform::from_xyz(0.0, -100.0, 0.0), // Near player for testing
-                EvolutionChamber,
-                BioluminescentParticle {
-                    base_color: Color::srgb(0.3, 0.9, 0.6),
-                    pulse_frequency: 1.0,
-                    pulse_intensity: 0.6,
-                    organic_motion: OrganicMotion {
-                        undulation_speed: 0.8,
-                        response_to_current: 0.2,
-                    },
-                },
-            ));
-        }
-    }
-}
-
-
-pub fn debug_trigger_king_tide(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut tidal_physics: ResMut<TidalPoolPhysics>,
-    mut tidal_events: EventWriter<TidalEvent>,
-) {
-    if keyboard.just_pressed(KeyCode::F4) {
-        println!("🌊 DEBUG: Triggering King Tide!");
-        tidal_physics.king_tide_active = true;
-        tidal_physics.king_tide_timer = 0.0;
-        tidal_physics.king_tide_intensity = 3.0;
-        tidal_events.write(TidalEvent::KingTideBegin {
-            intensity: 3.0,
-            duration: 15.0,
-        });
-    }
-}
