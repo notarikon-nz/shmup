@@ -698,7 +698,7 @@ pub fn move_biological_powerups(
 // Enhanced ATP collection with organic energy transfer
 pub fn collect_atp_with_energy_transfer(
     mut commands: Commands,
-    atp_query: Query<(Entity, &Transform, &Collider, &ATP), Without<Player>>,
+    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (Without<Player>, Without<AlreadyDespawned>)>,
     mut player_query: Query<(&Transform, &Collider, &mut ATP), With<Player>>,
     mut particle_events: EventWriter<SpawnParticles>,
     mut game_score: ResMut<GameScore>,
@@ -732,7 +732,9 @@ pub fn collect_atp_with_energy_transfer(
                 player_atp.amount += atp_component.amount;
                 game_score.current += atp_component.amount * 12; // Slightly higher points for biological energy
 
-                commands.entity(atp_entity).despawn();
+                commands.entity(atp_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
     }
@@ -812,7 +814,7 @@ pub fn update_evolution_ui(
     mut commands: Commands,
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
     player_query: Query<(&Transform, &ATP), With<Player>>,
-    existing_ui_query: Query<Entity, With<EvolutionUI>>,
+    existing_ui_query: Query<Entity, (With<EvolutionUI>,Without<AlreadyDespawned>)>,
 ) {
     if let Ok((player_transform, atp)) = player_query.single() {
         let near_chamber = chamber_query.iter().any(|chamber_transform| {
@@ -1025,7 +1027,7 @@ pub fn spawn_extra_life_powerups(
 
 pub fn extra_life_collection_system(
     mut commands: Commands,
-    mut extra_life_query: Query<(Entity, &Transform, &Collider, &mut ExtraLifePowerUp)>,
+    mut extra_life_query: Query<(Entity, &Transform, &Collider, &mut ExtraLifePowerUp), Without<AlreadyDespawned>>,
     mut player_query: Query<(&Transform, &Collider, &mut Player)>,
     mut particle_events: EventWriter<SpawnParticles>,
     mut shake_events: EventWriter<AddScreenShake>,

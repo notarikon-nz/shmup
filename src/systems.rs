@@ -123,13 +123,16 @@ pub fn cleanup_offscreen(
         Without<HealthBar>,
         Without<LivesText>,
         Without<MultiplierText>,
-        Without<CellWallVisual>
+        Without<CellWallVisual>,
+        Without<AlreadyDespawned>,
     )>,
 ) {
     for (entity, transform) in query.iter() {
         if transform.translation.y < -450.0 || transform.translation.y > 550.0 ||
            transform.translation.x < -750.0 || transform.translation.x > 750.0 {
-            commands.entity(entity).despawn();
+            commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
         }
     }
 }
@@ -182,7 +185,7 @@ pub fn save_high_score(game_score: &mut GameScore) {
 
 pub fn check_game_over(
     mut commands: Commands,
-    player_query: Query<(Entity, &Health, &Transform, &Player), With<Player>>,
+    player_query: Query<(Entity, &Health, &Transform, &Player), (With<Player>, Without<AlreadyDespawned>)>,
     mut next_state: ResMut<NextState<GameState>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
@@ -194,7 +197,9 @@ pub fn check_game_over(
                 enemy_type: None,
             });
             
-            commands.entity(player_entity).despawn();
+            commands.entity(player_entity)
+                .insert(AlreadyDespawned)
+                .despawn();
             next_state.set(GameState::GameOver);
         }
     }
@@ -273,10 +278,12 @@ pub fn setup_game_over_ui(
 
 pub fn cleanup_game_over_ui(
     mut commands: Commands,
-    game_over_query: Query<Entity, With<GameOverUI>>,
+    game_over_query: Query<Entity, (With<GameOverUI>, Without<AlreadyDespawned>)>,
 ) {
     for entity in game_over_query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity)
+            .insert(AlreadyDespawned)
+            .despawn();
     }
 }
 
@@ -339,10 +346,12 @@ pub fn setup_pause_ui(mut commands: Commands) {
 
 pub fn cleanup_pause_ui(
     mut commands: Commands,
-    pause_query: Query<Entity, With<PauseOverlay>>,
+    pause_query: Query<Entity, (With<PauseOverlay>, Without<AlreadyDespawned>)>,
 ) {
     for entity in pause_query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity)
+            .insert(AlreadyDespawned)
+            .despawn();
     }
 }
 
@@ -459,7 +468,9 @@ pub fn handle_player_hit(
                     player.invincible_timer = 3.0;
                 } else {
                     // Final cellular breakdown
-                    commands.entity(player_entity).despawn();
+                    commands.entity(player_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
                     next_state.set(GameState::GameOver);
                 }
             }
@@ -729,8 +740,8 @@ pub fn collision_system(
     mut game_score: ResMut<GameScore>,
     time: Res<Time>,
 
-    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile)>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), Without<Projectile>>,
+    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<AlreadyDespawned>>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<AlreadyDespawned>)>,
     player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>)>,
 ) {
     if let Ok((player_entity, player_transform, player_collider, player, crit_stats)) = player_query.single() {
@@ -758,7 +769,9 @@ pub fn collision_system(
                     enemy_type: None,
                 });
                 
-                commands.entity(proj_entity).despawn();
+                commands.entity(proj_entity)
+                    .insert(AlreadyDespawned)
+                    .despawn();
             }
         }
         
@@ -812,7 +825,9 @@ pub fn collision_system(
                         },
                     ));
                     
-                    commands.entity(proj_entity).despawn();
+                    commands.entity(proj_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
                     
                     if enemy_health.0 <= 0 {
                         let enemy_type = &enemy_opt.unwrap().enemy_type;
@@ -831,7 +846,9 @@ pub fn collision_system(
                             intensity: 1.0,
                             enemy_type: Some(enemy_type.clone()),
                         });
-                        commands.entity(enemy_entity).despawn();
+                        commands.entity(enemy_entity)
+                            .insert(AlreadyDespawned)
+                            .despawn();
 
                         // stats tracking
                         game_score.enemies_defeated += 1;
@@ -863,7 +880,9 @@ pub fn collision_system(
                         intensity: 1.0,
                         enemy_type: None,
                     });
-                    commands.entity(enemy_entity).despawn();
+                    commands.entity(enemy_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
                 }
             }
         }
@@ -897,7 +916,7 @@ pub struct FpsText;
 // floating combat text
 pub fn damage_text_system(
     mut commands: Commands,
-    mut damage_query: Query<(Entity, &mut Transform, &mut DamageText, &mut TextColor)>,
+    mut damage_query: Query<(Entity, &mut Transform, &mut DamageText, &mut TextColor), Without<AlreadyDespawned>>,
     time: Res<Time>,
 ) {
     for (entity, mut transform, mut damage_text, mut text_color) in damage_query.iter_mut() {
@@ -908,7 +927,10 @@ pub fn damage_text_system(
         text_color.0 = Color::srgba(1.0, 0.3, 0.3, alpha);
         
         if damage_text.timer <= 0.0 {
-            commands.entity(entity).despawn();
+            commands.entity(entity)
+                .insert(AlreadyDespawned)
+                .despawn();
+                
         }
     }
 }

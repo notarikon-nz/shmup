@@ -2,6 +2,9 @@ use bevy::prelude::*;
 use crate::enemy_types::{Enemy,EnemyType};
 
 #[derive(Component)]
+pub struct AlreadyDespawned;
+
+#[derive(Component)]
 pub struct Player {
     pub speed: f32,
     pub roll_factor: f32,
