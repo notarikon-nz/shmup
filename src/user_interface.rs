@@ -9,6 +9,24 @@ pub fn setup_biological_ui(
     mut commands: Commands,
     fonts: Res<GameFonts>,
 ) {
+
+    commands.spawn((
+        Text::new("FPS: --"),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(8.0),
+            bottom: Val::Px(8.0),
+            ..default()
+        },
+        TextFont { 
+            font: fonts.default_font.clone(),
+            font_size: 12.0, // Increased size
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 1.0, 1.0)), // Brighter color
+        FpsText,
+    ));
+        
     // Cellular integrity bar (health bar)
     commands.spawn((
         Node {
@@ -44,8 +62,8 @@ pub fn setup_biological_ui(
         Text::new("Lives: 3"),
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(20.0),
-            bottom: Val::Px(20.0),
+            left: Val::Px(24.0),
+            bottom: Val::Px(24.0),
             ..default()
         },
         TextFont { 
@@ -89,7 +107,7 @@ pub fn setup_biological_ui(
 
     // ATP text (currency)
     commands.spawn((
-        Text::new("ATP: 0⚡"),
+        Text::new("ATP: 0"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
@@ -185,7 +203,7 @@ pub fn setup_biological_ui(
 
     // Environmental status (new)
     commands.spawn((
-        Text::new("pH: 7.0 | O₂: Normal"),
+        Text::new("pH: 7.0 | O2: Normal"),
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(20.0),
@@ -215,22 +233,7 @@ pub fn setup_biological_ui(
         CellWallTimerText,
     ));
 
-    commands.spawn((
-        Text::new("FPS: --"),
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            bottom: Val::Px(20.0), // Changed from bottom: Val::Px(40.0)
-            ..default()
-        },
-        TextFont { 
-            font: fonts.default_font.clone(),
-            font_size: 18.0, // Increased size
-            ..default() 
-        },
-        TextColor(Color::srgb(0.9, 1.0, 0.9)), // Brighter color
-        FpsText,
-    ));  
+
 
     // Add ecosystem health indicator
     commands.spawn((

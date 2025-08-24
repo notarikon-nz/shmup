@@ -3,6 +3,7 @@ use bevy::render::camera::ScalingMode;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
+use crate::achievements::*;
 use crate::enemy_types::*;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 
@@ -627,6 +628,8 @@ pub fn collision_system(
     projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<AlreadyDespawned>>,
     mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<AlreadyDespawned>)>,
     player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>)>,
+
+    mut achievement_events: EventWriter<AchievementEvent>,
 ) {
     if let Ok((_, player_transform, player_collider, player, crit_stats)) = player_query.single() {
         // Skip if invincible
@@ -738,6 +741,10 @@ pub fn collision_system(
 
                         // stats tracking
                         game_score.enemies_defeated += 1;
+
+                        achievement_events.write(AchievementEvent::EnemyKilled(
+                            enemy_type.get_biological_description().to_string()
+                        ));                     
                     }
                     break;
                 }
@@ -761,6 +768,12 @@ pub fn collision_system(
                 enemy_health.0 -= 30;
                 if enemy_health.0 <= 0 {
                     game_score.current += 50;
+
+                    // Achievement tracking for ramming kills
+                    achievement_events.write(AchievementEvent::EnemyKilled(
+                        "Collision Kill".to_string()
+                    ));
+
                     explosion_events.write(SpawnExplosion {
                         position: enemy_transform.translation,
                         intensity: 1.0,
@@ -779,23 +792,23 @@ pub fn collision_system(
 // BEGIN FPS
 pub fn fps_system(
     diagnostics: Res<DiagnosticsStore>, 
-    mut fps_text: Query<&mut Text, With<FpsText>>
+    mut query: Query<&mut Text, With<FpsText>>
 ) {
-    if let Ok(mut text) = fps_text.single_mut() {
+
+    if let Ok(mut fps_text) = query.single_mut() {
         if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
             if let Some(value) = fps.smoothed() {
-                **text = format!("FPS: {:.0}", value);
+                **fps_text = format!("FPS: {:.0}", value);
             } else {
-                **text = "FPS: --".to_string();
+                **fps_text = format!("FPS: --");
             }
         } else {
-            **text = "FPS: N/A".to_string();
+                **fps_text = format!("FPS: N/A");
         }
     }
 }
 
-#[derive(Component)]
-pub struct FpsText;
+
 
 // END FPS
 

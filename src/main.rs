@@ -22,6 +22,8 @@ mod powerup_systems;
 mod user_interface;
 mod debug;
 mod achievements;
+mod background;
+mod tidal_feedback;
 
 use components::*;
 use resources::*;
@@ -42,6 +44,8 @@ use powerup_systems::{spawn_powerup_system};
 use user_interface::*;
 use achievements::*;
 use debug::*;
+use background::*;
+use tidal_feedback::*;
 
 fn main() {
     App::new()
@@ -70,6 +74,7 @@ fn main() {
         .init_resource::<ScreenShakeResource>()
         .init_resource::<TidalState>()
         .init_resource::<AchievementManager>()
+        .init_resource::<TidalFeedbackSystem>()
 
         .init_state::<GameState>()
         .add_event::<SpawnExplosion>()
@@ -81,6 +86,7 @@ fn main() {
         .add_event::<EnemyHit>()
         .add_event::<SpawnEnhancedExplosion>()
         .add_event::<TidalEvent>()
+        .add_event::<AchievementEvent>()
 
         .add_systems(Startup, (
             setup_camera, 
@@ -95,10 +101,13 @@ fn main() {
             init_chemical_zones,
             init_current_generator,
             // init_tidal_state, // do we need this?
-            
+            setup_achievement_system,
+            init_procedural_background,
+            // setup_audio.after(load_biological_assets),
             start_ambient_music.after(load_biological_assets),
+            
+
         ))
-        .add_systems(Update, fps_system)
         // FIXED: Separate systems into different Update groups to avoid query conflicts
         .add_systems(Update, (
             audio_system,
@@ -112,11 +121,23 @@ fn main() {
             spawn_biological_powerups, 
             spawn_evolution_powerups, 
 
-            // track_achievements_system,
+            track_achievements_system,
+            update_achievement_notifications,
 
             link_symbiotic_pairs,
             spawn_evolution_chambers, 
 
+            fps_system,
+
+        ).run_if(in_state(GameState::Playing)))
+        
+        // procedural backgrounds
+        .add_systems(Update, (
+            procedural_background_generation,
+            update_background_particles,  
+            enhanced_parallax_system,
+            biological_feedback_system,
+            update_depth_of_field_focus,
         ).run_if(in_state(GameState::Playing)))
 
         // Improved Enemy AI 
@@ -174,6 +195,13 @@ fn main() {
             update_cell_wall_timer,
             enemy_flash_system,
             screen_shake_system,
+
+            // TIDAL FEEDBACK
+            enhanced_tidal_feedback_system,
+            update_fluid_motion_visualizers, 
+            update_tidal_wave_effects,
+            tidal_audio_feedback_system,
+            tidal_movement_response_system,            
         ).run_if(in_state(GameState::Playing)))
 
         // Third Update group - enemy systems (separate from projectile systems)
@@ -287,6 +315,21 @@ pub fn init_tidal_state(mut commands: Commands) {
     commands.init_resource::<TidalState>();
 }
 
+pub fn setup_achievement_system(mut commands: Commands) {
+    let mut achievement_manager = achievements::initialize_achievements();
+    
+    // Load saved progress if available
+    if let Ok(save_data) = std::fs::read_to_string("achievements.json") {
+        if let Ok(loaded_data) = serde_json::from_str::<achievements::AchievementSaveData>(&save_data) {
+            achievement_manager.unlocked_achievements = loaded_data.unlocked_achievements;
+            achievement_manager.lifetime_stats = loaded_data.lifetime_stats;
+            println!("Loaded {} unlocked achievements", achievement_manager.unlocked_achievements.len());
+        }
+    }
+    
+    commands.insert_resource(achievement_manager);
+}
+
 // Enhanced player spawning with biological properties
 pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let texture = asset_server.load("textures/player.png");
@@ -332,25 +375,6 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
 
 // New biological background with organic elements
 pub fn setup_biological_background(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Organic background layers representing different depth levels
-    let layers = vec![
-        ("textures/bg_layer1.png", 0.05, -100.0, Color::srgb(0.2, 0.4, 0.6)), // Deep water
-        ("textures/bg_layer2.png", 0.15, -50.0, Color::srgb(0.3, 0.6, 0.8)),  // Mid water with plankton
-        ("textures/bg_layer3.png", 0.3, -25.0, Color::srgb(0.4, 0.8, 1.0)),   // Surface with debris
-    ];
-    
-    for (path, speed, depth, tint) in layers {
-        let texture = asset_server.load(path);
-        commands.spawn((
-            Sprite {
-                image: texture,
-                color: tint,
-                ..default()
-            },
-            Transform::from_xyz(0.0, 0.0, depth),
-            ParallaxLayer { speed, depth },
-        ));
-    }
 
     // Add some ambient current indicators
     for i in 0..5 {

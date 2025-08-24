@@ -532,7 +532,7 @@ pub fn load_achievements(achievement_manager: &mut AchievementManager) {
 }
 
 #[derive(Serialize, Deserialize)]
-struct AchievementSaveData {
-    unlocked_achievements: Vec<String>,
-    lifetime_stats: LifetimeStats,
+pub struct AchievementSaveData {
+    pub unlocked_achievements: Vec<String>,
+    pub lifetime_stats: LifetimeStats,
 }

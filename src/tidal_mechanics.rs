@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use crate::achievements::*;
 
 pub fn advanced_tidal_system(
     mut tidal_physics: ResMut<TidalPoolPhysics>,
@@ -226,6 +227,7 @@ fn apply_tidal_effects(
 pub fn process_tidal_events(
     mut commands: Commands,
     mut tidal_events: EventReader<TidalEvent>,
+    mut achievement_events: EventWriter<AchievementEvent>, // NEW
     mut enemy_spawner: ResMut<EnemySpawner>,
     mut spawn_enemy_events: EventWriter<SpawnEnemy>,
     assets: Option<Res<GameAssets>>,
@@ -236,33 +238,28 @@ pub fn process_tidal_events(
             TidalEvent::KingTideBegin { intensity, duration } => {
                 println!("KING TIDE EVENT! Intensity: {:.1}", intensity);
                 
-                // Spawn tidal debris and special enemies
+                // Achievement tracking for surviving king tides
+                achievement_events.write(AchievementEvent::KingTideSurvived);
+                
                 spawn_tidal_debris(&mut commands, &assets, *intensity);
                 spawn_king_tide_enemies(&mut spawn_enemy_events, *intensity);
-                
-                // Boost enemy spawn rates during king tide
-                enemy_spawner.spawn_timer *= 0.3; // Much faster spawning
+                enemy_spawner.spawn_timer *= 0.3;
             }
             
             TidalEvent::HighTideReached => {
-                // High tide brings more aggressive enemies
-                enemy_spawner.spawn_timer *= 0.7; // Faster spawning
-                
-                // Spawn thermal vent activation
+                enemy_spawner.spawn_timer *= 0.7;
                 spawn_thermal_vent_activation(&mut commands, &assets);
             }
             
             TidalEvent::LowTideReached => {
-                // Low tide reveals hidden areas, slower enemies
-                enemy_spawner.spawn_timer *= 1.5; // Slower spawning
+                enemy_spawner.spawn_timer *= 1.5;
             }
             
             TidalEvent::CurrentReversal { new_direction } => {
-                // Visual indicator of current change
                 spawn_current_reversal_effect(&mut commands, &assets, *new_direction);
             }
 
-            _ => {} // PLACEHOLDER
+            _ => {}
         }
     }
 }

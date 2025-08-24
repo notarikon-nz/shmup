@@ -3,6 +3,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use crate::achievements::*;
 
 // FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
@@ -11,6 +12,7 @@ pub fn atp_pickup_system(
     atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>, Without<AlreadyDespawned>)>,
     mut player_query: Query<(&Transform, &Collider, &mut ATP), With<Player>>,
     mut game_score: ResMut<GameScore>,
+    mut achievement_events: EventWriter<AchievementEvent>,
 ) {
     if let Ok((player_transform, player_collider, mut player_atp)) = player_query.single_mut() {
         for (atp_entity, atp_transform, atp_collider, atp_component) in atp_query.iter() {
@@ -25,6 +27,9 @@ pub fn atp_pickup_system(
 
                 // stats tracking
                 game_score.total_atp_collected += atp_component.amount as u64;
+                
+                achievement_events.write(AchievementEvent::ATPCollected(atp_component.amount));
+                
             }
         }
     }

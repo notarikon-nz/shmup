@@ -5,6 +5,9 @@ use crate::enemy_types::{Enemy,EnemyType};
 pub struct AlreadyDespawned;
 
 #[derive(Component)]
+pub struct FpsText;
+
+#[derive(Component)]
 pub struct Player {
     pub speed: f32,
     pub roll_factor: f32,
