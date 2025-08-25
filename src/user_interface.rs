@@ -10,22 +10,7 @@ pub fn setup_biological_ui(
     fonts: Res<GameFonts>,
 ) {
 
-    commands.spawn((
-        Text::new("FPS: --"),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(8.0),
-            bottom: Val::Px(8.0),
-            ..default()
-        },
-        TextFont { 
-            font: fonts.default_font.clone(),
-            font_size: 12.0, // Increased size
-            ..default()
-        },
-        TextColor(Color::srgb(1.0, 1.0, 1.0)), // Brighter color
-        FpsText,
-    ));
+
         
     // Cellular integrity bar (health bar)
     commands.spawn((
@@ -290,7 +275,7 @@ pub fn update_biological_ui(
     if let Ok((player, atp, evolution_system)) = player_query.single() {
         // Update ATP display
         if let Ok(mut atp_text) = atp_query.single_mut() {
-            **atp_text = format!("ATP: {}⚡", atp.amount);
+            **atp_text = format!("ATP: {}", atp.amount);
         }
         
         // Update evolution display
@@ -331,7 +316,7 @@ pub fn update_biological_ui(
 
     // Update environment status
     if let Ok(mut env_text) = environment_query.single_mut() {
-        **env_text = format!("pH: {:.1} | O₂: {:.0}%", 
+        **env_text = format!("pH: {:.1} | O2: {:.0}%", 
             environment.base_ph, 
             environment.base_oxygen * 100.0
         );

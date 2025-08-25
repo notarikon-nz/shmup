@@ -5,7 +5,7 @@ use crate::events::*;
 use std::f32::consts::TAU;
 use bevy::audio::*;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct TidalMovementIndicator {
     pub direction: Vec2,
     pub intensity: f32,
@@ -165,12 +165,16 @@ fn update_existing_tidal_indicators(
             commands.entity(entity).insert(AlreadyDespawned).despawn();
             continue;
         }
-        
+
+        let indicator_clone = indicator.clone();
+
         // Update indicator based on type
         match &mut indicator.indicator_type {
+
             TidalIndicatorType::CurrentFlow { strength } => {
+
                 // Animate current flow
-                let pulse = (indicator.lifetime * indicator.pulse_frequency).sin() * 0.5 + 0.5;
+                let pulse = (indicator_clone.lifetime * indicator_clone.pulse_frequency).sin() * 0.5 + 0.5;
                 let flow_intensity = *strength * pulse;
                 
                 // Move in current direction
@@ -204,7 +208,7 @@ fn update_existing_tidal_indicators(
             
             TidalIndicatorType::ThermalVentActivity { heat_level } => {
                 // Heat shimmer effect
-                let shimmer = (indicator.lifetime * 8.0).sin() * *heat_level * 3.0;
+                let shimmer = (indicator_clone.lifetime * 8.0).sin() * *heat_level * 3.0;
                 transform.translation.x += shimmer * delta_time;
                 
                 // Color shift from orange to white based on heat
@@ -239,13 +243,13 @@ fn update_existing_tidal_indicators(
             
             TidalIndicatorType::EcosystemStress { damage_rate } => {
                 // Stressed ecosystem particles
-                let stress_pulse = (indicator.lifetime * 4.0).sin().abs();
+                let stress_pulse = (indicator_clone.lifetime * 4.0).sin().abs();
                 sprite.color = Color::srgb(0.8, 0.8 * (1.0 - stress_pulse), 0.2);
                 
                 // Erratic movement for stress
                 let stress_movement = Vec2::new(
-                    (indicator.lifetime * 12.0).sin() * *damage_rate * 10.0,
-                    (indicator.lifetime * 15.0).cos() * *damage_rate * 8.0,
+                    (indicator_clone.lifetime * 12.0).sin() * *damage_rate * 10.0,
+                    (indicator_clone.lifetime * 15.0).cos() * *damage_rate * 8.0,
                 );
                 transform.translation += stress_movement.extend(0.0) * delta_time;
             }

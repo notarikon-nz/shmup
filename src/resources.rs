@@ -35,7 +35,6 @@ pub struct GameAssets {
     pub multiplier_powerup_texture: Handle<Image>,
     pub rapidfire_powerup_texture: Handle<Image>,
 
-    pub background_layers: Vec<Handle<Image>>,
     pub sfx_shoot: Handle<AudioSource>,
     pub sfx_explosion: Handle<AudioSource>,
     pub sfx_powerup: Handle<AudioSource>,
@@ -70,6 +69,7 @@ pub enum GameState {
     Playing,
     Paused,
     GameOver,
+    None,
 }
 
 #[derive(Resource, Default)]

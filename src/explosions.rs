@@ -4,6 +4,351 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 
+
+#[derive(Resource)]
+pub struct EntityPools {
+    pub available_particles: Vec<Entity>,
+    pub active_particles: Vec<Entity>,
+    pub available_explosions: Vec<Entity>,
+    pub active_explosions: Vec<Entity>,
+}
+
+impl Default for EntityPools {
+    fn default() -> Self {
+        Self {
+            available_particles: Vec::with_capacity(500),
+            active_particles: Vec::with_capacity(500),
+            available_explosions: Vec::with_capacity(20),
+            active_explosions: Vec::with_capacity(20),
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct PooledEntity {
+    pub pool_type: PoolType,
+    pub in_use: bool,
+}
+
+#[derive(Clone)]
+pub enum PoolType {
+    Particle,
+    Explosion,
+    Projectile,
+    DamageText,
+}
+
+// ===== BATCH PARTICLE SPAWNING =====
+struct ParticleData {
+    position: Vec3,
+    velocity: Vec2,
+    color: Color,
+    size: f32,
+    lifetime: f32,
+    drift_pattern: DriftPattern,
+}
+
+// ===== POOL INITIALIZATION =====
+pub fn init_entity_pools(mut commands: Commands) {
+    // Start with empty pools - entities will be created as needed
+    let pools = EntityPools::default();
+    commands.insert_resource(pools);
+}
+
+
+// ===== OPTIMIZED EXPLOSION SYSTEM =====
+pub fn optimized_explosion_system(
+    mut commands: Commands,
+    mut pools: ResMut<EntityPools>,
+    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), 
+        (With<Explosion>, Without<AlreadyDespawned>)>,
+    mut explosion_events: EventReader<SpawnExplosion>,
+    mut shake_events: EventWriter<AddScreenShake>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        // Handle new explosions
+        for event in explosion_events.read() {
+            let explosion_entity = if let Some(pooled_entity) = pools.available_explosions.pop() {
+                // Move from available to active
+                pools.active_explosions.push(pooled_entity);
+                pooled_entity
+            } else {
+                // Create new entity and add to active
+                let entity = commands.spawn_empty().id();
+                pools.active_explosions.push(entity);
+                entity
+            };
+
+            let explosion_type = get_explosion_type(&event.enemy_type);
+            let layers = create_optimized_layers(&explosion_type, event.intensity);
+            
+            shake_events.write(AddScreenShake { amount: event.intensity * 0.3 });
+            
+            // Insert all components fresh
+            commands.entity(explosion_entity).insert((
+                Sprite {
+                    image: assets.explosion_texture.clone(),
+                    color: get_explosion_color(&explosion_type),
+                    custom_size: Some(Vec2::splat(32.0 * event.intensity)),
+                    ..default()
+                },
+                Transform::from_translation(event.position),
+                Explosion {
+                    timer: 0.0,
+                    max_time: 1.0,
+                    intensity: event.intensity,
+                    explosion_type,
+                    layers,
+                    current_layer_index: 0,
+                },
+                PooledEntity { pool_type: PoolType::Explosion, in_use: true },
+            ));
+        }
+        
+        // Update explosions with batch particle spawning
+        let mut particles_to_spawn = Vec::new();
+        let mut completed_explosions = Vec::new();
+        
+        for (entity, mut explosion, mut transform, mut sprite) in explosion_query.iter_mut() {
+
+            let explosion_clone = explosion.clone();
+
+            explosion.timer += time.delta_secs();
+            
+            if explosion.timer >= explosion.max_time {
+                completed_explosions.push(entity);
+                continue;
+            }
+            
+            // Batch particle spawning - collect all particles to spawn
+            for layer in &mut explosion.layers {
+                if !layer.completed && explosion_clone.timer >= layer.delay {
+                    let layer_progress = (explosion_clone.timer - layer.delay) / layer.duration;
+                    
+                    if layer_progress >= 1.0 {
+                        layer.completed = true;
+                        continue;
+                    }
+                    
+                    // Collect particle data instead of spawning immediately
+                    collect_layer_particles(
+                        &mut particles_to_spawn, 
+                        &transform, 
+                        layer, 
+                        layer_progress,
+                        &explosion_clone.explosion_type
+                    );
+                }
+            }
+            
+            // Update main explosion
+            let progress = explosion_clone.timer / explosion_clone.max_time;
+            let scale = explosion_clone.intensity * (1.0 + progress * 0.8);
+            transform.scale = Vec3::splat(scale);
+            sprite.color.set_alpha((1.0 - progress).powi(2));
+        }
+        
+        // Clean up completed explosions
+        for entity in completed_explosions {
+            if let Some(index) = pools.active_explosions.iter().position(|&e| e == entity) {
+                pools.active_explosions.remove(index);
+                pools.available_explosions.push(entity);
+            }
+            
+            commands.entity(entity).remove::<(Explosion, Sprite, Transform)>();
+        }
+        
+        // Batch spawn all collected particles
+        batch_spawn_particles(&mut commands, &mut pools, &assets, particles_to_spawn);
+    }
+}
+
+
+// ===== HELPER FUNCTIONS =====
+fn get_explosion_type(enemy_type: &Option<EnemyType>) -> ExplosionType {
+    match enemy_type {
+        Some(EnemyType::InfectedMacrophage) => ExplosionType::Biological { 
+            toxin_release: true, 
+            membrane_rupture: true 
+        },
+        Some(EnemyType::BiofilmColony) => ExplosionType::Chemical { 
+            ph_change: -1.2, 
+            oxygen_release: 0.3 
+        },
+        Some(EnemyType::AggressiveBacteria) => ExplosionType::Biological { 
+            toxin_release: true, 
+            membrane_rupture: false 
+        },
+        _ => ExplosionType::Standard,
+    }
+}
+
+
+// ===== REDUCED EXPLOSION LAYERS =====
+fn create_optimized_layers(explosion_type: &ExplosionType, intensity: f32) -> Vec<ExplosionLayer> {
+    // Significantly fewer layers for performance
+    match explosion_type {
+        ExplosionType::Biological { .. } => vec![
+            ExplosionLayer {
+                phase: ExplosionPhase::Membrane,
+                delay: 0.0,
+                duration: 0.15, // Shorter duration
+                particle_count: (15.0 * intensity) as u32, // Reduced from 25
+                color_start: Color::srgb(0.8, 1.0, 0.7),
+                color_end: Color::srgba(0.4, 0.8, 0.6, 0.0),
+                size_range: (2.0, 6.0),
+                velocity_range: (Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0)),
+                completed: false,
+            },
+        ],
+        _ => vec![
+            ExplosionLayer {
+                phase: if intensity < 1.0 { ExplosionPhase::MiniBlast } else { ExplosionPhase::CoreBlast },
+                delay: 0.0,
+                duration: 0.25,
+                particle_count: (8.0 * intensity) as u32, // Reduced from 20
+                color_start: Color::srgb(1.0, 0.8, 0.4),
+                color_end: Color::srgba(1.0, 0.4, 0.2, 0.0),
+                size_range: (1.0, 4.0),
+                velocity_range: (Vec2::new(-120.0, -120.0), Vec2::new(120.0, 120.0)),
+                completed: false,
+            },
+        ]
+    }
+}
+
+fn collect_layer_particles(
+    particles: &mut Vec<ParticleData>,
+    transform: &Transform,
+    layer: &ExplosionLayer,
+    progress: f32,
+    explosion_type: &ExplosionType,
+) {
+    if progress > 0.3 { return; } // Only spawn early in layer
+    
+    // Reduced particle counts
+    let count = match layer.phase {
+        ExplosionPhase::Shockwave => 8,     // Was 12
+        ExplosionPhase::CoreBlast => 12,    // Was 40
+        ExplosionPhase::Membrane => 4,      // Was 6
+        ExplosionPhase::MiniBlast => 6,     // Was 10
+        _ => 3,
+    };
+    
+    for i in 0..count {
+        let angle = (i as f32 / count as f32) * std::f32::consts::TAU;
+        let speed = match layer.phase {
+            ExplosionPhase::Shockwave => 200.0,
+            ExplosionPhase::CoreBlast => 120.0,
+            _ => 80.0,
+        };
+        
+        particles.push(ParticleData {
+            position: transform.translation,
+            velocity: Vec2::from_angle(angle) * speed,
+            color: layer.color_start,
+            size: layer.size_range.0,
+            lifetime: 0.6, // Reduced from various values
+            drift_pattern: match explosion_type {
+                ExplosionType::Biological { .. } => DriftPattern::Floating,
+                _ => DriftPattern::Pulsing,
+            },
+        });
+    }
+}
+
+fn batch_spawn_particles(
+    commands: &mut Commands,
+    pools: &mut EntityPools,
+    assets: &GameAssets,
+    particle_data: Vec<ParticleData>,
+) {
+    const MAX_SPAWN_PER_FRAME: usize = 50; // Reduced limit
+    
+    for (i, data) in particle_data.iter().enumerate() {
+        if i >= MAX_SPAWN_PER_FRAME { break; }
+        
+        let particle_entity = if let Some(pooled_entity) = pools.available_particles.pop() {
+            // Move from available to active
+            pools.active_particles.push(pooled_entity);
+            pooled_entity
+        } else {
+            // Create new entity and add to active
+            let entity = commands.spawn_empty().id();
+            pools.active_particles.push(entity);
+            entity
+        };
+
+        commands.entity(particle_entity).insert((
+            Sprite {
+                image: assets.particle_texture.clone(),
+                color: data.color,
+                custom_size: Some(Vec2::splat(data.size)),
+                ..default()
+            },
+            Transform::from_translation(data.position).with_scale(Vec3::splat(data.size)),
+            Particle {
+                velocity: data.velocity,
+                lifetime: 0.0,
+                max_lifetime: data.lifetime,
+                size: data.size,
+                fade_rate: 1.0,
+                bioluminescent: false,
+                drift_pattern: data.drift_pattern,
+            },
+            PooledEntity { pool_type: PoolType::Particle, in_use: true },
+        ));
+    }
+}
+
+// ===== ADDITIONAL PERFORMANCE IMPROVEMENTS =====
+
+// Simplified particle defaults
+impl Default for Particle {
+    fn default() -> Self {
+        Self {
+            velocity: Vec2::ZERO,
+            lifetime: 0.0,
+            max_lifetime: 1.0,
+            size: 2.0,
+            fade_rate: 1.0,
+            bioluminescent: false,
+            drift_pattern: DriftPattern::Pulsing,
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ===== 
+
+
 pub fn consolidated_explosion_system(
     mut commands: Commands,
     mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), Without<AlreadyDespawned>>,

@@ -212,6 +212,7 @@ pub fn procedural_background_generation(
     chemical_environment: Res<ChemicalEnvironment>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
+    mut initial_generation: Local<bool>,
 ) {
     if let Ok(camera_transform) = camera_query.single() {
         if let Some(assets) = assets {
@@ -221,8 +222,29 @@ pub fn procedural_background_generation(
             bg_manager.environmental_state.current_strength = tidal_physics.current_strength;
             bg_manager.environmental_state.water_clarity = 0.9 - ecosystem.infection_level * 0.4;
             
-            // Generate new tiles ahead of camera
             let camera_y = camera_transform.translation.y;
+            
+            // Initial generation - populate entire view on first frame
+            if !*initial_generation {
+                *initial_generation = true;
+                
+                // Generate tiles across the entire visible area plus buffer
+                for y in -2..=3 {
+                    let tile_y = camera_y + (y as f32 * 200.0);
+                    for depth_layer in [0.1, 0.3, 0.5, 0.7, 0.8] { // More layers for richness
+                        generate_background_tile(
+                            &mut commands,
+                            &mut bg_manager,
+                            &assets,
+                            depth_layer,
+                            tile_y,
+                            time.elapsed_secs() + y as f32,
+                        );
+                    }
+                }
+            }
+            
+            // Normal generation - only ahead of camera
             let generation_threshold = camera_y + bg_manager.generation_distance;
             
             // Check each depth layer for tile generation needs

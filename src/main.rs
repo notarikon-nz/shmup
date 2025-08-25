@@ -1,7 +1,8 @@
 use bevy::prelude::*;
+use bevy_hanabi::prelude::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin};
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
 mod components;
 mod resources;
@@ -47,8 +48,12 @@ use debug::*;
 use background::*;
 use tidal_feedback::*;
 
+#[derive(Component)]
+struct PerfHudText;
+
 fn main() {
     App::new()
+        // ===== CORE BEVY SETUP =====
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Cosmic Tidal Pool".into(),
@@ -58,263 +63,295 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep water blue-black
+        .add_plugins(FrameTimeDiagnosticsPlugin::default()) // For FPS display
+        .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
+        .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep ocean background
 
-        .init_resource::<InputState>()
-        .init_resource::<EnemySpawner>()
-        .init_resource::<GameScore>()
-        .init_resource::<GameStarted>()
-        .init_resource::<ShootingState>()
-        .init_resource::<FluidEnvironment>()
-        .init_resource::<ChemicalEnvironment>()
-        .init_resource::<TidalPoolPhysics>()
-        .init_resource::<BioluminescenceManager>()
-        .init_resource::<EcosystemState>()
-        .init_resource::<ScreenShakeResource>()
-        .init_resource::<TidalState>()
-        .init_resource::<AchievementManager>()
-        .init_resource::<TidalFeedbackSystem>()
+        // ===== CORE GAME RESOURCES =====
+        .init_resource::<InputState>()           // Player input tracking (keyboard, gamepad)
+        .init_resource::<EnemySpawner>()         // Enemy wave spawning system
+        .init_resource::<GameScore>()            // Score tracking and high scores
+        .init_resource::<GameStarted>()          // Game initialization flag
+        .init_resource::<ShootingState>()        // Weapon firing rate modifiers
+        .init_resource::<ScreenShakeResource>()  // Screen shake for impact feedback
+        .init_resource::<AudioChannels>()
 
-        .init_state::<GameState>()
-        .add_event::<SpawnExplosion>()
-        .add_event::<SpawnEnemy>()
-        .add_event::<SpawnPowerUp>()
-        .add_event::<SpawnParticles>()
-        .add_event::<PlayerHit>()
-        .add_event::<AddScreenShake>()
-        .add_event::<EnemyHit>()
-        .add_event::<SpawnEnhancedExplosion>()
-        .add_event::<TidalEvent>()
-        .add_event::<AchievementEvent>()
+        // ===== BIOLOGICAL SYSTEMS RESOURCES =====
+        .init_resource::<FluidEnvironment>()     // Water current simulation grid
+        .init_resource::<ChemicalEnvironment>()  // pH zones and oxygen simulation
+        .init_resource::<TidalPoolPhysics>()     // Tide mechanics and king tide events
+        .init_resource::<BioluminescenceManager>() // Organic lighting system
+        .init_resource::<EcosystemState>()       // Environmental health tracking
+        .init_resource::<TidalState>()           // Tidal event state tracking
+        .init_resource::<AchievementManager>()   // Steam-ready achievement system
+        .init_resource::<TidalFeedbackSystem>()  // Visual feedback for tidal effects
+        .init_resource::<DiagnosticsStore>()
 
+        // ===== GAME STATE MANAGEMENT =====
+        .init_state::<GameState>() // Playing, Paused, GameOver states
+
+        // ===== CORE GAME EVENTS =====
+        .add_event::<SpawnExplosion>()          // Biological cell bursts and explosions
+        .add_event::<SpawnEnemy>()              // Dynamic enemy spawning with AI types
+        .add_event::<SpawnPowerUp>()            // Biological evolution power-ups
+        .add_event::<SpawnParticles>()          // Organic particle effects system
+        .add_event::<PlayerHit>()               // Player damage and invincibility frames
+        .add_event::<AddScreenShake>()          // Dynamic screen shake for impacts
+        .add_event::<EnemyHit>()                // Enemy flash effects when damaged
+        .add_event::<SpawnEnhancedExplosion>()  // Advanced explosion system
+        .add_event::<TidalEvent>()              // King tides, current reversals
+        .add_event::<AchievementEvent>()        // Achievement progression tracking
+
+        // ===== STARTUP SYSTEMS (Run Once) =====
         .add_systems(Startup, (
-            setup_camera, 
-            setup_biological_background, 
-            spawn_biological_player, 
-            load_biological_assets, 
-            load_game_fonts,
-            setup_biological_ui.after(load_game_fonts),
-            load_high_scores_from_file,
-            init_particle_pool,
-            init_fluid_environment, 
-            init_chemical_zones,
-            init_current_generator,
-            // init_tidal_state, // do we need this?
-            setup_achievement_system,
-            init_procedural_background,
-            // setup_audio.after(load_biological_assets),
-            start_ambient_music.after(load_biological_assets),
-            
-
+            setup_camera,                    // Initialize 2D camera with orthographic projection
+            setup_biological_background,    // Spawn current indicators and environmental elements
+            spawn_biological_player,        // Create player cell with fluid dynamics
+            load_biological_assets,         // Load unique enemy sprites and audio
+            load_game_fonts,                // Load custom game font
+            load_high_scores_from_file,     // Load persistent high score data
+            init_particle_pool,             // Pre-allocate particle system
+            init_fluid_environment,         // Initialize water current simulation
+            init_chemical_zones,            // Place initial pH and oxygen zones
+            init_current_generator,         // Set up thermal vents and major currents
+            setup_achievement_system,       // Initialize Steam-ready achievements
+            init_procedural_background,     // Set up dynamic background generation
+            start_ambient_music.after(load_biological_assets), // Begin ocean ambience
         ))
-        // FIXED: Separate systems into different Update groups to avoid query conflicts
+        .add_systems(Startup, (
+            setup_biological_ui,            // Create UI with biological terminology
+            setup_fps_ui,
+        ).after(load_game_fonts))
+
+        // ===== CORE GAME LOOP SYSTEMS =====
         .add_systems(Update, (
-            audio_system,
-            handle_pause_input,
+            audio_system,           // Play sound effects for shooting, explosions
+            handle_pause_input,     // ESC/P key pause toggle
+            fps_text_update_system,
         ))
+
+        // ===== PRIMARY GAMEPLAY SYSTEMS (Playing State Only) =====
         .add_systems(Update, (
-            handle_input,
-            biological_movement_system, 
-            enhanced_shooting_system,
-            spawn_enemies,
-            spawn_biological_powerups, 
-            spawn_evolution_powerups, 
 
-            track_achievements_system,
-            update_achievement_notifications,
+            // Core player and enemy interaction
+            handle_input,                    // Process keyboard/gamepad input
+            biological_movement_system,      // Player movement with fluid dynamics
+            enhanced_shooting_system,        // Evolution-based weapon systems
+            spawn_enemies,                   // Wave-based enemy spawning
+            spawn_biological_powerups,      // ATP and evolution power-ups
+            spawn_evolution_powerups,       // Advanced evolutionary upgrades
 
-            link_symbiotic_pairs,
-            spawn_evolution_chambers, 
+            // Achievement and progression tracking
+            track_achievements_system,       // Monitor progress for Steam achievements
+            update_achievement_notifications, // Display achievement unlock notifications
 
-            fps_system,
-
+            // Special enemy behaviors
+            link_symbiotic_pairs,           // Connect paired organisms
+            spawn_evolution_chambers,       // Player upgrade stations
         ).run_if(in_state(GameState::Playing)))
         
-        // procedural backgrounds
+        // ===== PROCEDURAL BACKGROUND SYSTEMS =====
         .add_systems(Update, (
-            procedural_background_generation,
-            update_background_particles,  
-            enhanced_parallax_system,
-            biological_feedback_system,
-            update_depth_of_field_focus,
+            procedural_background_generation, // Dynamic coral reefs, debris spawning
+            update_background_particles,     // Animate plankton, chemical particles
+            enhanced_parallax_system,        // Multi-layer scrolling backgrounds
+            biological_feedback_system,      // Environmental health indicators
+            update_depth_of_field_focus,    // Camera depth effects for immersion
+        ).run_if(in_state(GameState::None)))
+
+        // ===== ADVANCED AI SYSTEMS =====
+        .add_systems(Update, (
+            // Ecosystem simulation
+            adaptive_difficulty_system,      // Scale challenge to player evolution
+            chemical_trail_system,          // Pheromone tracking for AI
+            chemical_trail_following,       // Enemies follow chemical trails
+            ecosystem_balance_system,       // Population dynamics simulation
+
+            // Environmental storytelling
+            enhanced_coral_system,          // Dynamic coral health and corruption
+            contamination_visualization_system, // Show pollution effects
+            microscopic_debris_system,      // Story fragments in debris
+            bioluminescent_warning_system,  // Emergency lighting for dangers
+            environmental_narrative_system, // Dynamic environmental storytelling
         ).run_if(in_state(GameState::Playing)))
 
-        // Improved Enemy AI 
+        // ===== SPECIAL EFFECT SYSTEMS =====
         .add_systems(Update, (
-
-            // predator_prey_system, // accesses component(s) Transform in a way that conflicts with a previous system parameter
-            adaptive_difficulty_system,
-            chemical_trail_system,
-            chemical_trail_following,
-            ecosystem_balance_system,
-            enhanced_coral_system,
-            contamination_visualization_system,
-            microscopic_debris_system,
-            bioluminescent_warning_system,
-            environmental_narrative_system,
-
+            spawn_extra_life_powerups,      // Rare life-extending power-ups
+            extra_life_collection_system,   // Handle life gain with celebration
+            update_dynamic_lights,          // Bioluminescent lighting effects
+            render_light_effects,           // Convert lighting to visual sprites
         ).run_if(in_state(GameState::Playing)))
 
-        .add_systems(Update, (
-            spawn_extra_life_powerups,
-            extra_life_collection_system,
-            update_dynamic_lights,
-            render_light_effects,
-        ).run_if(in_state(GameState::Playing)))
-
-        // Fifth Update group - effect and cleanup systems
+        // ===== PARTICLE AND EFFECT SYSTEMS =====
         .add_systems(Update, (        
-            performance_optimization_system,
+            performance_optimization_system, // Limit entity processing per frame
             
-            
-            update_biological_effects,
-            update_temporary_evolution_effects,
-            consolidated_explosion_system, 
+            // Visual effects management
+            update_biological_effects,      // Player power-up timers and visuals
+            update_temporary_evolution_effects, // Temporary stat modifications
+            consolidated_explosion_system,  // Multi-layered explosion rendering
 
-            unified_particle_system, 
+            unified_particle_system,        // All particle types in one system
 
-            update_parallax,
-            cleanup_offscreen,
-            spawn_bioluminescent_trail,
+            // Environmental effects
+            update_parallax,                // Background layer scrolling
+            cleanup_offscreen,              // Remove entities outside play area
+            spawn_bioluminescent_trail,     // Player movement trail effects
         ).run_if(in_state(GameState::Playing)))
 
-        // Second Update group - projectile and movement systems
+        // ===== PROJECTILE AND MOVEMENT SYSTEMS =====
         .add_systems(Update, (
-            move_projectiles,
+            move_projectiles,               // Update all projectile positions
 
-            unified_weapon_update_system,
+            unified_weapon_update_system,   // Homing missiles, laser beams, toxin clouds
            
-            move_biological_powerups,
-            move_atp,
-            collect_atp_with_energy_transfer,
-
+            // Currency and upgrade systems
+            move_biological_powerups,       // Organic floating animation for power-ups
+            move_atp,                       // ATP energy particles with current response
+            collect_atp_with_energy_transfer, // Enhanced ATP collection with particles
         ).run_if(in_state(GameState::Playing)))
 
+        // ===== FEEDBACK AND UI SYSTEMS =====
         .add_systems(Update, (
-            update_cell_wall_timer,
-            enemy_flash_system,
-            screen_shake_system,
+            update_cell_wall_timer,         // Shield timer display
+            enemy_flash_system,             // Flash enemies white when hit
+            screen_shake_system,            // Camera shake for impacts
 
-            // TIDAL FEEDBACK
-            enhanced_tidal_feedback_system,
-            update_fluid_motion_visualizers, 
-            update_tidal_wave_effects,
-            tidal_audio_feedback_system,
-            tidal_movement_response_system,            
+            // Advanced tidal feedback systems
+            enhanced_tidal_feedback_system, // Visual indicators for currents/tides
+            update_fluid_motion_visualizers, // Current flow visualization
+            update_tidal_wave_effects,      // King tide wave propagation
+            tidal_audio_feedback_system,    // Sound cues for tidal events
+            tidal_movement_response_system, // Enhanced player response to currents
         ).run_if(in_state(GameState::Playing)))
 
-        // Third Update group - enemy systems (separate from projectile systems)
+        // ===== ENEMY AI AND COMBAT SYSTEMS =====
         .add_systems(Update, (
-            enemy_shooting,
-            turret_shooting,
-            move_enemies,
-            update_spawner_enemies,
-            update_formations,
-            formation_coordination_system,
-            procedural_colony_spawning,
+            enemy_shooting,                 // Enemy projectile attacks
+            turret_shooting,                // Biofilm colony ranged attacks
+            move_enemies,                   // All enemy movement AI patterns
+            update_spawner_enemies,         // Reproductive vesicle offspring spawning
+            update_formations,              // Colony coordination and movement
+            formation_coordination_system,  // Chemical signaling between colony members
+            procedural_colony_spawning,     // Dynamic enemy group generation
         ).run_if(in_state(GameState::Playing)))
-        // Fourth Update group - collision and interaction systems
+
+        // ===== COLLISION AND INTERACTION SYSTEMS =====
         .add_systems(Update, (            
-            collision_system, 
-            atp_pickup_system, 
-            evolution_powerup_collection,
-            evolution_chamber_interaction,
-            handle_biological_powerup_collection,
+            collision_system,               // All projectile-enemy-player collisions
+            atp_pickup_system,              // Energy collection from defeated enemies
+            evolution_powerup_collection,   // Evolutionary upgrade collection
+            evolution_chamber_interaction,  // Player upgrades at evolution chambers
+            handle_biological_powerup_collection, // Power-up effects application
+            damage_text_system,             // Floating combat damage numbers
         ).run_if(in_state(GameState::Playing)))
 
-        // Sixth Update group - biological environment systems
+        // ===== BIOLOGICAL ENVIRONMENT SIMULATION =====
         .add_systems(Update, (
-            damage_text_system,
-            fluid_dynamics_system,
-            chemical_environment_system,
-            update_current_field,
-            organic_ai_system,
-            generate_procedural_currents,
-            cell_division_system,
-            symbiotic_pair_system,
-            thermal_vent_effects_system,
-            dynamic_chemical_zone_system,
-            scroll_thermal_vents,
-        ).run_if(in_state(GameState::Playing)))
+            
+            fluid_dynamics_system,          // Water current field generation
+            chemical_environment_system,    // pH and oxygen zone simulation
+            update_current_field,           // Current indicator visualization
+            organic_ai_system,              // Biological AI behaviors (chemotaxis, etc.)
+            generate_procedural_currents,   // Dynamic current pattern generation
+            cell_division_system,           // Enemy reproduction mechanics
+            symbiotic_pair_system,          // Paired organism death mechanics
+            thermal_vent_effects_system,    // Heat effects and thermal particles
+            dynamic_chemical_zone_system,   // Adaptive chemical zone spawning
+            scroll_thermal_vents,           // Move thermal vents with current
+        ).run_if(in_state(GameState::None)))
 
-        // TIDAL MECHANICS GROUP
-
+        // ===== TIDAL MECHANICS SYSTEMS =====
         .add_systems(Update, (
-            advanced_tidal_system, // PROBLEM with apply_tidal_effects
-            process_tidal_events,
-            update_king_tide,
-            update_tidal_debris,
-        ).run_if(in_state(GameState::Playing)))
+            advanced_tidal_system,          // King tide events, tidal cycles
+            process_tidal_events,           // Handle tidal event responses
+            update_king_tide,               // King tide duration and effects
+            update_tidal_debris,            // Debris movement during king tides
+        ).run_if(in_state(GameState::None)))
 
-        // Chemical Environment Effects
+        // ===== CHEMICAL AND ENVIRONMENTAL EFFECTS =====
         .add_systems(Update, (
-            apply_chemical_damage_system,
-            pheromone_communication_system,
-            ecosystem_monitoring_system,
-        ).run_if(in_state(GameState::Playing)))
+            apply_chemical_damage_system,   // pH and oxygen damage to entities
+            pheromone_communication_system, // Colony chemical coordination
+            ecosystem_monitoring_system,    // Track ecosystem health metrics
+        ).run_if(in_state(GameState::None)))
 
-        // animation systems
+        // ===== ENEMY VISUAL ANIMATION SYSTEMS =====
         .add_systems(Update, (
-            signal_particle_spawning,
-            virus_pulsing_animation,
-            bacteria_flagella_animation,
-            corruption_color_shift,
-            warning_flash_animation,
-            offspring_wiggle_animation,
-            pseudopod_animation,
-            gestation_animation,
-            toxic_aura_animation,
+            signal_particle_spawning,       // Coordination indicators for swarm cells
+            virus_pulsing_animation,        // Viral particle size pulsing
+            bacteria_flagella_animation,    // Bacterial undulation movement
+            corruption_color_shift,         // Color changes for corrupted enemies
+            warning_flash_animation,        // Warning flashes for dangerous enemies
+            offspring_wiggle_animation,     // Juvenile organism movement
+            pseudopod_animation,            // Protozoa shape-shifting animation
+            gestation_animation,            // Reproductive vesicle growth animation
+            toxic_aura_animation,           // Biofilm colony toxin particle emission
         ).run_if(in_state(GameState::Playing)))
 
-        // Event processing systems
+        // ===== EVENT PROCESSING SYSTEMS =====
         .add_systems(Update, (
-            spawn_explosion_system,
-            spawn_enemy_system,
-            spawn_powerup_system,
-            spawn_particles_system,
-            spawn_atp_on_death,
-            handle_player_hit,
-            update_health_bar,
-            check_game_over,
-            handle_restart_input,
+            spawn_explosion_system,         // Create explosion entities from events
+            spawn_enemy_system,             // Create enemy entities from events
+            spawn_powerup_system,           // Create power-up entities from events
+            spawn_particles_system,         // Create particle effects from events
+            spawn_atp_on_death,             // Drop ATP currency when enemies die
+            handle_player_hit,              // Process player damage and lives
+            update_health_bar,              // Update UI health display
+            check_game_over,                // Transition to game over state
+            handle_restart_input,           // R key restart functionality
         ).run_if(in_state(GameState::Playing)))
 
-        // User Interface
+        // ===== USER INTERFACE SYSTEMS =====
         .add_systems(Update, (
-
-            update_cell_wall_timer_ui,
-            update_evolution_ui,
-            update_tidal_ui,
-            update_biological_ui,
-
+            update_cell_wall_timer_ui,      // Shield duration display
+            update_evolution_ui,            // Evolution chamber upgrade menu
+            update_tidal_ui,                // Tide status indicator
+            update_biological_ui,           // ATP, score, lives, ecosystem status
         ).run_if(in_state(GameState::Playing)))
-        // Debug Systems
+
+        // ===== DEBUG SYSTEMS (Development Only) =====
         .add_systems(Update, (
-            debug_atp_spawner,
-            debug_spawn_evolution_chamber,
-            debug_trigger_king_tide,
+            debug_atp_spawner,              // F2: Spawn 1000 ATP for testing
+            debug_spawn_evolution_chamber,  // F3: Spawn evolution chamber
+            debug_trigger_king_tide,        // F4: Force trigger king tide event
         ).run_if(in_state(GameState::Playing)))
 
-        // Game Over
-        .add_systems(OnEnter(GameState::GameOver), (save_high_score_to_file, enhanced_game_over_ui).chain())
+        // ===== GAME STATE TRANSITION SYSTEMS =====
+        
+        // When transitioning TO game over state
+        .add_systems(OnEnter(GameState::GameOver), (
+            save_high_score_to_file,        // Persist high score data
+            enhanced_game_over_ui            // Show detailed stats and high score table
+        ).chain()) // Ensure save happens before UI
+        
+        // When leaving game over state
         .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
+        
+        // When starting/restarting a game
         .add_systems(OnEnter(GameState::Playing), reset_biological_game_state)
         
-        // Game Paused
+        // Pause state management
         .add_systems(OnEnter(GameState::Paused), setup_pause_ui)
         .add_systems(OnExit(GameState::Paused), cleanup_pause_ui)
+        
+        // Game over input handling
         .add_systems(Update, (
-            handle_restart_button,
+            handle_restart_button,          // UI button for restarting
         ).run_if(in_state(GameState::GameOver)))
 
         .run();
 }
 
+// ===== INITIALIZATION HELPER FUNCTIONS =====
+
+/// Initialize tidal state tracking for king tides and debris
 pub fn init_tidal_state(mut commands: Commands) {
     commands.init_resource::<TidalState>();
 }
 
+/// Set up Steam-ready achievement system with progress tracking
 pub fn setup_achievement_system(mut commands: Commands) {
     let mut achievement_manager = achievements::initialize_achievements();
     
@@ -330,7 +367,8 @@ pub fn setup_achievement_system(mut commands: Commands) {
     commands.insert_resource(achievement_manager);
 }
 
-// Enhanced player spawning with biological properties
+/// Spawn the player cell with advanced biological properties
+/// Includes fluid dynamics, chemical sensitivity, and evolution system
 pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let texture = asset_server.load("textures/player.png");
     
@@ -373,7 +411,7 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
 
 
 
-// New biological background with organic elements
+/// Set up environmental background elements with current indicators
 pub fn setup_biological_background(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // Add some ambient current indicators
@@ -396,7 +434,7 @@ pub fn setup_biological_background(mut commands: Commands, asset_server: Res<Ass
     }
 }
 
-// Load biological-themed assets
+/// Load all game assets including unique enemy sprites and biological sound effects
 pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     let assets = GameAssets {
         // Player and general
@@ -426,11 +464,6 @@ pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetSer
         rapidfire_powerup_texture: asset_server.load("textures/weapon_powerup.png"),
         
         // Background and audio (existing)
-        background_layers: vec![
-            asset_server.load("textures/bg_layer1.png"),
-            asset_server.load("textures/bg_layer2.png"),
-            asset_server.load("textures/bg_layer3.png"),
-        ],
         sfx_shoot: asset_server.load("audio/organic_pulse.ogg"),
         sfx_explosion: asset_server.load("audio/cell_burst.ogg"),
         sfx_powerup: asset_server.load("audio/evolution.ogg"),
@@ -439,7 +472,7 @@ pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetSer
     commands.insert_resource(assets);
 }
 
-// Initialize fluid environment
+/// Initialize the fluid dynamics simulation grid for water currents
 pub fn init_fluid_environment(mut commands: Commands) {
     commands.insert_resource(FluidEnvironment {
         current_field: vec![Vec2::ZERO; 64 * 64],
@@ -450,7 +483,7 @@ pub fn init_fluid_environment(mut commands: Commands) {
     });
 }
 
-// Initialize chemical zones
+/// Place initial chemical zones for pH and oxygen simulation
 pub fn init_chemical_zones(mut commands: Commands) {
     commands.insert_resource(ChemicalEnvironment {
         ph_zones: vec![
@@ -483,7 +516,8 @@ pub fn init_chemical_zones(mut commands: Commands) {
 
 
 
-// Enhanced game reset with biological state
+/// Reset all game state when starting a new game
+/// Despawns all entities and respawns the player
 pub fn reset_biological_game_state(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
@@ -585,6 +619,7 @@ pub fn reset_biological_game_state(
     }
 }
 
+/// Load game fonts for UI display
 pub fn load_game_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
     let fonts = GameFonts {
         default_font: asset_server.load("fonts/planetary_contact.ttf"),
@@ -593,7 +628,7 @@ pub fn load_game_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 
-// New biological movement system
+/// Enhanced player movement with fluid dynamics and organic motion
 pub fn biological_movement_system(
     mut player_query: Query<(&mut Transform, &mut FluidDynamics, &Player)>,
     input_state: Res<InputState>,
@@ -941,3 +976,56 @@ pub fn init_current_generator(mut commands: Commands) {
 }
 
 
+fn setup_fps_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(5.0),
+                left: Val::Px(5.0),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("FPS: ... | ms: ... | Entities: ..."),
+                TextFont {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                PerfHudText,
+            ));
+        });
+}
+
+fn fps_text_update_system(
+    diagnostics: Res<DiagnosticsStore>,
+    all_entities: Query<Entity>, // ✅ safe way to count entities
+    mut query: Query<&mut Text, With<PerfHudText>>,
+) {
+    if let Ok(mut text) = query.get_single_mut() {
+        // FPS
+        let fps = diagnostics
+            .get(&FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|fps| fps.smoothed())
+            .unwrap_or(0.0);
+
+        // Frame time (ms)
+        let frametime = diagnostics
+            .get(&FrameTimeDiagnosticsPlugin::FRAME_TIME)
+            .and_then(|ft| ft.smoothed())
+            .map(|s| s * 1000.0)
+            .unwrap_or(0.0);
+
+        // Entity count
+        let entity_count = all_entities.iter().len();
+
+        *text = Text::new(format!(
+            "FPS: {:>5.0} | {:>5.0} ms | Entities: {}",
+            fps, frametime, entity_count
+        ));
+    }
+}

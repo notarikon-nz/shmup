@@ -14,7 +14,7 @@ pub fn setup_camera(mut commands: Commands) {
         Camera2d,
         Projection::from(OrthographicProjection {
             scaling_mode: ScalingMode::FixedVertical { 
-                viewport_height: 720.0 
+                viewport_height: 720.0
             },
             ..OrthographicProjection::default_2d()
         }),
@@ -129,8 +129,8 @@ pub fn cleanup_offscreen(
     )>,
 ) {
     for (entity, transform) in query.iter() {
-        if transform.translation.y < -800.0 || transform.translation.y > 800.0 ||
-           transform.translation.x < -800.0 || transform.translation.x > 800.0 {
+        if transform.translation.y < -600.0 || transform.translation.y > 600.0 ||
+           transform.translation.x < -600.0 || transform.translation.x > 600.0 {
             commands.entity(entity)
                 .try_insert(AlreadyDespawned)
                 .despawn();
@@ -789,24 +789,7 @@ pub fn collision_system(
 }
 
 
-// BEGIN FPS
-pub fn fps_system(
-    diagnostics: Res<DiagnosticsStore>, 
-    mut query: Query<&mut Text, With<FpsText>>
-) {
 
-    if let Ok(mut fps_text) = query.single_mut() {
-        if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(value) = fps.smoothed() {
-                **fps_text = format!("FPS: {:.0}", value);
-            } else {
-                **fps_text = format!("FPS: --");
-            }
-        } else {
-                **fps_text = format!("FPS: N/A");
-        }
-    }
-}
 
 
 
@@ -941,21 +924,40 @@ pub fn screen_shake_system(
 
 
 
+
 pub fn performance_optimization_system(
     mut commands: Commands,
-    entity_query: Query<Entity, (Or<(With<Particle>, With<Enemy>, With<Projectile>)>, Without<AlreadyDespawned>)>,
-    camera_query: Query<&Transform, With<Camera2d>>,
+    particle_query: Query<Entity, (With<Particle>, Without<AlreadyDespawned>)>,
+    explosion_query: Query<Entity, (With<Explosion>, Without<AlreadyDespawned>)>,
+    audio_query: Query<Entity, (With<AudioPlayer>, Without<AlreadyDespawned>)>,
+    time: Res<Time>,
+    mut cleanup_timer: Local<f32>,
 ) {
-    if let Ok(camera_transform) = camera_query.single() {
-        let mut entities_processed = 0;
-        const MAX_ENTITIES_PER_FRAME: usize = 100;
+    *cleanup_timer += time.delta_secs();
+    
+    // Aggressive cleanup every 2 seconds during high entity counts
+    if *cleanup_timer >= 2.0 {
+        *cleanup_timer = 0.0;
         
-        for entity in entity_query.iter() {
-            // Could add distance culling here for very far entities
-            entities_processed += 1;
-            if entities_processed >= MAX_ENTITIES_PER_FRAME {
-                break;
+        let total_entities = particle_query.iter().count() + explosion_query.iter().count();
+        
+        if total_entities > 200 {
+            // Remove oldest particles first
+            let mut particles: Vec<Entity> = particle_query.iter().collect();
+            let remove_count = (total_entities - 150).min(particles.len());
+            
+            for &entity in particles.iter().take(remove_count) {
+                commands.entity(entity)
+                    .try_insert(AlreadyDespawned)
+                    .despawn();
             }
+        }
+        
+        // Clean up finished audio
+        let audio_count = audio_query.iter().count();
+        if audio_count > 10 {
+            // This would need a more sophisticated system to track audio completion
+            println!("High audio entity count: {}", audio_count);
         }
     }
 }
