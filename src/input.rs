@@ -406,18 +406,17 @@ pub fn input_update_system(
     mut input_manager: ResMut<InputManager>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
-    gamepad_query: Query<Entity, With<Gamepad>>,
-    gamepad_buttons: Res<ButtonInput<GamepadButton>>,
-    gamepad_axis: Res<Axis<GamepadAxis>>,
+    gamepad_query: Query<(Entity, &Gamepad)>,
 ) {
     // Store previous states for edge detection
     input_manager.previous_states = input_manager.current_states.clone();
     
     // Auto-detect gamepad if none is active
     if input_manager.active_gamepad.is_none() {
-        if let Some(gamepad_entity) = gamepad_query.iter().next() {
-            // In Bevy 0.16, Gamepad is just the Entity itself
-            input_manager.set_active_gamepad(gamepad_entity);
+        // Get the first gamepad entity
+        if let Some((entity, _gamepad)) = gamepad_query.iter().next() {
+            // Store the Entity directly as the gamepad identifier
+            input_manager.set_active_gamepad(entity);
         }
     }
     
@@ -448,32 +447,34 @@ pub fn input_update_system(
             }
         }
         
-        // Check gamepad input
-        if let (Some(gamepad_binding), Some(gamepad)) = (&binding.gamepad, input_manager.active_gamepad) {
-            // Check button
-            if let Some(button_type) = gamepad_binding.button {
-                // In Bevy 0.16.1, GamepadButton variants are used directly with ButtonInput
-                if gamepad_buttons.pressed(button_type) {
-                    pressed = true;
-                    analog_value = 1.0;
+        // Check gamepad input using the Gamepad component directly
+        if let (Some(gamepad_binding), Some(gamepad_entity)) = (&binding.gamepad, input_manager.active_gamepad) {
+            if let Ok((_entity, gamepad)) = gamepad_query.get(gamepad_entity) {
+                // Check button
+                if let Some(button_type) = gamepad_binding.button {
+                    // In Bevy 0.16.1, use gamepad.pressed() directly
+                    if gamepad.pressed(button_type) {
+                        pressed = true;
+                        analog_value = 1.0;
+                    }
                 }
-            }
-            
-            // Check axis
-            if let Some((axis_type, threshold)) = gamepad_binding.axis {
-                // In Bevy 0.16.1, GamepadAxis variants are used directly with Axis<GamepadAxis>
-                if let Some(axis_value) = gamepad_axis.get(axis_type) {
-                    let abs_value = axis_value.abs();
-                    if abs_value >= threshold {
-                        let normalized_value = if gamepad_binding.axis_negative {
-                            if axis_value < -threshold { -axis_value } else { 0.0 }
-                        } else {
-                            if axis_value > threshold { axis_value } else { 0.0 }
-                        };
-                        
-                        analog_value = normalized_value.clamp(0.0, 1.0);
-                        if analog_value > 0.0 {
-                            pressed = true;
+                
+                // Check axis
+                if let Some((axis_type, threshold)) = gamepad_binding.axis {
+                    // In Bevy 0.16.1, use gamepad.get() directly
+                    if let Some(axis_value) = gamepad.get(axis_type) {
+                        let abs_value = axis_value.abs();
+                        if abs_value >= threshold {
+                            let normalized_value = if gamepad_binding.axis_negative {
+                                if axis_value < -threshold { -axis_value } else { 0.0 }
+                            } else {
+                                if axis_value > threshold { axis_value } else { 0.0 }
+                            };
+                            
+                            analog_value = normalized_value.clamp(0.0, 1.0);
+                            if analog_value > 0.0 {
+                                pressed = true;
+                            }
                         }
                     }
                 }
@@ -546,6 +547,7 @@ pub fn handle_restart_input(
         next_state.set(GameState::Playing);
     }
 }
+
 
 // ===== PLUGIN SETUP =====
 pub struct InputPlugin;

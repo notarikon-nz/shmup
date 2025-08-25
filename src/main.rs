@@ -4,6 +4,7 @@ use bevy::input::gamepad::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use crate::lighting::PerformantLightingPlugin;
 
 mod components;
 mod resources;
@@ -70,6 +71,7 @@ fn main() {
         .add_plugins(FrameTimeDiagnosticsPlugin::default()) // For FPS display
         .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
         .add_plugins(input::InputPlugin)        // Remappable input (keyboard, gamepad)
+        .add_plugins(PerformantLightingPlugin)
 
         .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep ocean background
 
@@ -169,8 +171,8 @@ fn main() {
         .add_systems(Update, (
             // Ecosystem simulation
             adaptive_difficulty_system,      // Scale challenge to player evolution
-            chemical_trail_system,          // Pheromone tracking for AI
-            chemical_trail_following,       // Enemies follow chemical trails
+            // chemical_trail_system,          // Pheromone tracking for AI - can ause a panic with despawn
+            // chemical_trail_following,       // Enemies follow chemical trails
             ecosystem_balance_system,       // Population dynamics simulation
 
             // Environmental storytelling
@@ -185,8 +187,8 @@ fn main() {
         .add_systems(Update, (
             spawn_extra_life_powerups,      // Rare life-extending power-ups
             extra_life_collection_system,   // Handle life gain with celebration
-            update_dynamic_lights,          // Bioluminescent lighting effects
-            render_light_effects,           // Convert lighting to visual sprites
+            // update_dynamic_lights,          // Bioluminescent lighting effects
+            // render_light_effects,           // Convert lighting to visual sprites
         ).run_if(in_state(GameState::Playing)))
 
         // ===== PARTICLE AND EFFECT SYSTEMS =====
