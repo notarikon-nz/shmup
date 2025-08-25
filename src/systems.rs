@@ -6,6 +6,7 @@ use crate::events::*;
 use crate::achievements::*;
 use crate::enemy_types::*;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
+use crate::input::*;
 
 // ===== GENERIC SYSTEMS (unchanged) =====
 
@@ -35,59 +36,18 @@ pub fn handle_pause_input(
     }
 }
 
-pub fn handle_input(
-    mut input_state: ResMut<InputState>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    gamepads: Query<(Entity, &Gamepad)>,
+
+pub fn handle_input_legacy(
+    input_manager: Res<InputManager>,
+    mut legacy_input_state: ResMut<OldInputState>,  // Keep for backward compatibility
 ) {
-    if input_state.gamepad.is_none() {
-        if let Some((entity, _)) = gamepads.iter().next() {
-            input_state.gamepad = Some(entity);
-        }
-    }
+    // Update legacy InputState for systems that haven't been converted yet
+    legacy_input_state.movement = input_manager.movement_vector();
+    legacy_input_state.shooting = input_manager.pressed(InputAction::Shoot);
     
-    let mut movement = Vec2::ZERO;
-    
-    // Keyboard input
-    if keyboard.pressed(KeyCode::ArrowLeft) || keyboard.pressed(KeyCode::KeyA) {
-        movement.x -= 1.0;
-    }
-    if keyboard.pressed(KeyCode::ArrowRight) || keyboard.pressed(KeyCode::KeyD) {
-        movement.x += 1.0;
-    }
-    if keyboard.pressed(KeyCode::ArrowUp) || keyboard.pressed(KeyCode::KeyW) {
-        movement.y += 1.0;
-    }
-    if keyboard.pressed(KeyCode::ArrowDown) || keyboard.pressed(KeyCode::KeyS) {
-        movement.y -= 1.0;
-    }
-    
-    // Gamepad input
-    if let Some(gamepad_entity) = input_state.gamepad {
-        if let Ok((_, gamepad)) = gamepads.get(gamepad_entity) {
-            let left_stick_x = gamepad.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
-            let left_stick_y = gamepad.get(GamepadAxis::LeftStickY).unwrap_or(0.0);
-            
-            movement += Vec2::new(left_stick_x, left_stick_y);
-        }
-    }
-    
-    input_state.movement = movement.clamp_length_max(1.0);
-    
-    // Shooting input
-    let mut shooting = keyboard.pressed(KeyCode::Space) || mouse.pressed(MouseButton::Left);
-    
-    if let Some(gamepad_entity) = input_state.gamepad {
-        if let Ok((_, gamepad)) = gamepads.get(gamepad_entity) {
-            if gamepad.pressed(GamepadButton::RightTrigger2) {
-                shooting = true;
-            }
-        }
-    }
-    
-    input_state.shooting = shooting;
+    // You can remove this system once all systems are converted to use InputManager directly
 }
+
 
 pub fn init_particle_pool(mut commands: Commands) {
     commands.insert_resource(ParticlePool {
@@ -207,7 +167,7 @@ pub fn check_game_over(
 }
 
 
-
+/*
 pub fn handle_restart_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut next_state: ResMut<NextState<GameState>>,
@@ -216,6 +176,7 @@ pub fn handle_restart_input(
         next_state.set(GameState::Playing);
     }
 }
+*/
 
 pub fn handle_restart_button(
     mut interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<RestartButton>)>,

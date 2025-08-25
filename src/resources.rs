@@ -48,7 +48,7 @@ pub struct ParticlePool {
 }
 
 #[derive(Resource, Default)]
-pub struct InputState {
+pub struct OldInputState {
     pub movement: Vec2,
     pub shooting: bool,
     pub shoot_timer: f32,

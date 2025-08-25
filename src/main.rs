@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_hanabi::prelude::*;
+use bevy::input::gamepad::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
@@ -25,6 +26,7 @@ mod debug;
 mod achievements;
 mod background;
 mod tidal_feedback;
+mod input;
 
 use components::*;
 use resources::*;
@@ -47,6 +49,8 @@ use achievements::*;
 use debug::*;
 use background::*;
 use tidal_feedback::*;
+use input::*;
+
 
 #[derive(Component)]
 struct PerfHudText;
@@ -65,10 +69,12 @@ fn main() {
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default()) // For FPS display
         .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
+        .add_plugins(input::InputPlugin)        // Remappable input (keyboard, gamepad)
+
         .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep ocean background
 
         // ===== CORE GAME RESOURCES =====
-        .init_resource::<InputState>()           // Player input tracking (keyboard, gamepad)
+        .init_resource::<OldInputState>()        // Legacy Input (Temporary)
         .init_resource::<EnemySpawner>()         // Enemy wave spawning system
         .init_resource::<GameScore>()            // Score tracking and high scores
         .init_resource::<GameStarted>()          // Game initialization flag
@@ -126,7 +132,7 @@ fn main() {
         // ===== CORE GAME LOOP SYSTEMS =====
         .add_systems(Update, (
             audio_system,           // Play sound effects for shooting, explosions
-            handle_pause_input,     // ESC/P key pause toggle
+            // handle_pause_input,     // ESC/P key pause toggle
             fps_text_update_system,
         ))
 
@@ -134,7 +140,7 @@ fn main() {
         .add_systems(Update, (
 
             // Core player and enemy interaction
-            handle_input,                    // Process keyboard/gamepad input
+            handle_input_legacy,             // Process keyboard/gamepad input
             biological_movement_system,      // Player movement with fluid dynamics
             enhanced_shooting_system,        // Evolution-based weapon systems
             spawn_enemies,                   // Wave-based enemy spawning
@@ -522,7 +528,7 @@ pub fn reset_biological_game_state(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
     mut enemy_spawner: ResMut<EnemySpawner>,
-    mut input_state: ResMut<InputState>,
+    mut input_state: ResMut<OldInputState>,
     mut game_started: ResMut<GameStarted>,
     mut shooting_state: ResMut<ShootingState>,
     mut fluid_environment: ResMut<FluidEnvironment>,
@@ -631,13 +637,16 @@ pub fn load_game_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
 /// Enhanced player movement with fluid dynamics and organic motion
 pub fn biological_movement_system(
     mut player_query: Query<(&mut Transform, &mut FluidDynamics, &Player)>,
-    input_state: Res<InputState>,
+    input_manager: Res<InputManager>, // Changed from InputState
     fluid_environment: Res<FluidEnvironment>,
     time: Res<Time>,
 ) {
     if let Ok((mut transform, mut fluid, player)) = player_query.single_mut() {
+        // Get movement vector from input manager
+        let movement = input_manager.movement_vector(); // Smooth analog movement
+        
         // Player input creates thrust against fluid resistance
-        let thrust = input_state.movement * player.speed * 2.0;
+        let thrust = movement * player.speed * 2.0;
         
         // Sample current from fluid field
         let grid_pos = world_to_grid_pos(transform.translation.truncate(), &fluid_environment);
@@ -660,7 +669,7 @@ pub fn biological_movement_system(
         
         // Organic roll motion based on fluid flow
         let flow_influence = (fluid.velocity.x + current.x) * 0.001;
-        let target_roll = -input_state.movement.x * player.roll_factor + flow_influence;
+        let target_roll = -movement.x * player.roll_factor + flow_influence;
         transform.rotation = transform.rotation.lerp(
             Quat::from_rotation_z(target_roll),
             time.delta_secs() * 6.0
@@ -758,7 +767,7 @@ pub fn update_organic_particles(
 pub fn spawn_bioluminescent_trail(
     mut commands: Commands,
     player_query: Query<&Transform, With<EngineTrail>>,
-    input_state: Res<InputState>,
+    input_manager: Res<InputManager>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
     mut trail_segments: Local<Vec<Vec3>>,
@@ -768,7 +777,7 @@ pub fn spawn_bioluminescent_trail(
     
     if *spawn_timer <= 0.0 {
         for transform in player_query.iter() {
-            let intensity = input_state.movement.length().max(0.2);
+            let intensity = input_manager.movement_vector().length().max(0.2);
             
             // Add new trail segment
             trail_segments.push(transform.translation + Vec3::new(0.0, -18.0, -0.1));

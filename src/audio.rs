@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::audio::*;
 use crate::resources::*;
 use crate::events::*;
+use crate::input::*;
 
 #[derive(Resource)]
 pub struct AudioChannels {
@@ -22,7 +23,7 @@ pub fn audio_system(
     mut commands: Commands,
     mut explosion_events: EventReader<SpawnExplosion>,
     mut powerup_events: EventReader<SpawnPowerUp>,
-    input_state: Res<InputState>,
+    input_manager: Res<InputManager>,
     assets: Option<Res<GameAssets>>,
     mut channels: ResMut<AudioChannels>,
     time: Res<Time>,
@@ -40,7 +41,7 @@ pub fn audio_system(
     channels.shoot_time -= time.delta_secs();
     
     // Shooting - throttled
-    if input_state.shooting && channels.shoot_time <= 0.0 {
+    if input_manager.pressed(InputAction::Shoot) && channels.shoot_time <= 0.0 {
         commands.spawn((
             AudioPlayer::new(assets.sfx_shoot.clone()),
             PlaybackSettings::DESPAWN.with_volume(Volume::Linear(0.3)),

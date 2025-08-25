@@ -4,6 +4,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::achievements::*;
+use crate::input::*;
 
 // FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
@@ -151,7 +152,7 @@ pub fn move_atp(
 // Evolution Chamber interaction (renamed from upgrade_station_interaction)
 pub fn evolution_chamber_interaction(
     commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input_manager: Res<InputManager>, // Changed from keyboard
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
     mut player_query: Query<(&Transform, &mut ATP, &mut EvolutionSystem, &mut CellularUpgrades), With<Player>>,
 ) {
@@ -159,46 +160,42 @@ pub fn evolution_chamber_interaction(
         for chamber_transform in chamber_query.iter() {
             let distance = player_transform.translation.distance(chamber_transform.translation);
             if distance < 80.0 {
-                // Player is near evolution chamber
-                if keyboard.just_pressed(KeyCode::Digit1) && atp.amount >= 10 {
+                // Player is near evolution chamber - use new input actions
+                
+                if input_manager.just_pressed(InputAction::UpgradeDamage) && atp.amount >= 10 {
                     atp.amount -= 10;
                     upgrades.damage_amplification *= 1.2;
                     evolution_system.cellular_adaptations.membrane_permeability *= 1.2;
-                    println!("Upgraded damage!"); // Debug
+                    println!("Upgraded damage!");
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit2) && atp.amount >= 15 {
-                    // Enhance metabolic rate
+                if input_manager.just_pressed(InputAction::UpgradeMetabolic) && atp.amount >= 15 {
                     atp.amount -= 15;
                     upgrades.metabolic_rate *= 1.3;
                     evolution_system.cellular_adaptations.metabolic_efficiency *= 1.3;
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit3) && atp.amount >= 20 {
-                    // Strengthen cellular integrity
+                if input_manager.just_pressed(InputAction::UpgradeCellular) && atp.amount >= 20 {
                     atp.amount -= 20;
                     upgrades.max_health += 25;
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit4) && atp.amount >= 25 {
-                    // Develop enzyme production
+                if input_manager.just_pressed(InputAction::UpgradeEnzyme) && atp.amount >= 25 {
                     atp.amount -= 25;
                     evolution_system.cellular_adaptations.extremophile_traits = true;
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit5) && atp.amount >= 30 {
-                    // Enhance bioluminescence
+                if input_manager.just_pressed(InputAction::UpgradeBioluminescence) && atp.amount >= 30 {
                     atp.amount -= 30;
                     evolution_system.cellular_adaptations.biofilm_formation = true;
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit6) && atp.amount >= 20 {
-                    // Develop emergency spore
+                if input_manager.just_pressed(InputAction::UpgradeSpore) && atp.amount >= 20 {
                     atp.amount -= 20;
                     evolution_system.emergency_spores += 1;
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit7) && atp.amount >= 50 {
+                if input_manager.just_pressed(InputAction::EvolvePseudopod) && atp.amount >= 50 {
                     atp.amount -= 50;
                     evolution_system.primary_evolution = EvolutionType::PseudopodNetwork {
                         damage: 8,
@@ -206,11 +203,10 @@ pub fn evolution_chamber_interaction(
                         tendril_count: 5,
                         spread_angle: 0.6,
                     };
-                    println!("Evolved to Pseudopod Network!"); // Debug
+                    println!("Evolved to Pseudopod Network!");
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit8) && atp.amount >= 75 {
-                    // Evolve to Symbiotic Hunters
+                if input_manager.just_pressed(InputAction::EvolveSymbiotic) && atp.amount >= 75 {
                     atp.amount -= 75;
                     evolution_system.primary_evolution = EvolutionType::SymbioticHunters {
                         damage: 25,
@@ -220,8 +216,7 @@ pub fn evolution_chamber_interaction(
                     };
                 }
 
-                if keyboard.just_pressed(KeyCode::Digit9) && atp.amount >= 100 {
-                    // Evolve to Bioluminescent Beam
+                if input_manager.just_pressed(InputAction::EvolveBioluminescent) && atp.amount >= 100 {
                     atp.amount -= 100;
                     evolution_system.primary_evolution = EvolutionType::BioluminescentBeam {
                         damage: 15,

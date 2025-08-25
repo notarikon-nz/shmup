@@ -4,7 +4,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::achievements::*;
-
+use crate::input::*;
 
 // New components for biological weapons
 #[derive(Component)]
@@ -375,11 +375,9 @@ fn find_nearest_enemy(
 
 // ===== PREVIOUS FILE =====
 
-// Enhanced biological shooting system
 pub fn enhanced_shooting_system(
     mut commands: Commands,
-    input_state: Res<InputState>,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input_manager: Res<InputManager>, // Changed from InputState and keyboard
     mut player_query: Query<(&Transform, &mut EvolutionSystem), With<Player>>,
     enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>, Without<SporeWave>, Without<LaserBeam>, Without<ToxinCloudEffect>)>,
     assets: Option<Res<GameAssets>>,
@@ -400,6 +398,9 @@ pub fn enhanced_shooting_system(
         if let Ok((player_transform, mut evolution_system)) = player_query.single_mut() {
             let evolution = evolution_system.primary_evolution.clone();
             let adaptations = &evolution_system.cellular_adaptations;
+            
+            // Check shooting input
+            let shooting = input_manager.pressed(InputAction::Shoot);
             
             // Get rate multiplier from mitochondria overcharge
             let rate_multiplier = mitochondria_query.iter().next()
@@ -430,21 +431,21 @@ pub fn enhanced_shooting_system(
             
             match evolution {
                 EvolutionType::CytoplasmicSpray { damage, fire_rate } => {
-                    if input_state.shooting && *shoot_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                         spawn_cytoplasmic_projectile(&mut commands, &assets, player_transform, damage, adaptations);
                         *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
                     }
                 }
                 
                 EvolutionType::PseudopodNetwork { damage, fire_rate, tendril_count, spread_angle } => {
-                    if input_state.shooting && *shoot_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                         spawn_pseudopod_network(&mut commands, &assets, player_transform, damage, tendril_count, spread_angle, adaptations);
                         *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
                     }
                 }
                 
                 EvolutionType::BioluminescentBeam { damage, charge_time, duration, width } => {
-                    if input_state.shooting {
+                    if input_manager.pressed(InputAction::Shoot) {
                         if !*beam_charging {
                             *beam_charging = true;
                             *beam_charge_timer = 0.0;
@@ -463,7 +464,7 @@ pub fn enhanced_shooting_system(
                 }
                 
                 EvolutionType::SymbioticHunters { damage, fire_rate, homing_strength, blast_radius } => {
-                    if input_state.shooting && *shoot_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                         let target = find_nearest_enemy(&enemy_query, player_transform.translation);
                         let enhanced_homing = homing_strength + homing_bonus;
                         spawn_symbiotic_hunter(&mut commands, &assets, player_transform, damage, target, enhanced_homing, blast_radius, adaptations);
@@ -472,21 +473,21 @@ pub fn enhanced_shooting_system(
                 }
                 
                 EvolutionType::EnzymeBurst { damage, fire_rate, acid_damage } => {
-                    if input_state.shooting && *shoot_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                         spawn_enzyme_burst(&mut commands, &assets, player_transform, damage, acid_damage, adaptations);
                         *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
                     }
                 }
                 
                 EvolutionType::ToxinCloud { damage_per_second, cloud_radius, duration } => {
-                    if input_state.shooting && *toxin_cloud_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *toxin_cloud_timer <= 0.0 {
                         spawn_toxin_cloud(&mut commands, &assets, player_transform, damage_per_second, cloud_radius, duration, adaptations);
                         *toxin_cloud_timer = 3.0; // Cooldown for toxin clouds
                     }
                 }
                 
                 EvolutionType::ElectricDischarge { damage, chain_count, range } => {
-                    if input_state.shooting && *shoot_timer <= 0.0 {
+                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                         spawn_electric_discharge(&mut commands, &assets, player_transform, &enemy_query, damage, chain_count, range, adaptations);
                         *shoot_timer = 1.5 / adaptations.metabolic_efficiency;
                     }
@@ -495,14 +496,14 @@ pub fn enhanced_shooting_system(
             
             // Binary fission - spawn clone projectiles
             if let Some(binary_fission) = binary_fission_query.iter().next() {
-                if input_state.shooting && *shoot_timer <= 0.0 {
+                if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
                     // Spawn additional projectile for binary fission
                     spawn_clone_projectile(&mut commands, &assets, player_transform, &evolution, adaptations);
                 }
             }
             
-            // Emergency spore activation (replaces smart bomb)
-            if keyboard.just_pressed(KeyCode::Space) && evolution_system.emergency_spores > 0 {
+            // Emergency spore activation - now uses dedicated action
+            if input_manager.just_pressed(InputAction::EmergencySpore) && evolution_system.emergency_spores > 0 {
                 spawn_emergency_spore(&mut commands, &assets, player_transform.translation);
                 evolution_system.emergency_spores -= 1;
             }

@@ -2,16 +2,19 @@ use bevy::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
+use crate::input::*;
 
 pub fn debug_atp_spawner(
     mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    player_query: Query<&Transform, With<Player>>,
+    input_manager: Res<InputManager>, // Changed from keyboard
     assets: Option<Res<GameAssets>>,
 ) {
-    if keyboard.just_pressed(KeyCode::F2) {
-        if let Ok(player_transform) = player_query.single() {
-            if let Some(assets) = assets {
+    if !input_manager.debug_enabled { return; }
+    
+    if input_manager.just_pressed(InputAction::DebugSpawnATP) {
+        if let Some(assets) = assets {
+            for i in 0..20 {
+                let x = (i as f32 - 10.0) * 30.0;
                 commands.spawn((
                     Sprite {
                         image: assets.multiplier_powerup_texture.clone(),
@@ -19,8 +22,8 @@ pub fn debug_atp_spawner(
                         custom_size: Some(Vec2::splat(18.0)),
                         ..default()
                     },
-                    Transform::from_translation(player_transform.translation + Vec3::new(32.0, 0.0, 0.0)),
-                    ATP { amount: 1000 },
+                    Transform::from_xyz(x, 200.0, 0.0),
+                    ATP { amount: 50 },
                     Collider { radius: 9.0 },
                 ));
             }
@@ -28,13 +31,14 @@ pub fn debug_atp_spawner(
     }
 }
 
-
 pub fn debug_spawn_evolution_chamber(
     mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input_manager: Res<InputManager>,
     assets: Option<Res<GameAssets>>,
 ) {
-    if keyboard.just_pressed(KeyCode::F3) {
+    if !input_manager.debug_enabled { return; }
+    
+    if input_manager.just_pressed(InputAction::DebugSpawnEvolutionChamber) {
         if let Some(assets) = assets {
             commands.spawn((
                 Sprite {
@@ -43,35 +47,23 @@ pub fn debug_spawn_evolution_chamber(
                     custom_size: Some(Vec2::splat(60.0)),
                     ..default()
                 },
-                Transform::from_xyz(0.0, -100.0, 0.0), // Near player for testing
+                Transform::from_xyz(0.0, 200.0, 0.0),
                 EvolutionChamber,
-                BioluminescentParticle {
-                    base_color: Color::srgb(0.3, 0.9, 0.6),
-                    pulse_frequency: 1.0,
-                    pulse_intensity: 0.6,
-                    organic_motion: OrganicMotion {
-                        undulation_speed: 0.8,
-                        response_to_current: 0.2,
-                    },
-                },
             ));
         }
     }
 }
 
-
 pub fn debug_trigger_king_tide(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut tidal_physics: ResMut<TidalPoolPhysics>,
+    mut commands: Commands,
+    input_manager: Res<InputManager>,
     mut tidal_events: EventWriter<TidalEvent>,
 ) {
-    if keyboard.just_pressed(KeyCode::F4) {
-        println!("🌊 DEBUG: Triggering King Tide!");
-        tidal_physics.king_tide_active = true;
-        tidal_physics.king_tide_timer = 0.0;
-        tidal_physics.king_tide_intensity = 3.0;
+    if !input_manager.debug_enabled { return; }
+    
+    if input_manager.just_pressed(InputAction::DebugTriggerKingTide) {
         tidal_events.write(TidalEvent::KingTideBegin {
-            intensity: 3.0,
+            intensity: 2.0,
             duration: 15.0,
         });
     }
