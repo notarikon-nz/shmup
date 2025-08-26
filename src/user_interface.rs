@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use crate::components::*;
 use crate::resources::*;
 use crate::systems::*;
@@ -857,4 +857,58 @@ pub fn enhanced_game_over_ui(
             TextColor(Color::srgb(0.7, 0.7, 0.7)),
         ));
     });
+}
+
+pub fn setup_fps_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(5.0),
+                left: Val::Px(5.0),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("FPS: ... | ms: ... | Entities: ..."),
+                TextFont {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                PerfHudText,
+            ));
+        });
+}
+
+pub fn fps_text_update_system(
+    diagnostics: Res<DiagnosticsStore>,
+    all_entities: Query<Entity>, // ✅ safe way to count entities
+    mut query: Query<&mut Text, With<PerfHudText>>,
+) {
+    if let Ok(mut text) = query.get_single_mut() {
+        // FPS
+        let fps = diagnostics
+            .get(&FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|fps| fps.smoothed())
+            .unwrap_or(0.0);
+
+        // Frame time (ms)
+        let frametime = diagnostics
+            .get(&FrameTimeDiagnosticsPlugin::FRAME_TIME)
+            .and_then(|ft| ft.smoothed())
+            .map(|s| s * 1000.0)
+            .unwrap_or(0.0);
+
+        // Entity count
+        let entity_count = all_entities.iter().len();
+
+        *text = Text::new(format!(
+            "FPS: {:>5.0} | {:>5.0} ms | Entities: {}",
+            fps, frametime, entity_count
+        ));
+    }
 }

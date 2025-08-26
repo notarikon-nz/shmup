@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::enemy_types::{Enemy,EnemyType};
+use crate::enemy_types::*;
 
 #[derive(Component)]
 pub struct AlreadyDespawned;
@@ -1030,3 +1030,6 @@ pub struct EcosystemStatusText;
 
 #[derive(Component)]
 pub struct ContaminationWarningText;
+
+#[derive(Component)]
+pub struct PerfHudText;

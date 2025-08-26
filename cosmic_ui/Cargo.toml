@@ -1,0 +1,26 @@
+[package]
+name = "cosmic_ui"
+version = "0.1.0"
+edition = "2021"
+description = "Ultra-performant declarative UI framework for Bevy games"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+bevy = { version = "0.16.1", default-features = false, features = [
+    "bevy_text",
+    "bevy_ui", 
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_sprite",
+    "bevy_asset"
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+cosmic_ui_derive = { path = "../cosmic_ui_derive" }
+ordered-float = "4"
+
+[features]
+default = ["performance_monitoring"]
+performance_monitoring = []
+hot_reload = ["bevy/file_watcher"]
+external_tools = []
