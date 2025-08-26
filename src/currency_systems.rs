@@ -5,6 +5,7 @@ use crate::events::*;
 use crate::enemy_types::*;
 use crate::achievements::*;
 use crate::input::*;
+use crate::physics::*;
 
 // FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
@@ -817,23 +818,6 @@ pub fn spawn_evolution_chambers(
     }
 }
 
-
-
-// Helper functions from biological_systems.rs
-fn world_to_grid_pos(world_pos: Vec2, fluid_env: &FluidEnvironment) -> (usize, usize) {
-    let grid_x = ((world_pos.x + 640.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
-    let grid_y = ((world_pos.y + 360.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
-    (grid_x, grid_y)
-}
-
-fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec2 {
-    let index = grid_pos.1 * fluid_env.grid_size + grid_pos.0;
-    if index < fluid_env.current_field.len() {
-        fluid_env.current_field[index]
-    } else {
-        Vec2::ZERO
-    }
-}
 
 pub fn spawn_extra_life_powerups(
     mut commands: Commands,

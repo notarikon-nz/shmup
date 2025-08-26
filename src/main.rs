@@ -31,6 +31,7 @@ mod background;
 mod tidal_feedback;
 mod input;
 mod player;
+mod physics;
 
 use components::*;
 use resources::*;
@@ -55,6 +56,7 @@ use background::*;
 use tidal_feedback::*;
 use input::*;
 use player::*;
+use physics::*;
 
 fn main() {
     App::new()
@@ -149,7 +151,7 @@ fn main() {
         .add_systems(Update, (
 
             // Core player and enemy interaction
-            handle_input_legacy,             // Process keyboard/gamepad input
+            // handle_input_legacy,             // Process keyboard/gamepad input
             biological_movement_system,      // Player movement with fluid dynamics
             enhanced_shooting_system,        // Evolution-based weapon systems
             spawn_enemies,                   // Wave-based enemy spawning
@@ -738,12 +740,6 @@ pub fn update_organic_particles(
         }
     }
 }
-
-
-
-
-
-
 
 // fix for the fluid_dynamics_system panic
 pub fn init_current_generator(mut commands: Commands) {

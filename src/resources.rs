@@ -546,7 +546,7 @@ impl Default for ScreenShakeResource {
 }
 
 // (Persistent) High Scores
-#[derive(Resource, Default)]
+#[derive(Resource, Clone, Default)]
 pub struct GameScore {
     pub current: u32,
     pub high_scores: Vec<u32>,

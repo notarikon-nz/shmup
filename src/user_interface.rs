@@ -3,6 +3,7 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnost
 use crate::components::*;
 use crate::resources::*;
 use crate::systems::*;
+use crate::high_scores::*;
 
 // Biological UI setup with updated terminology
 pub fn setup_biological_ui(
@@ -398,8 +399,11 @@ pub fn setup_game_over_ui(
     mut commands: Commands,
     mut game_score: ResMut<GameScore>,
     fonts: Res<GameFonts>,
+    player_query: Query<&EvolutionSystem, With<Player>>,
+    time: Res<Time>,    
 ) {
-    save_high_score(&mut game_score);
+    let mut game_score_clone = game_score.clone();
+    save_high_score_to_file(game_score, player_query, time);
     
     commands.spawn((
         Node {
@@ -425,14 +429,14 @@ pub fn setup_game_over_ui(
         ));
         
         parent.spawn((
-            Text::new(format!("Final Score: {}", game_score.current)),
+            Text::new(format!("Final Score: {}", game_score_clone.current)),
             TextFont { font_size: 24.0, ..default() },
             TextColor(Color::WHITE),
             FinalScoreText,
             Node { margin: UiRect::bottom(Val::Px(20.0)), ..default() },
         ));
         
-        let high_score = game_score.high_scores.first().unwrap_or(&0);
+        let high_score = game_score_clone.high_scores.first().unwrap_or(&0);
         parent.spawn((
             Text::new(format!("High Score: {}", high_score)),
             TextFont { 

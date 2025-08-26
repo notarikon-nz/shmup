@@ -11,7 +11,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::systems::*;
 use crate::input::*;
-
+use crate::physics::*;
 
 /// Enhanced player movement with fluid dynamics and organic motion
 pub fn biological_movement_system(
@@ -251,21 +251,5 @@ pub fn update_biological_effects(
         if binary_fission.timer <= 0.0 {
             commands.entity(entity).remove::<BinaryFissionActive>();
         }
-    }
-}
-
-// Helper functions for biological systems
-fn world_to_grid_pos(world_pos: Vec2, fluid_env: &FluidEnvironment) -> (usize, usize) {
-    let grid_x = ((world_pos.x + 640.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
-    let grid_y = ((world_pos.y + 360.0) / fluid_env.cell_size).clamp(0.0, (fluid_env.grid_size - 1) as f32) as usize;
-    (grid_x, grid_y)
-}
-
-fn sample_current(fluid_env: &FluidEnvironment, grid_pos: (usize, usize)) -> Vec2 {
-    let index = grid_pos.1 * fluid_env.grid_size + grid_pos.0;
-    if index < fluid_env.current_field.len() {
-        fluid_env.current_field[index]
-    } else {
-        Vec2::ZERO
     }
 }
