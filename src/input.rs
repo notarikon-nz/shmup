@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::input::gamepad::{GamepadConnection, GamepadConnectionEvent, GamepadEvent};
+use bevy::input::gamepad::{GamepadConnection, GamepadConnectionEvent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::resources::{GameState};

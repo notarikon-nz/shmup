@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use crate::resources::*;
 use crate::events::*;
 use crate::input::*;
-use crate::components::*;
 use crate::enemy_types::*;
 use crate::achievements::{AchievementEvent};
 

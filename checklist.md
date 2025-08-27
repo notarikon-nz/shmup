@@ -55,6 +55,7 @@
 - [ ] **Spawn Pattern Variety**
   - [ ] Side spawns, diagonal approaches, spiral formations
   - [ ] Boss enemies with multiple phases
+    - [ ] Boss enemies have their own healthbar at top of screen
   - [ ] Environmental storytelling through enemy placement
 - [ ] **Difficulty Curve Balancing**
   - [ ] Health scaling per wave

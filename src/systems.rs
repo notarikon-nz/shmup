@@ -1,13 +1,12 @@
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
-use bevy::diagnostic::DiagnosticsStore;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::achievements::*;
 use crate::enemy_types::*;
-use crate::input::*;
 use crate::physics::*;
+use crate::wave_systems::*;
 
 // ===== PERFORMANCE CONSTANTS =====
 const MAX_PARTICLES: usize = 200;
@@ -267,7 +266,7 @@ pub fn enemy_shooting(
 
 // ===== SPAWN ENEMY SYSTEM (simplified) =====
 
-pub fn spawn_enemy_system(
+pub fn old_spawn_enemy_system(
     mut commands: Commands,
     mut enemy_events: EventReader<SpawnEnemy>,
     assets: Option<Res<GameAssets>>,
@@ -324,6 +323,108 @@ pub fn spawn_enemy_system(
         };
     }
 }
+
+pub fn spawn_enemy_system(
+    mut commands: Commands,
+    mut spawn_events: EventReader<SpawnEnemy>,
+    wave_manager: ResMut<WaveManager>,
+    assets: Option<Res<GameAssets>>,
+) {
+    let Some(assets) = assets else { return };
+    
+    for event in spawn_events.read() {
+        let (base_health, _damage, base_speed, base_color) = event.enemy_type.get_stats();
+        let chemical_signature = event.enemy_type.get_chemical_signature();
+        
+        // Apply wave difficulty scaling
+        let (health_mult, speed_mult) = wave_manager.calculate_difficulty_multipliers();
+        let final_health = (base_health as f32 * health_mult) as i32;
+        let final_speed = base_speed * speed_mult;
+        
+        // Select appropriate texture
+        let texture = match event.enemy_type {
+            EnemyType::ViralParticle => assets.viral_particle_texture.clone(),
+            EnemyType::AggressiveBacteria => assets.aggressive_bacteria_texture.clone(),
+            EnemyType::ParasiticProtozoa => assets.parasitic_protozoa_texture.clone(),
+            EnemyType::InfectedMacrophage => assets.infected_macrophage_texture.clone(),
+            EnemyType::SuicidalSpore => assets.suicidal_spore_texture.clone(),
+            EnemyType::BiofilmColony => assets.biofilm_colony_texture.clone(),
+            EnemyType::SwarmCell => assets.swarm_cell_texture.clone(),
+            EnemyType::ReproductiveVesicle => assets.reproductive_vesicle_texture.clone(),
+            EnemyType::Offspring => assets.offspring_texture.clone(),
+        };
+
+        let enemy_entity = commands.spawn((
+            Sprite {
+                image: texture,
+                color: base_color,
+                ..default()
+            },
+            Transform::from_translation(event.position),
+            Enemy {
+                ai_type: event.ai_type.clone(),
+                health: final_health,
+                speed: final_speed,
+                enemy_type: event.enemy_type.clone(),
+                colony_id: None,
+                chemical_signature,
+            },
+            Health(final_health),
+            Collider { radius: get_enemy_collision_radius(event.enemy_type.clone()) },
+        )).id();
+
+        // Add special components based on enemy type
+        match event.enemy_type {
+            EnemyType::InfectedMacrophage => {
+                commands.entity(enemy_entity).insert(CriticalHitStats::default());
+            }
+            EnemyType::SuicidalSpore => {
+                commands.entity(enemy_entity).insert(ExplosiveProjectile {
+                    blast_radius: 60.0,
+                    blast_damage: 40,
+                    organic_explosion: true,
+                });
+            }
+            EnemyType::ReproductiveVesicle => {
+                commands.entity(enemy_entity).insert(ParticleEmitter {
+                    spawn_rate: 2.0,
+                    spawn_timer: 0.0,
+                    particle_config: ParticleConfig::default(),
+                    active: true,
+                });
+            }
+            _ => {}
+        }
+
+        // Add ecosystem role and predator-prey behavior
+        if let Some(behavior) = event.enemy_type.get_predator_prey_behavior() {
+            commands.entity(enemy_entity).insert(behavior);
+        }
+        
+        commands.entity(enemy_entity).insert(event.enemy_type.get_ecosystem_role());
+        
+        // Add adaptive difficulty component for later waves
+        if wave_manager.current_wave >= 10 {
+            commands.entity(enemy_entity).insert(AdaptiveDifficulty {
+                threat_level: 1.0,
+                adaptation_rate: 0.5,
+                player_evolution_response: 1.0,
+            });
+        }
+    }
+}
+
+fn get_enemy_collision_radius(enemy_type: EnemyType) -> f32 {
+    match enemy_type {
+        EnemyType::ViralParticle | EnemyType::Offspring => 8.0,
+        EnemyType::AggressiveBacteria | EnemyType::SwarmCell => 12.0,
+        EnemyType::ParasiticProtozoa | EnemyType::SuicidalSpore => 16.0,
+        EnemyType::BiofilmColony | EnemyType::ReproductiveVesicle => 20.0,
+        EnemyType::InfectedMacrophage => 24.0,
+    }
+}
+
+
 
 // ===== MASSIVELY OPTIMIZED COLLISION SYSTEM =====
 

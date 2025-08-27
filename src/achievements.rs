@@ -6,8 +6,6 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use crate::components::*;
 use crate::resources::*;
-use crate::events::*;
-use crate::enemy_types::*;
 
 // Achievement System Components and Resources
 #[derive(Resource, Default)]
@@ -341,6 +339,14 @@ pub enum AchievementEvent {
     PowerUpUsed(String),
     HealthLost(i32),
     HealthGained(i32),
+
+    WaveCompleted { wave_number: u32, completion_time: f32 },
+    FirstEvolution,
+    SurvivalMilestone { minutes: u32 },
+    BossDefeated,
+    PerfectWave, // No damage taken
+    SpeedRun { wave_number: u32, time: f32 }, // Completed wave under time limit
+
 }
 
 fn check_achievement_progress(

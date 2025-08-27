@@ -3,7 +3,6 @@
 
 use bevy::prelude::*;
 use std::hash::{Hash, Hasher, DefaultHasher};
-use ordered_float::OrderedFloat;
 
 /// Trait for bindable data sources
 pub trait Bindable: Send + Sync + 'static {

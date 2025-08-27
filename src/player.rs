@@ -1,15 +1,7 @@
 use bevy::prelude::*;
-use bevy_hanabi::prelude::*;
-use bevy::input::gamepad::*;
-use bevy::window::WindowResolution;
-use bevy::sprite::Anchor;
-use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use crate::lighting::PerformantLightingPlugin;
 
 use crate::components::*;
 use crate::resources::*;
-use crate::events::*;
-use crate::systems::*;
 use crate::input::*;
 use crate::physics::*;
 

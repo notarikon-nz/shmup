@@ -6,6 +6,7 @@ use crate::enemy_types::*;
 use crate::achievements::*;
 use crate::input::*;
 use crate::physics::*;
+use crate::wave_systems::*;
 
 // FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
@@ -903,3 +904,60 @@ pub fn extra_life_collection_system(
         }
     }
 }
+
+// Enhanced wave completion rewards
+pub fn wave_completion_system(
+    mut wave_manager: ResMut<WaveManager>,
+    mut game_score: ResMut<GameScore>,
+    mut spawn_powerup_events: EventWriter<SpawnPowerUp>,
+    enemy_query: Query<&Enemy>,
+    player_query: Query<&Transform, With<Player>>,
+    mut achievement_events: EventWriter<AchievementEvent>,
+    time: Res<Time>,
+) {
+    if !wave_manager.wave_active {
+        return;
+    }
+
+    let living_enemies = enemy_query.iter().count();
+    if living_enemies > 0 || wave_manager.enemies_remaining > 0 {
+        return;
+    }
+
+    // Wave completed!
+    let Ok(player_transform) = player_query.single() else { return };
+    
+    if let Some(pattern) = wave_manager.get_current_wave_pattern() {
+        // Award ATP bonus
+        game_score.total_atp_collected += pattern.completion_rewards.atp_bonus as u64;
+        
+        // Apply score multiplier
+        let wave_bonus = (game_score.current as f32 * pattern.completion_rewards.score_multiplier) as u32;
+        game_score.current += wave_bonus;
+        
+        // Guarantee power-up spawn
+        if let Some(powerup_type) = &pattern.completion_rewards.powerup_guarantee {
+            spawn_powerup_events.write(SpawnPowerUp {
+                position: player_transform.translation + Vec3::new(0.0, 50.0, 0.0),
+                power_type: powerup_type.clone(),
+            });
+        }
+        
+        // Achievement tracking
+        achievement_events.write(AchievementEvent::WaveCompleted {
+            wave_number: wave_manager.current_wave,
+            completion_time: time.elapsed_secs() - wave_manager.wave_start_time,
+        });
+
+        // Milestone achievements
+        match wave_manager.current_wave {
+            5 => { achievement_events.write(AchievementEvent::FirstEvolution); },
+            10 => { achievement_events.write(AchievementEvent::SurvivalMilestone { minutes: 5 }); },
+            20 => { achievement_events.write(AchievementEvent::BossDefeated); },
+            _ => {}
+        }
+    }
+    
+    complete_current_wave(&mut wave_manager, time.elapsed_secs());
+}
+

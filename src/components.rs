@@ -1112,3 +1112,10 @@ pub struct SettingsMenu;
 
 #[derive(Component)]
 pub struct HighScoreMenu;
+
+// wave systems
+#[derive(Component)]
+pub struct WaveInfoText;
+
+#[derive(Component)] 
+pub struct WaveProgressBar;

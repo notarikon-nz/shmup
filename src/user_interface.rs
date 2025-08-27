@@ -2,7 +2,8 @@ use bevy::prelude::*;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use crate::components::*;
 use crate::resources::*;
-use crate::high_scores::*;
+use crate::wave_systems::*;
+use crate::enemy_types::{Enemy};
 
 // ===== CONSTANTS =====
 const UI_FONT_SIZE_LARGE: f32 = 48.0;
@@ -417,5 +418,68 @@ pub fn fps_text_update_system(
         let entity_count = all_entities.iter().len();
         
         **text = format!("FPS: {:>5.0} | {:>5.0} ms | Entities: {}", fps, frametime, entity_count);
+    }
+}
+
+// Wave information UI system
+pub fn setup_wave_ui(mut commands: Commands, fonts: Res<GameFonts>) {
+    let font = fonts.default_font.clone();
+    
+    // Wave information text
+    spawn_positioned_text(&mut commands, "Wave 1 - Starting...", font.clone(), 
+        20.0, Color::srgb(0.8, 1.0, 0.9),
+        (Val::Auto, Val::Px(UI_PADDING), Val::Px(UI_PADDING + 30.0), Val::Auto), 
+        WaveInfoText);
+    
+    // Wave progress bar background
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(UI_PADDING), top: Val::Px(UI_PADDING + 60.0),
+            width: Val::Px(204.0), height: Val::Px(14.0),
+            border: UiRect::all(Val::Px(2.0)),
+            ..default()
+        },
+        BackgroundColor(COLOR_BACKGROUND), 
+        BorderColor(COLOR_BORDER),
+    )).with_children(|parent| {
+        parent.spawn((
+            Node {
+                width: Val::Px(0.0), height: Val::Percent(100.0),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.3, 1.0, 0.6)),
+            WaveProgressBar,
+        ));
+    });
+}
+
+pub fn wave_ui_system(
+    wave_manager: Res<WaveManager>,
+    enemy_query: Query<&Enemy>,
+    mut wave_text_query: Query<&mut Text, With<WaveInfoText>>,
+    mut progress_bar_query: Query<&mut Node, With<WaveProgressBar>>,
+) {
+    if let Ok(mut text) = wave_text_query.single_mut() {
+        let enemies_remaining = enemy_query.iter().count();
+        **text = if wave_manager.wave_active {
+            format!("Wave {} - Enemies: {}", wave_manager.current_wave, enemies_remaining)
+        } else {
+            format!("Preparing Wave {}...", wave_manager.current_wave)
+        };
+    }
+
+    // Update progress bar if it exists
+    if let Ok(mut progress_bar) = progress_bar_query.single_mut() {
+        if wave_manager.wave_active {
+            let enemies_remaining = enemy_query.iter().count() as f32;
+            let initial_enemies = wave_manager.enemies_remaining as f32;
+            let progress : f32 = if initial_enemies > 0.0 {
+                1.0 - (enemies_remaining / initial_enemies)
+            } else { 1.0 };
+            progress_bar.width = Val::Px(200.0 * progress.clamp(0.0, 1.0));
+        } else {
+            progress_bar.width = Val::Px(0.0);
+        }
     }
 }

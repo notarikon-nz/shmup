@@ -15,7 +15,6 @@ pub fn cosmic_ui_change_detection(
 
 /// Batch update system - processes all UI updates in one frame
 pub fn cosmic_ui_batch_updates(
-    mut commands: Commands,
     mut scheduler: ResMut<UIUpdateScheduler>,
     mut metrics: ResMut<UIPerformanceMetrics>,
     mut text_query: Query<&mut Text>,
@@ -127,11 +126,11 @@ pub fn update_progress_bars(
     mut background_color_query: Query<&mut BackgroundColor>,
     time: Res<Time>,
 ) {
-    for mut progress_bar in progress_bars.iter_mut() {
+    for progress_bar in progress_bars.iter_mut() {
         // Smooth animation towards target percentage
         if let Ok(mut node) = node_query.get_mut(progress_bar.fill_entity) {
             let style = &mut node;
-            let target_width = Val::Percent(progress_bar.current_percent * 100.0);
+            // let target_width = Val::Percent(progress_bar.current_percent * 100.0);
             
             // Smooth interpolation
             if let Val::Percent(current_width) = style.width {

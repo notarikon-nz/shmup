@@ -1,4 +1,6 @@
+// lighting.rs - GPU-accelerated 2D lighting using bevy_light_2d
 use bevy::prelude::*;
+use bevy_light_2d::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
@@ -88,10 +90,6 @@ pub fn render_light_effects(
     }
 }
 
-// lighting.rs - GPU-accelerated 2D lighting using bevy_light_2d
-use bevy::prelude::*;
-use bevy_light_2d::prelude::*;
-use crate::components::*;
 
 // Minimal high-performance GPU lighting system
 #[derive(Component)]

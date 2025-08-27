@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use crate::components::{PowerUpType, ParticleConfig, ExplosionType};
 use crate::enemy_types::{EnemyAI, EnemyType};
-use crate::resources::{TidalPoolPhysics};
 
 #[derive(Event)]
 pub struct SpawnExplosion {

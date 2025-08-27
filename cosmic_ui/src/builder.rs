@@ -37,7 +37,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
     /// Add text display with automatic formatting
-    pub fn text_display(mut self, initial_text: &str, position: UIPosition) -> (Self, TextDisplay) {
+    pub fn text_display(self, initial_text: &str, position: UIPosition) -> (Self, TextDisplay) {
         let entity = self.commands.spawn((
             Text::new(initial_text),
             TextFont {
@@ -66,7 +66,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
     /// Add progress bar with GPU-optimized rendering
-    pub fn progress_bar(mut self, position: UIPosition, config: ProgressBarConfig) -> (Self, ProgressBar) {
+    pub fn progress_bar(self, position: UIPosition, config: ProgressBarConfig) -> (Self, ProgressBar) {
         // Background
         let bg_entity = self.commands.spawn((
             Node {
@@ -108,7 +108,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
 /// Add counter with prefix/suffix
-    pub fn counter(mut self, prefix: &str, suffix: &str, position: UIPosition) -> (Self, Counter) {
+    pub fn counter(self, prefix: &str, suffix: &str, position: UIPosition) -> (Self, Counter) {
         let initial_text = format!("{}{}{}", prefix, 0, suffix);
         let (builder, text_widget) = self.text_display(&initial_text, position);
         
@@ -118,7 +118,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
     /// Add status indicator with multiple states
-    pub fn status_indicator(mut self, states: Vec<StatusState>, position: UIPosition) -> (Self, StatusIndicator) {
+    pub fn status_indicator(self, states: Vec<StatusState>, position: UIPosition) -> (Self, StatusIndicator) {
         let initial_text = states.first().map(|s| s.text.as_str()).unwrap_or("");
         let initial_color = states.first().map(|s| s.color).unwrap_or(Color::WHITE);
         
@@ -131,7 +131,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
     /// Add notification queue
-    pub fn notification_queue(mut self, position: UIPosition, max_visible: usize) -> (Self, NotificationQueue) {
+    pub fn notification_queue(self, position: UIPosition, max_visible: usize) -> (Self, NotificationQueue) {
         let container = self.commands.spawn((
             Node {
                 position_type: PositionType::Absolute,
@@ -153,7 +153,7 @@ impl<'a> WidgetBuilder<'a> {
     }
     
     /// Add info panel for multi-line text
-    pub fn info_panel(mut self, max_lines: usize, position: UIPosition) -> (Self, InfoPanel) {
+    pub fn info_panel(self, max_lines: usize, position: UIPosition) -> (Self, InfoPanel) {
         let container = self.commands.spawn((
             Node {
                 position_type: PositionType::Absolute,

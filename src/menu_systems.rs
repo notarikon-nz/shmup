@@ -1,7 +1,7 @@
 // src/menu_systems.rs - Complete menu system implementation
 use bevy::prelude::*;
 use bevy::window::{WindowMode, PrimaryWindow};
-use bevy::asset::{LoadState, RecursiveDependencyLoadState};
+use bevy::asset::{LoadState};
 use bevy::app::AppExit;
 use rand::Rng;
 

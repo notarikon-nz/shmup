@@ -3,8 +3,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
-use crate::physics::*;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{TAU};
 
 // Constants to replace magic numbers
 const FLUID_UPDATE_INTERVAL: f32 = 0.5;

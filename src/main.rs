@@ -1,64 +1,14 @@
 use bevy::prelude::*;
 use bevy_hanabi::prelude::*;
-use bevy::input::gamepad::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
-use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
+
+use Cosmic_Tidal_Pool::*;
 use crate::lighting::PerformantLightingPlugin;
 use cosmic_ui::prelude::*;
-use cosmic_ui::*;
 
-mod components;
-mod resources;
-mod systems;
-mod events;
-mod enemy_types;
-mod enemy_systems;
-mod weapon_systems;
-mod currency_systems;
-mod biological_systems; 
-mod audio; 
-mod lighting;
-mod explosions;
-mod particles;
-mod tidal_mechanics;
-mod high_scores;
-mod powerup_systems;
-mod user_interface;
-mod debug;
-mod achievements;
-mod background;
-mod tidal_feedback;
-mod input;
-mod player;
-mod physics;
-mod menu_systems;
 
-use menu_systems::*;
-use components::*;
-use resources::*;
-use systems::*;
-use events::*;
-use enemy_types::*;
-use enemy_systems::*;
-use weapon_systems::*;
-use currency_systems::*;
-use biological_systems::*; 
-use audio::*;
-use lighting::*;
-use explosions::*;
-use particles::*;
-use tidal_mechanics::*;
-use high_scores::*;
-use powerup_systems::{spawn_powerup_system};
-use user_interface::*;
-use achievements::*;
-use debug::*;
-use background::*;
-use tidal_feedback::*;
-use input::*;
-use player::*;
-use physics::*;
 
 fn main() {
     App::new()
@@ -103,6 +53,7 @@ fn main() {
         .init_resource::<TidalFeedbackSystem>()  // Visual feedback for tidal effects
         .init_resource::<DiagnosticsStore>()
         .init_resource::<MenuSettings>() 
+        .init_resource::<WaveManager>()
 
         // ===== GAME STATE MANAGEMENT =====
         .init_state::<GameState>() // Playing, Paused, GameOver states
@@ -140,10 +91,12 @@ fn main() {
             // NEW: Spawn the Cosmic UI HUD
             // spawn_game_hud.after(load_game_fonts),
         ))
-        .add_systems(Startup, (
+
+        .add_systems(OnEnter(GameState::Playing), (
             setup_biological_ui,            // Create UI with biological terminology
             setup_fps_ui,
-        ).after(load_game_fonts))
+            setup_wave_ui,
+        ))
 
         // ===== CORE GAME LOOP SYSTEMS =====
         .add_systems(Update, (
@@ -161,7 +114,12 @@ fn main() {
             // handle_input_legacy,             // Process keyboard/gamepad input
             biological_movement_system,      // Player movement with fluid dynamics
             enhanced_shooting_system,        // Evolution-based weapon systems
-            spawn_enemies,                   // Wave-based enemy spawning
+
+            spawn_enemies,               // Wave-based enemy spawning, replaced by following 3 functions
+            wave_progression_system,
+            wave_spawning_system,
+            environmental_hazard_system,
+
             spawn_biological_powerups,      // ATP and evolution power-ups
             spawn_evolution_powerups,       // Advanced evolutionary upgrades
 
@@ -326,6 +284,7 @@ fn main() {
             update_evolution_ui,            // Evolution chamber upgrade menu
             update_tidal_ui,                // Tide status indicator
             update_biological_ui,           // ATP, score, lives, ecosystem status
+            wave_ui_system,
         ).run_if(in_state(GameState::Playing)))
 
         // ===== DEBUG SYSTEMS (Development Only) =====
