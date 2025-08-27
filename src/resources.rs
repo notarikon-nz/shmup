@@ -1,12 +1,14 @@
+// src/resources.rs - Updated with complete menu system support
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-// FONT
+// ===== FONTS =====
 #[derive(Resource)]
 pub struct GameFonts {
     pub default_font: Handle<Font>,
 }
 
+// ===== CORE ASSETS =====
 #[derive(Resource)]
 pub struct GameAssets {
     // Player & General
@@ -18,35 +20,95 @@ pub struct GameAssets {
 
     // Enemy Textures -> Unique Sprites
     pub enemy_texture: Handle<Image>,
-    pub viral_particle_texture: Handle<Image>,        // Small, spiky virus
-    pub aggressive_bacteria_texture: Handle<Image>,   // Rod-shaped with flagella
-    pub parasitic_protozoa_texture: Handle<Image>,    // Amoeba-like with pseudopods
-    pub infected_macrophage_texture: Handle<Image>,   // Large corrupted cell
-    pub suicidal_spore_texture: Handle<Image>,        // Explosive spore with warning patterns
-    pub biofilm_colony_texture: Handle<Image>,        // Clustered bacterial mat
-    pub swarm_cell_texture: Handle<Image>,            // Coordinated cell with communication tendrils
-    pub reproductive_vesicle_texture: Handle<Image>,  // Egg-like spawning structure
-    pub offspring_texture: Handle<Image>,             // Small, newly spawned cell
+    pub viral_particle_texture: Handle<Image>,
+    pub aggressive_bacteria_texture: Handle<Image>,
+    pub parasitic_protozoa_texture: Handle<Image>,
+    pub infected_macrophage_texture: Handle<Image>,
+    pub suicidal_spore_texture: Handle<Image>,
+    pub biofilm_colony_texture: Handle<Image>,
+    pub swarm_cell_texture: Handle<Image>,
+    pub reproductive_vesicle_texture: Handle<Image>,
+    pub offspring_texture: Handle<Image>,
 
-    // PowerUp Textirse
+    // PowerUp Textures
     pub health_powerup_texture: Handle<Image>,
     pub shield_powerup_texture: Handle<Image>,
     pub speed_powerup_texture: Handle<Image>,
     pub multiplier_powerup_texture: Handle<Image>,
     pub rapidfire_powerup_texture: Handle<Image>,
 
+    // Audio
     pub sfx_shoot: Handle<AudioSource>,
     pub sfx_explosion: Handle<AudioSource>,
     pub sfx_powerup: Handle<AudioSource>,
     pub music: Handle<AudioSource>,
 }
 
+// ===== GAME STATES (Complete Menu System) =====
+#[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum GameState {
+    #[default]
+    Loading,
+    TitleScreen,
+    Settings,
+    HighScores,
+    Playing,
+    Paused,
+    GameOver,
+    Controls, // Legacy - now used for Settings
+    None,
+}
+
+// ===== MENU SYSTEM RESOURCES =====
+#[derive(Resource)]
+pub struct LoadingAssets { 
+    pub handles: Vec<UntypedHandle> 
+}
+
+#[derive(Resource)]
+pub struct AudioMenuSettings { 
+    pub master_volume: f32,
+    pub sfx_volume: f32,
+    pub music_volume: f32,
+}
+
+impl Default for AudioMenuSettings {
+    fn default() -> Self { 
+        Self { 
+            master_volume: 0.7,
+            sfx_volume: 0.8,
+            music_volume: 0.6,
+        } 
+    }
+}
+
+#[derive(Resource)]
+pub struct MenuSettings {
+    pub fullscreen: bool,
+    pub resolution: (f32, f32),
+    pub show_fps: bool,
+    pub particles_enabled: bool,
+}
+
+impl Default for MenuSettings {
+    fn default() -> Self {
+        Self {
+            fullscreen: false,
+            resolution: (1280.0, 720.0),
+            show_fps: false,
+            particles_enabled: true,
+        }
+    }
+}
+
+// ===== PARTICLE SYSTEM =====
 #[derive(Resource)]
 pub struct ParticlePool {
     pub entities: Vec<Entity>,
     pub index: usize,
 }
 
+// ===== GAME CORE RESOURCES =====
 #[derive(Resource, Default)]
 pub struct OldInputState {
     pub movement: Vec2,
@@ -63,18 +125,6 @@ pub struct EnemySpawner {
     pub powerup_timer: f32,
 }
 
-#[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub enum GameState {
-    #[default]
-    Loading,
-    TitleScreen,
-    Controls,
-    Playing,
-    Paused,
-    GameOver,
-    None, // placeholder for testing
-}
-
 #[derive(Resource, Default)]
 pub struct GameStarted(pub bool);
 
@@ -84,10 +134,10 @@ pub struct ShootingState {
     pub base_rate: f32,
 }
 
-// New: Fluid Environment for biological movement
+// ===== BIOLOGICAL ENVIRONMENT =====
 #[derive(Resource)]
 pub struct FluidEnvironment {
-    pub current_field: Vec<Vec2>, // Grid-based flow field
+    pub current_field: Vec<Vec2>,
     pub grid_size: usize,
     pub cell_size: f32,
     pub tidal_phase: f32,
@@ -106,7 +156,6 @@ impl Default for FluidEnvironment {
     }
 }
 
-// New: Chemical Environment for pH and oxygen simulation
 #[derive(Resource, Clone)]
 pub struct ChemicalEnvironment {
     pub ph_zones: Vec<ChemicalZone>,
@@ -144,67 +193,7 @@ impl Default for ChemicalEnvironment {
     }
 }
 
-// New: Scale Management for seamless transitions
-#[derive(Resource)]
-pub struct ScaleManager {
-    pub current_scale: f32, // 1.0 = normal, 0.1 = zoomed in 10x, 10.0 = zoomed out 10x
-    pub target_scale: f32,
-    pub transition_speed: f32,
-    pub scale_levels: Vec<ScaleLevel>,
-    pub physics_scale_factor: f32,
-}
-
-#[derive(Clone)]
-pub struct ScaleLevel {
-    pub scale: f32,
-    pub name: String,
-    pub physics_multiplier: f32, // Brownian motion more intense at smaller scales
-    pub enemy_spawn_rates: Vec<f32>,
-    pub environmental_effects: Vec<EnvironmentalEffect>,
-}
-
-#[derive(Clone)]
-pub struct EnvironmentalEffect {
-    pub effect_type: String,
-    pub intensity: f32,
-    pub radius: f32,
-}
-
-impl Default for ScaleManager {
-    fn default() -> Self {
-        Self {
-            current_scale: 1.0,
-            target_scale: 1.0,
-            transition_speed: 2.0,
-            scale_levels: vec![
-                ScaleLevel {
-                    scale: 0.1,
-                    name: "Molecular Level".to_string(),
-                    physics_multiplier: 3.0,
-                    enemy_spawn_rates: vec![0.5, 1.0, 2.0],
-                    environmental_effects: vec![],
-                },
-                ScaleLevel {
-                    scale: 1.0,
-                    name: "Cellular Level".to_string(),
-                    physics_multiplier: 1.0,
-                    enemy_spawn_rates: vec![1.0, 1.5, 2.5],
-                    environmental_effects: vec![],
-                },
-                ScaleLevel {
-                    scale: 10.0,
-                    name: "Tissue Level".to_string(),
-                    physics_multiplier: 0.3,
-                    enemy_spawn_rates: vec![2.0, 3.0, 4.0],
-                    environmental_effects: vec![],
-                },
-            ],
-            physics_scale_factor: 1.0,
-        }
-    }
-}
-
-// New: Current Field Generator for procedural flow
+// ===== CURRENT GENERATION =====
 #[derive(Resource)]
 pub struct CurrentGenerator {
     pub noise_offset: Vec2,
@@ -262,7 +251,7 @@ impl Default for CurrentGenerator {
     }
 }
 
-// New: Bioluminescence Manager for organic lighting
+// ===== BIOLUMINESCENCE =====
 #[derive(Resource)]
 pub struct BioluminescenceManager {
     pub ambient_glow: f32,
@@ -292,16 +281,15 @@ impl Default for BioluminescenceManager {
     }
 }
 
-
-// New: Ecosystem State Manager
+// ===== ECOSYSTEM STATE =====
 #[derive(Resource)]
 pub struct EcosystemState {
-    pub health: f32, // Overall ecosystem health (0.0-1.0)
-    pub infection_level: f32, // How corrupted the environment is
-    pub symbiotic_activity: f32, // Cooperative organism activity
-    pub nutrient_density: f32, // Available resources
-    pub ph_stability: f32, // How stable the chemical environment is
-    pub oxygen_circulation: f32, // Oxygen flow health
+    pub health: f32,
+    pub infection_level: f32,
+    pub symbiotic_activity: f32,
+    pub nutrient_density: f32,
+    pub ph_stability: f32,
+    pub oxygen_circulation: f32,
     pub population_balance: BiomePopulation,
 }
 
@@ -332,26 +320,10 @@ impl Default for EcosystemState {
     }
 }
 
-#[derive(Clone)]
-pub struct ChemicalAttractant {
-    pub position: Vec2,
-    pub attractant_type: String,
-    pub strength: f32,
-    pub decay_rate: f32,
-}
-
-#[derive(Clone)]
-pub struct ColonySpawnPattern {
-    pub pattern_name: String,
-    pub spawn_positions: Vec<Vec2>,
-    pub spawn_delays: Vec<f32>,
-    pub organism_types: Vec<String>,
-}
-
-// New: Tidal Pool Physics
+// ===== TIDAL PHYSICS =====
 #[derive(Resource)]
 pub struct TidalPoolPhysics {
-    pub tide_level: f32, // -1.0 (low tide) to 1.0 (high tide)
+    pub tide_level: f32,
     pub tide_cycle_speed: f32,
     pub wave_intensity: f32,
     pub current_strength: f32,
@@ -364,8 +336,193 @@ pub struct TidalPoolPhysics {
     pub king_tide_intensity: f32,
 }
 
+impl Default for TidalPoolPhysics {
+    fn default() -> Self {
+        Self {
+            tide_level: 0.0,
+            tide_cycle_speed: 0.02,
+            wave_intensity: 0.5,
+            current_strength: 1.0,
+            surface_tension: 0.8,
+            water_viscosity: 0.9,
+            temperature: 20.0,
+            salinity: 3.5,
+            king_tide_active: false,
+            king_tide_timer: 0.0,
+            king_tide_intensity: 1.0,
+        }
+    }
+}
 
-// New: Microscopic Scale Physics
+// ===== TIDAL STATE =====
+use crate::components::TidePhase;
+
+#[derive(Resource)]
+pub struct TidalState {
+    pub last_king_tide: f32,
+    pub current_tide_phase: TidePhase,
+    pub debris_active: bool,
+}
+
+impl Default for TidalState {
+    fn default() -> Self {
+        Self {
+            last_king_tide: 0.0,
+            current_tide_phase: TidePhase::Rising,
+            debris_active: false,
+        }
+    }
+}
+
+// ===== SCREEN SHAKE =====
+#[derive(Resource)]
+pub struct ScreenShakeResource {
+    pub trauma: f32,
+    pub max_trauma: f32,
+    pub decay_rate: f32,
+    pub shake_intensity: f32,
+    pub rotation_factor: f32,
+}
+
+impl Default for ScreenShakeResource {
+    fn default() -> Self {
+        Self {
+            trauma: 0.0,
+            max_trauma: 1.0,
+            decay_rate: 2.5,
+            shake_intensity: 25.0,
+            rotation_factor: 0.02,
+        }
+    }
+}
+
+// ===== HIGH SCORES =====
+#[derive(Resource, Clone, Default)]
+pub struct GameScore {
+    pub current: u32,
+    pub high_scores: Vec<u32>,
+    pub score_multiplier: f32,
+    pub multiplier_timer: f32,
+    pub high_score_data: Option<HighScoreData>,
+    pub total_atp_collected: u64,
+    pub enemies_defeated: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HighScoreData {
+    pub scores: Vec<HighScoreEntry>,
+    pub total_games_played: u32,
+    pub best_evolution_reached: String,
+    pub longest_survival_time: f32,
+    pub total_atp_collected: u64,
+    pub enemies_defeated: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct HighScoreEntry {
+    pub score: u32,
+    pub date: String,
+    pub evolution_type: String,
+    pub waves_survived: u32,
+    pub time_played: f32,
+}
+
+impl Default for HighScoreData {
+    fn default() -> Self {
+        Self {
+            scores: vec![
+                HighScoreEntry {
+                    score: 10000,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Cytoplasmic Spray".to_string(),
+                    waves_survived: 10,
+                    time_played: 300.0,
+                },
+                HighScoreEntry {
+                    score: 7500,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Pseudopod Network".to_string(),
+                    waves_survived: 8,
+                    time_played: 240.0,
+                },
+                HighScoreEntry {
+                    score: 5000,
+                    date: "2025-01-01".to_string(),
+                    evolution_type: "Bioluminescent Beam".to_string(),
+                    waves_survived: 6,
+                    time_played: 180.0,
+                },
+            ],
+            total_games_played: 3,
+            best_evolution_reached: "Bioluminescent Beam".to_string(),
+            longest_survival_time: 300.0,
+            total_atp_collected: 2500,
+            enemies_defeated: 150,
+        }
+    }
+}
+
+// ===== SCALE MANAGEMENT =====
+#[derive(Resource)]
+pub struct ScaleManager {
+    pub current_scale: f32,
+    pub target_scale: f32,
+    pub transition_speed: f32,
+    pub scale_levels: Vec<ScaleLevel>,
+    pub physics_scale_factor: f32,
+}
+
+#[derive(Clone)]
+pub struct ScaleLevel {
+    pub scale: f32,
+    pub name: String,
+    pub physics_multiplier: f32,
+    pub enemy_spawn_rates: Vec<f32>,
+    pub environmental_effects: Vec<EnvironmentalEffect>,
+}
+
+#[derive(Clone)]
+pub struct EnvironmentalEffect {
+    pub effect_type: String,
+    pub intensity: f32,
+    pub radius: f32,
+}
+
+impl Default for ScaleManager {
+    fn default() -> Self {
+        Self {
+            current_scale: 1.0,
+            target_scale: 1.0,
+            transition_speed: 2.0,
+            scale_levels: vec![
+                ScaleLevel {
+                    scale: 0.1,
+                    name: "Molecular Level".to_string(),
+                    physics_multiplier: 3.0,
+                    enemy_spawn_rates: vec![0.5, 1.0, 2.0],
+                    environmental_effects: vec![],
+                },
+                ScaleLevel {
+                    scale: 1.0,
+                    name: "Cellular Level".to_string(),
+                    physics_multiplier: 1.0,
+                    enemy_spawn_rates: vec![1.0, 1.5, 2.5],
+                    environmental_effects: vec![],
+                },
+                ScaleLevel {
+                    scale: 10.0,
+                    name: "Tissue Level".to_string(),
+                    physics_multiplier: 0.3,
+                    enemy_spawn_rates: vec![2.0, 3.0, 4.0],
+                    environmental_effects: vec![],
+                },
+            ],
+            physics_scale_factor: 1.0,
+        }
+    }
+}
+
+// ===== MICROSCOPIC PHYSICS =====
 #[derive(Resource)]
 pub struct MicroscopicPhysics {
     pub brownian_motion_intensity: f32,
@@ -412,7 +569,7 @@ impl Default for MicroscopicPhysics {
     }
 }
 
-// New: Biological Progression System
+// ===== EVOLUTION PROGRESSION =====
 #[derive(Resource)]
 pub struct EvolutionProgression {
     pub current_evolutionary_stage: u32,
@@ -444,7 +601,7 @@ impl Default for EvolutionProgression {
     }
 }
 
-// New: Biological Interaction Matrix
+// ===== BIOLOGICAL INTERACTIONS =====
 #[derive(Resource)]
 pub struct BiologicalInteractions {
     pub symbiotic_relationships: Vec<SymbioticPair>,
@@ -526,121 +683,19 @@ impl Default for BiologicalInteractions {
     }
 }
 
-// Screen Shake Effect
-#[derive(Resource)]
-pub struct ScreenShakeResource {
-    pub trauma: f32,
-    pub max_trauma: f32,
+// ===== ADDITIONAL HELPER TYPES =====
+#[derive(Clone)]
+pub struct ChemicalAttractant {
+    pub position: Vec2,
+    pub attractant_type: String,
+    pub strength: f32,
     pub decay_rate: f32,
-    pub shake_intensity: f32,
-    pub rotation_factor: f32,
 }
 
-impl Default for ScreenShakeResource {
-    fn default() -> Self {
-        Self {
-            trauma: 0.0,
-            max_trauma: 1.0,
-            decay_rate: 2.5,
-            shake_intensity: 25.0,
-            rotation_factor: 0.02,
-        }
-    }
-}
-
-// (Persistent) High Scores
-#[derive(Resource, Clone, Default)]
-pub struct GameScore {
-    pub current: u32,
-    pub high_scores: Vec<u32>,
-    pub score_multiplier: f32,
-    pub multiplier_timer: f32,
-    pub high_score_data: Option<HighScoreData>,
-    pub total_atp_collected: u64,
-    pub enemies_defeated: u32,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct HighScoreData {
-    pub scores: Vec<HighScoreEntry>,
-    pub total_games_played: u32,
-    pub best_evolution_reached: String,
-    pub longest_survival_time: f32,
-    pub total_atp_collected: u64,
-    pub enemies_defeated: u32,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct HighScoreEntry {
-    pub score: u32,
-    pub date: String,
-    pub evolution_type: String,
-    pub waves_survived: u32,
-    pub time_played: f32,
-}
-
-impl Default for HighScoreData {
-    fn default() -> Self {
-        Self {
-            scores: vec![
-                HighScoreEntry {
-                    score: 10000,
-                    date: "2025-01-01".to_string(),
-                    evolution_type: "Cytoplasmic Spray".to_string(),
-                    waves_survived: 10,
-                    time_played: 300.0,
-                },
-                HighScoreEntry {
-                    score: 7500,
-                    date: "2025-01-01".to_string(),
-                    evolution_type: "Pseudopod Network".to_string(),
-                    waves_survived: 8,
-                    time_played: 240.0,
-                },
-                HighScoreEntry {
-                    score: 5000,
-                    date: "2025-01-01".to_string(),
-                    evolution_type: "Bioluminescent Beam".to_string(),
-                    waves_survived: 6,
-                    time_played: 180.0,
-                },
-            ],
-            total_games_played: 3,
-            best_evolution_reached: "Bioluminescent Beam".to_string(),
-            longest_survival_time: 300.0,
-            total_atp_collected: 2500,
-            enemies_defeated: 150,
-        }
-    }
-}
-
-use crate::components::{TidePhase};
-
-// Tidal Mechanics
-#[derive(Resource)]
-pub struct TidalState {
-    pub last_king_tide: f32,
-    pub current_tide_phase: TidePhase,
-    pub debris_active: bool,
-}
-
-impl Default for TidalState {
-    fn default() -> Self {
-        Self {
-            last_king_tide: 0.0,
-            current_tide_phase: TidePhase::Rising,
-            debris_active: false,
-        }
-    }
-}
-
-// menu system
-#[derive(Resource)]
-pub struct LoadingAssets { pub handles: Vec<UntypedHandle> }
-
-#[derive(Resource)]
-pub struct AudioMenuSettings { pub volume: f32 }
-
-impl Default for AudioMenuSettings {
-    fn default() -> Self { Self { volume: 0.5 } }
+#[derive(Clone)]
+pub struct ColonySpawnPattern {
+    pub pattern_name: String,
+    pub spawn_positions: Vec<Vec2>,
+    pub spawn_delays: Vec<f32>,
+    pub organism_types: Vec<String>,
 }

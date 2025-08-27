@@ -131,7 +131,7 @@ impl Default for InputManager {
 }
 
 impl InputManager {
-    fn setup_default_bindings(&mut self) {
+    pub fn setup_default_bindings(&mut self) {
         use InputAction::*;
         
         // Movement bindings

@@ -1061,4 +1061,54 @@ pub struct CopyrightText;
 pub struct HighScoreDisplay;
 
 #[derive(Clone)]
-pub enum MenuAction { Play, Options, Quit }
+pub enum MenuAction { 
+    Play, 
+    Options, 
+    Quit,
+    Settings,
+    HighScores,
+    Back,
+    ToggleFullscreen,
+    ResetControls,
+}
+
+// ===== MENU SYSTEM COMPONENTS =====
+#[derive(Component)]
+pub struct PulsingText;
+
+#[derive(Component)]
+pub struct AnimatedParticle {
+    pub velocity: Vec2,
+    pub lifetime: f32,
+    pub pulse_phase: f32,
+}
+
+#[derive(Component, Clone)]
+pub enum SliderType {
+    Master,
+    SFX,
+    Music,
+}
+
+#[derive(Component)]
+pub struct AudioSlider {
+    pub slider_type: SliderType,
+}
+
+#[derive(Component)]
+pub struct SliderFill {
+    pub slider_type: SliderType,
+}
+
+#[derive(Component)]
+pub enum VolumeText {
+    Master,
+    SFX,
+    Music,
+}
+
+#[derive(Component)]
+pub struct SettingsMenu;
+
+#[derive(Component)]
+pub struct HighScoreMenu;

@@ -64,22 +64,3 @@ pub enum TidalEvent {
     LowTideReached,
     CurrentReversal { new_direction: Vec2 },
 }
-
-// Add to TidalPoolPhysics in resources.rs:
-impl Default for TidalPoolPhysics {
-    fn default() -> Self {
-        Self {
-            tide_level: 0.0,
-            tide_cycle_speed: 0.02, // Slower for more dramatic effect
-            wave_intensity: 0.5,
-            current_strength: 1.0,
-            surface_tension: 0.8,
-            water_viscosity: 0.9,
-            temperature: 20.0,
-            salinity: 3.5,
-            king_tide_active: false,
-            king_tide_timer: 0.0,
-            king_tide_intensity: 1.0,
-        }
-    }
-}

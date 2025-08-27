@@ -4,23 +4,27 @@
 
 ### **1.1 Complete Menu System** 
 - [ ] **Main Menu UI**
-  - [ ] Title screen with animated background particles
-  - [ ] Play, Options, High Scores, Quit buttons
-  - [ ] Biological theme styling (organic shapes, bioluminescent colors)
-  - [ ] Button hover/click animations
+  - [x] Title screen with animated background particles
+  - [x] Play, Options, High Scores, Quit buttons
+  - [-] Biological theme styling (organic shapes, bioluminescent colors)
+  - [x] Button hover/click animations
 - [ ] **Settings Menu**
+  - [ ] Font size doesn't match buttons
   - [ ] Audio volume sliders (Master, SFX, Music)
+    - [ ] Visual sliders, no controls
   - [ ] Controls remapping interface
+    - [ ] No remapping functions, just a list of controls
   - [ ] Graphics options (fullscreen, resolution)
-  - [ ] Back button navigation
+  - [x] Back button navigation
 - [ ] **High Scores Display**
-  - [ ] Top 10 leaderboard with evolution types
-  - [ ] Date/time stamps
-  - [ ] "Your Best" highlighting
+  - [x] Top 10 leaderboard with evolution types
+  - [x] Date/time stamps
+  - [-] "Your Best" highlighting
+    - [ ] Need better column/table layout
 - [ ] **Menu State Management**
-  - [ ] Proper state transitions (TitleScreen → Playing → GameOver)
-  - [ ] ESC key handling throughout menus
-  - [ ] Menu background cleanup on state change
+  - [x] Proper state transitions (TitleScreen → Playing → GameOver)
+  - [x] ESC key handling throughout menus
+  - [x] Menu background cleanup on state change
 
 ### **1.2 Audio System Implementation**
 - [ ] **Background Music**

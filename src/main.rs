@@ -103,6 +103,7 @@ fn main() {
         .init_resource::<AchievementManager>()   // Steam-ready achievement system
         .init_resource::<TidalFeedbackSystem>()  // Visual feedback for tidal effects
         .init_resource::<DiagnosticsStore>()
+        .init_resource::<MenuSettings>() 
 
         // ===== GAME STATE MANAGEMENT =====
         .init_state::<GameState>() // Playing, Paused, GameOver states

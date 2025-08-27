@@ -200,7 +200,7 @@ pub fn spawn_enemies(
         
         let (ai_type, enemy_type) = get_enemy_config_fast(enemy_spawner.wave_timer, enemy_spawner.enemies_spawned);
         
-        spawn_events.send(SpawnEnemy {
+        spawn_events.write(SpawnEnemy {
             position: Vec3::new(spawn_x, 400.0, 0.0),
             ai_type,
             enemy_type,
@@ -364,9 +364,9 @@ pub fn collision_system(
     // Enemy projectiles vs player - optimized
     for (proj_entity, proj_pos, proj_radius, projectile) in enemy_projectiles {
         if check_collision_fast(player_pos, player_radius, proj_pos, proj_radius) {
-            player_hit_events.send(PlayerHit { position: proj_pos, damage: projectile.damage });
-            shake_events.send(AddScreenShake { amount: 0.5 });
-            explosion_events.send(SpawnExplosion { position: proj_pos, intensity: 0.8, enemy_type: None });
+            player_hit_events.write(PlayerHit { position: proj_pos, damage: projectile.damage });
+            shake_events.write(AddScreenShake { amount: 0.5 });
+            explosion_events.write(SpawnExplosion { position: proj_pos, intensity: 0.8, enemy_type: None });
             commands.entity(proj_entity).try_insert(AlreadyDespawned).despawn();
         }
     }
@@ -384,8 +384,8 @@ pub fn collision_system(
                 let (final_damage, is_crit) = calculate_crit_hit(projectile.damage, crit_stats, seed);
                 
                 enemy_health.0 -= final_damage;
-                enemy_hit_events.send(EnemyHit { entity: enemy_entity, position: enemy_transform.translation });
-                explosion_events.send(SpawnExplosion { position: proj_pos, intensity: 0.6, enemy_type: None });
+                enemy_hit_events.write(EnemyHit { entity: enemy_entity, position: enemy_transform.translation });
+                explosion_events.write(SpawnExplosion { position: proj_pos, intensity: 0.6, enemy_type: None });
                 spawn_damage_text_fast(&mut commands, enemy_transform.translation, final_damage, is_crit, &fonts);
                 projectiles_to_remove.push(proj_entity);
                 
@@ -398,8 +398,8 @@ pub fn collision_system(
                         EnemyType::ParasiticProtozoa => 0.4,
                         _ => 0.2,
                     };
-                    shake_events.send(AddScreenShake { amount: shake });
-                    explosion_events.send(SpawnExplosion { 
+                    shake_events.write(AddScreenShake { amount: shake });
+                    explosion_events.write(SpawnExplosion { 
                         position: enemy_transform.translation, 
                         intensity: 1.0, 
                         enemy_type: Some(enemy_type.clone()) 
@@ -407,7 +407,7 @@ pub fn collision_system(
                     
                     enemies_to_remove.push(enemy_entity);
                     game_score.enemies_defeated += 1;
-                    achievement_events.send(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));
+                    achievement_events.write(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));
                 }
                 break; // Projectile can only hit one enemy
             }
@@ -427,14 +427,14 @@ pub fn collision_system(
         if enemy_opt.is_none() { continue; }
         
         if check_collision_fast(player_pos, player_radius, enemy_transform.translation, enemy_collider.radius) {
-            player_hit_events.send(PlayerHit { position: enemy_transform.translation, damage: 20 });
-            shake_events.send(AddScreenShake { amount: 0.6 });
+            player_hit_events.write(PlayerHit { position: enemy_transform.translation, damage: 20 });
+            shake_events.write(AddScreenShake { amount: 0.6 });
             
             enemy_health.0 -= 30;
             if enemy_health.0 <= 0 {
                 game_score.current += 50;
-                achievement_events.send(AchievementEvent::EnemyKilled("Collision Kill".to_string()));
-                explosion_events.send(SpawnExplosion { position: enemy_transform.translation, intensity: 1.0, enemy_type: None });
+                achievement_events.write(AchievementEvent::EnemyKilled("Collision Kill".to_string()));
+                explosion_events.write(SpawnExplosion { position: enemy_transform.translation, intensity: 1.0, enemy_type: None });
                 commands.entity(enemy_entity).try_insert(AlreadyDespawned).despawn();
             }
         }
@@ -464,7 +464,7 @@ pub fn check_game_over(
 ) {
     if let Ok((entity, health, transform, player)) = player_query.single() {
         if health.0 <= 0 && player.lives <= 0 {
-            explosion_events.send(SpawnExplosion {
+            explosion_events.write(SpawnExplosion {
                 position: transform.translation,
                 intensity: 2.5,
                 enemy_type: None,
@@ -502,7 +502,7 @@ pub fn handle_player_hit(
             health.0 -= event.damage;
             player.invincible_timer = 1.0;
 
-            explosion_events.send(SpawnExplosion { position: event.position, intensity: 0.8, enemy_type: None });
+            explosion_events.write(SpawnExplosion { position: event.position, intensity: 0.8, enemy_type: None });
 
             if health.0 <= 0 {
                 player.lives -= 1;
