@@ -32,7 +32,9 @@ mod tidal_feedback;
 mod input;
 mod player;
 mod physics;
+mod menu_systems;
 
+use menu_systems::*;
 use components::*;
 use resources::*;
 use systems::*;
@@ -74,6 +76,7 @@ fn main() {
         .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
         .add_plugins(input::InputPlugin)        // Remappable input (keyboard, gamepad)
         .add_plugins(PerformantLightingPlugin)
+        .add_plugins(MenuSystemsPlugin)
 
         // ===== NEW: COSMIC UI SETUP =====
         .add_plugins(CosmicUIPlugin)              // Add the Cosmic UI plugin
@@ -122,7 +125,7 @@ fn main() {
             setup_biological_background,    // Spawn current indicators and environmental elements
             spawn_biological_player,        // Create player cell with fluid dynamics
             load_biological_assets,         // Load unique enemy sprites and audio
-            load_game_fonts,                // Load custom game font
+            // load_game_fonts,                // Load custom game font
             load_high_scores_from_file,     // Load persistent high score data
             init_particle_pool,             // Pre-allocate particle system
             init_fluid_environment,         // Initialize water current simulation
@@ -133,7 +136,7 @@ fn main() {
             start_ambient_music.after(load_biological_assets), // Begin ocean ambience
 
             // NEW: Spawn the Cosmic UI HUD
-            // spawn_game_hud.after(load_game_fonts),            
+            // spawn_game_hud.after(load_game_fonts),
         ))
         .add_systems(Startup, (
             setup_biological_ui,            // Create UI with biological terminology
@@ -643,17 +646,6 @@ pub fn reset_biological_game_state(
         ));
     }
 }
-
-/// Load game fonts for UI display
-pub fn load_game_fonts(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let fonts = GameFonts {
-        default_font: asset_server.load("fonts/planetary_contact.ttf"),
-    };
-    commands.insert_resource(fonts);
-}
-
-
-
 
 // Enhanced particle system for organic effects
 pub fn update_organic_particles(

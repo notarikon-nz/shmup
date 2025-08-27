@@ -10,8 +10,6 @@ pub fn setup_biological_ui(
     mut commands: Commands,
     fonts: Res<GameFonts>,
 ) {
-
-
         
     // Cellular integrity bar (health bar)
     commands.spawn((

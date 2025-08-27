@@ -1033,3 +1033,32 @@ pub struct ContaminationWarningText;
 
 #[derive(Component)]
 pub struct PerfHudText;
+
+
+// menu system
+#[derive(Component)]
+pub struct LoadingBar;
+
+#[derive(Component)]
+pub struct LoadingBarFill;
+
+#[derive(Component)]
+pub struct TitleScreen;
+
+#[derive(Component)]
+pub struct MenuButton { pub action: MenuAction }
+
+#[derive(Component)]
+pub struct BackgroundParticle { pub velocity: Vec2 }
+
+#[derive(Component)]
+pub struct ControlsScreen;
+
+#[derive(Component)]
+pub struct CopyrightText;
+
+#[derive(Component)]
+pub struct HighScoreDisplay;
+
+#[derive(Clone)]
+pub enum MenuAction { Play, Options, Quit }

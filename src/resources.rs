@@ -66,10 +66,13 @@ pub struct EnemySpawner {
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum GameState {
     #[default]
+    Loading,
+    TitleScreen,
+    Controls,
     Playing,
     Paused,
     GameOver,
-    None,
+    None, // placeholder for testing
 }
 
 #[derive(Resource, Default)]
@@ -629,4 +632,15 @@ impl Default for TidalState {
             debris_active: false,
         }
     }
+}
+
+// menu system
+#[derive(Resource)]
+pub struct LoadingAssets { pub handles: Vec<UntypedHandle> }
+
+#[derive(Resource)]
+pub struct AudioMenuSettings { pub volume: f32 }
+
+impl Default for AudioMenuSettings {
+    fn default() -> Self { Self { volume: 0.5 } }
 }
