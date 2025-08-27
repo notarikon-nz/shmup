@@ -187,7 +187,7 @@ pub fn update_biological_ui(
 }
 
 // ===== HEALTH BAR UPDATE =====
-pub fn old_update_health_bar(
+pub fn update_health_bar(
     player_query: Query<(&Health, &CellularUpgrades), With<Player>>,
     mut health_fill_query: Query<&mut Node, With<HealthBarFill>>,
 ) {
