@@ -73,7 +73,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default()) // For FPS display
-        .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
+        // .add_plugins(LogDiagnosticsPlugin::default()) // For GPU display
         .add_plugins(input::InputPlugin)        // Remappable input (keyboard, gamepad)
         .add_plugins(PerformantLightingPlugin)
         .add_plugins(MenuSystemsPlugin)
@@ -91,7 +91,6 @@ fn main() {
         .init_resource::<GameStarted>()          // Game initialization flag
         .init_resource::<ShootingState>()        // Weapon firing rate modifiers
         .init_resource::<ScreenShakeResource>()  // Screen shake for impact feedback
-        .init_resource::<AudioChannels>()
 
         // ===== BIOLOGICAL SYSTEMS RESOURCES =====
         .init_resource::<FluidEnvironment>()     // Water current simulation grid
@@ -134,7 +133,9 @@ fn main() {
             init_current_generator,         // Set up thermal vents and major currents
             setup_achievement_system,       // Initialize Steam-ready achievements
             init_procedural_background,     // Set up dynamic background generation
-            start_ambient_music.after(load_biological_assets), // Begin ocean ambience
+            
+            setup_audio_system, // replaces vv
+            // start_ambient_music.after(load_biological_assets), // Begin ocean ambience
 
             // NEW: Spawn the Cosmic UI HUD
             // spawn_game_hud.after(load_game_fonts),
@@ -147,6 +148,8 @@ fn main() {
         // ===== CORE GAME LOOP SYSTEMS =====
         .add_systems(Update, (
             audio_system,           // Play sound effects for shooting, explosions
+            music_system, 
+            audio_cleanup_system,
             // handle_pause_input,     // ESC/P key pause toggle
             fps_text_update_system,
         ))

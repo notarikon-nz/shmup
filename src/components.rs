@@ -697,7 +697,7 @@ pub enum ExplosionPhase {
     MiniBlast,  // Incorporates old MiniExplosion functionality
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ExplosionType {
     Standard,
     Biological { toxin_release: bool, membrane_rupture: bool },
