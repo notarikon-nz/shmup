@@ -78,7 +78,7 @@ pub fn cosmic_ui_cleanup(
         queue.notifications.retain_mut(|notification| {
             notification.lifetime -= time.delta_secs();
             if notification.lifetime <= 0.0 {
-                commands.entity(notification.entity).despawn_recursive();
+                commands.entity(notification.entity).despawn();
                 false
             } else {
                 true

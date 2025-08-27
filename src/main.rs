@@ -311,7 +311,7 @@ fn main() {
             spawn_particles_system,         // Create particle effects from events
             spawn_atp_on_death,             // Drop ATP currency when enemies die
             handle_player_hit,              // Process player damage and lives
-            // update_health_bar,              // Update UI health display
+            update_health_bar,              // Update UI health display
             check_game_over,                // Transition to game over state
             handle_restart_input,           // R key restart functionality
         ).run_if(in_state(GameState::Playing)))
@@ -322,7 +322,7 @@ fn main() {
             update_evolution_ui,            // Evolution chamber upgrade menu
             update_tidal_ui,                // Tide status indicator
             update_biological_ui,           // ATP, score, lives, ecosystem status
-        ).run_if(in_state(GameState::None)))
+        ).run_if(in_state(GameState::Playing)))
 
         // ===== DEBUG SYSTEMS (Development Only) =====
         .add_systems(Update, (

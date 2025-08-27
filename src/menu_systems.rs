@@ -107,7 +107,7 @@ pub fn loading_system(
 
 pub fn cleanup_loading(mut commands: Commands, query: Query<Entity, Or<(With<LoadingBar>, With<Node>)>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -284,7 +284,7 @@ pub fn cleanup_title_screen(
     particle_query: Query<Entity, With<BackgroundParticle>>,
 ) {
     for entity in title_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     
     for entity in particle_query.iter() {

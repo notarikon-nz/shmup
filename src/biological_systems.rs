@@ -698,7 +698,7 @@ fn apply_harmful_coral_effects(
 }
 
 fn spawn_coral_enemy(spawn_events: &mut EventWriter<SpawnEnemy>, position: Vec3) {
-    spawn_events.send(SpawnEnemy {
+    spawn_events.write(SpawnEnemy {
         position,
         ai_type: EnemyAI::Chemotaxis {
             target_chemical: ChemicalType::PlayerPheromones,
