@@ -189,10 +189,10 @@ fn main() {
 
             // Environmental storytelling
             enhanced_coral_system,          // Dynamic coral health and corruption
-            contamination_visualization_system, // Show pollution effects
-            microscopic_debris_system,      // Story fragments in debris
-            bioluminescent_warning_system,  // Emergency lighting for dangers
-            environmental_narrative_system, // Dynamic environmental storytelling
+            //contamination_visualization_system, // Show pollution effects
+            //microscopic_debris_system,      // Story fragments in debris
+            //bioluminescent_warning_system,  // Emergency lighting for dangers
+            //environmental_narrative_system, // Dynamic environmental storytelling
         ).run_if(in_state(GameState::Playing)))
 
         // ===== SPECIAL EFFECT SYSTEMS =====
@@ -278,14 +278,14 @@ fn main() {
             
             fluid_dynamics_system,          // Water current field generation
             chemical_environment_system,    // pH and oxygen zone simulation
-            update_current_field,           // Current indicator visualization
+            //update_current_field,           // Current indicator visualization
             organic_ai_system,              // Biological AI behaviors (chemotaxis, etc.)
-            generate_procedural_currents,   // Dynamic current pattern generation
+            //generate_procedural_currents,   // Dynamic current pattern generation
             cell_division_system,           // Enemy reproduction mechanics
             symbiotic_pair_system,          // Paired organism death mechanics
             thermal_vent_effects_system,    // Heat effects and thermal particles
-            dynamic_chemical_zone_system,   // Adaptive chemical zone spawning
-            scroll_thermal_vents,           // Move thermal vents with current
+            //dynamic_chemical_zone_system,   // Adaptive chemical zone spawning
+            //scroll_thermal_vents,           // Move thermal vents with current
         ).run_if(in_state(GameState::None)))
 
         // ===== TIDAL MECHANICS SYSTEMS =====
@@ -298,23 +298,10 @@ fn main() {
 
         // ===== CHEMICAL AND ENVIRONMENTAL EFFECTS =====
         .add_systems(Update, (
-            apply_chemical_damage_system,   // pH and oxygen damage to entities
+            //apply_chemical_damage_system,   // pH and oxygen damage to entities
             pheromone_communication_system, // Colony chemical coordination
             ecosystem_monitoring_system,    // Track ecosystem health metrics
         ).run_if(in_state(GameState::None)))
-
-        // ===== ENEMY VISUAL ANIMATION SYSTEMS =====
-        .add_systems(Update, (
-            signal_particle_spawning,       // Coordination indicators for swarm cells
-            virus_pulsing_animation,        // Viral particle size pulsing
-            bacteria_flagella_animation,    // Bacterial undulation movement
-            corruption_color_shift,         // Color changes for corrupted enemies
-            warning_flash_animation,        // Warning flashes for dangerous enemies
-            offspring_wiggle_animation,     // Juvenile organism movement
-            pseudopod_animation,            // Protozoa shape-shifting animation
-            gestation_animation,            // Reproductive vesicle growth animation
-            toxic_aura_animation,           // Biofilm colony toxin particle emission
-        ).run_if(in_state(GameState::Playing)))
 
         // ===== EVENT PROCESSING SYSTEMS =====
         .add_systems(Update, (
