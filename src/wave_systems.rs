@@ -27,7 +27,7 @@ pub struct WaveManager {
     pub wave_active: bool,
     pub enemies_remaining: u32,
     pub wave_start_time: f32,
-    wave_complete_time: f32,
+    pub wave_complete_time: f32,
     pub difficulty_multiplier: f32,
     pub environmental_hazards_active: bool,
     pub wave_patterns: Vec<WavePattern>,
