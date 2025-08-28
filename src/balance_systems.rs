@@ -87,6 +87,8 @@ pub struct ProgressionMetrics {
     pub invincibility_effectiveness: f32,
     pub difficulty_curve: Vec<(u32, f32)>, // (wave, difficulty_multiplier)
     pub player_power_curve: Vec<(f32, f32)>, // (time, power_level)
+    pub magnet_effectiveness: f32,
+    pub collection_efficiency: f32,    
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -207,6 +209,8 @@ pub fn initialize_balance_analyzer(mut commands: Commands) {
         invincibility_effectiveness: 1.0,
         difficulty_curve: vec![(1, 1.0), (5, 1.3), (10, 1.8), (15, 2.5), (20, 3.5)],
         player_power_curve: vec![(0.0, 1.0)],
+        collection_efficiency: 0.0,
+        magnet_effectiveness: 0.0,
     };
     
     commands.insert_resource(BalanceAnalyzer {
@@ -316,6 +320,13 @@ pub fn weapon_performance_tracking(
         // Calculate late-game viability based on enemy scaling
         weapon_stats.late_game_viability = calculate_late_game_viability(weapon_stats, enemy_count);
     }
+
+/*
+if upgrades.magnet_radius > 0.0 {
+    balance_analyzer.progression_metrics.collection_efficiency += 
+        (upgrades.magnet_radius + upgrades.magnet_strength * 50.0) / 100.0;
+}
+        */ 
 }
 
 pub fn atp_economy_analysis(

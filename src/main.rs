@@ -117,6 +117,8 @@ fn main() {
             biological_movement_system,      // Player movement with fluid dynamics
             enhanced_shooting_system,        // Evolution-based weapon systems
 
+            atp_magnet_system,
+
             // spawn_enemies,               // Wave-based enemy spawning, replaced by following 3 functions
             wave_progression_system,
             wave_spawning_system,
@@ -1215,6 +1217,41 @@ pub fn export_balance_data_system(
                 eprintln!("Failed to export balance data: {}", e);
             } else {
                 println!("Balance data exported to: {}", filename);
+            }
+        }
+    }
+}
+
+
+pub fn render_magnet_field(
+    mut commands: Commands,
+    player_query: Query<(&Transform, &CellularUpgrades), With<Player>>,
+    existing_field_query: Query<Entity, With<MagnetFieldVisual>>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+) {
+    if let Some(assets) = assets {
+        if let Ok((player_transform, upgrades)) = player_query.single() {
+            // Remove old field visual
+            for entity in existing_field_query.iter() {
+                commands.entity(entity).despawn();
+            }
+            
+            // Create new field visual if magnet is upgraded
+            if upgrades.magnet_radius > 0.0 || upgrades.magnet_strength > 0.0 {
+                let radius = 80.0 + upgrades.magnet_radius;
+                let alpha = 0.1 + (upgrades.magnet_strength * 0.05).min(0.15);
+                
+                commands.spawn((
+                    Sprite {
+                        image: assets.particle_texture.clone(),
+                        color: Color::srgba(0.3, 0.8, 1.0, alpha),
+                        custom_size: Some(Vec2::splat(radius * 2.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(player_transform.translation + Vec3::new(0.0, 0.0, -0.1)),
+                    MagnetFieldVisual,
+                ));
             }
         }
     }

@@ -36,6 +36,9 @@ pub enum InputAction {
     EvolvePseudopod,       // 7
     EvolveSymbiotic,       // 8
     EvolveBioluminescent,  // 9
+
+    UpgradeMagnetRadius,
+    UpgradeMagnetStrength,    
 }
 
 // ===== INPUT BINDINGS =====
@@ -227,7 +230,7 @@ impl InputManager {
         for (i, action) in [
             UpgradeDamage, UpgradeMetabolic, UpgradeCellular, UpgradeEnzyme,
             UpgradeBioluminescence, UpgradeSpore, EvolvePseudopod, 
-            EvolveSymbiotic, EvolveBioluminescent
+            EvolveSymbiotic, EvolveBioluminescent, UpgradeMagnetRadius, UpgradeMagnetStrength
         ].iter().enumerate() {
             let key = match i {
                 0 => KeyCode::Digit1,
@@ -239,7 +242,9 @@ impl InputManager {
                 6 => KeyCode::Digit7,
                 7 => KeyCode::Digit8,
                 8 => KeyCode::Digit9,
-                _ => KeyCode::Digit0,
+                9 => KeyCode::Digit0,
+                10 => KeyCode::Minus,
+                _ => KeyCode::Backspace,
             };
             
             self.bind_action(*action, InputBinding {

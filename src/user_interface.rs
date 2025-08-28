@@ -252,15 +252,17 @@ pub fn update_evolution_ui(
 
 fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32, fonts: &GameFonts) {
     let evolutions = [
-        ("1 - Membrane Reinforcement (10 ATP)", 10, "Increases projectile damage by 20%"),
-        ("2 - Metabolic Enhancement (15 ATP)", 15, "+30% movement speed & fire rate"),
-        ("3 - Cellular Integrity (20 ATP)", 20, "+25 Maximum Health Points"),
-        ("4 - Enzyme Production (25 ATP)", 25, "Immunity to environmental toxins"),
-        ("5 - Bioluminescence (30 ATP)", 30, "Enhanced coordination abilities"),
-        ("6 - Emergency Spore (20 ATP)", 20, "+1 Emergency reproductive blast"),
-        ("7 - Pseudopod Network (50 ATP)", 50, "Multi-directional tendril weapon"),
-        ("8 - Symbiotic Hunters (75 ATP)", 75, "Homing cooperative organisms"),
-        ("9 - Bioluminescent Beam (100 ATP)", 100, "Concentrated energy discharge"),
+        ("1   Membrane Reinforcement (10 ATP)", 10, "Increases projectile damage by 20%"),
+        ("2   Metabolic Enhancement (15 ATP)", 15, "+30% movement speed & fire rate"),
+        ("3   Cellular Integrity (20 ATP)", 20, "+25 Maximum Health Points"),
+        ("4   Enzyme Production (25 ATP)", 25, "Immunity to environmental toxins"),
+        ("5   Bioluminescence (30 ATP)", 30, "Enhanced coordination abilities"),
+        ("6   Emergency Spore (20 ATP)", 20, "+1 Emergency reproductive blast"),
+        ("7   Pseudopod Network (50 ATP)", 50, "Multi-directional tendril weapon"),
+        ("8   Symbiotic Hunters (75 ATP)", 75, "Homing cooperative organisms"),
+        ("9   Bioluminescent Beam (100 ATP)", 100, "Concentrated energy discharge"),
+        ("0   Magnet Radius (25 ATP)", 25, "Increase ATP collection radius by 20px"),
+        ("-   Magnet Strength (30 ATP)", 30, "Increase magnetic pull force by 30%"),        
     ];
 
     commands.spawn((

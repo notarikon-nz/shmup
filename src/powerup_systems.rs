@@ -101,6 +101,7 @@ pub fn spawn_powerup_system(
                 PowerUpType::Chemotaxis { .. } => (assets.speed_powerup_texture.clone(), Color::srgb(0.8, 0.6, 1.0)),
                 PowerUpType::Osmoregulation { .. } => (assets.shield_powerup_texture.clone(), Color::srgb(0.3, 0.8, 0.9)),
                 PowerUpType::BinaryFission { .. } => (assets.rapidfire_powerup_texture.clone(), Color::srgb(1.0, 0.9, 0.3)),
+                PowerUpType::MagneticField { .. } => (assets.multiplier_powerup_texture.clone(), Color::srgb(0.4, 0.9, 0.4)),
             };
             
             commands.spawn((

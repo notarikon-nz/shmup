@@ -165,6 +165,9 @@ pub enum PowerUpType {
     Chemotaxis { homing_strength: f32, duration: f32 },
     Osmoregulation { immunity_duration: f32 },
     BinaryFission { clone_duration: f32 },
+
+    // ATP Magnetic Field
+    MagneticField { radius_boost: f32, strength_boost: f32, duration: f32 },
 }
 
 // Active Power-up Components (updated names)
@@ -325,6 +328,8 @@ pub struct CellularUpgrades {
     pub damage_amplification: f32,
     pub metabolic_rate: f32,
     pub spore_capacity: u32,
+    pub magnet_radius: f32,
+    pub magnet_strength: f32,    
 }
 
 // Emergency Spore System (renamed from Smart Bomb)
@@ -396,6 +401,16 @@ pub enum AdaptationType {
     EvolutionSwap(EvolutionType),
 }
 
+#[derive(Component)]
+pub struct MagnetFieldVisual;
+
+#[derive(Component)]
+pub struct TemporaryMagnetBoost {
+    pub timer: f32,
+    pub radius_boost: f32,
+    pub strength_boost: f32,
+}
+
 impl Default for EvolutionSystem {
     fn default() -> Self {
         Self {
@@ -427,6 +442,8 @@ impl Default for CellularUpgrades {
             damage_amplification: 1.0,
             metabolic_rate: 1.0,
             spore_capacity: 3,
+            magnet_radius: 0.0,
+            magnet_strength: 0.0,
         }
     }
 }
@@ -1119,3 +1136,18 @@ pub struct WaveInfoText;
 
 #[derive(Component)] 
 pub struct WaveProgressBar;
+
+// ATP Magnet System
+#[derive(Component)]
+pub struct ATPMagnet {
+    pub radius: f32,
+    pub strength: f32, // Pull force multiplier
+    pub active: bool,
+}
+
+#[derive(Component)]
+pub struct MagnetizedATP {
+    pub target_position: Vec3,
+    pub pull_force: f32,
+}
+

@@ -64,18 +64,18 @@
   - [x] Power-up spawn rate tuning
 
 ### **2.2 Evolution System Balance**
-- [ ] **Weapon Balance Testing**
-  - [ ] DPS calculations for each evolution path
-  - [ ] ATP cost vs. power ratio analysis
-  - [ ] Late-game viability testing
-- [ ] **Power-up Economics**
-  - [ ] ATP generation rates per enemy type
-  - [ ] Evolution upgrade costs (currently 10-100 ATP)
-  - [ ] Emergency spore replenishment balance
-- [ ] **Player Progression**
-  - [ ] Health upgrade scaling
-  - [ ] Movement speed vs. game balance
-  - [ ] Invincibility frame tuning
+- [x] **Weapon Balance Testing**
+  - [x] DPS calculations for each evolution path
+  - [x] ATP cost vs. power ratio analysis
+  - [x] Late-game viability testing
+- [x] **Power-up Economics**
+  - [x] ATP generation rates per enemy type
+  - [x] Evolution upgrade costs (currently 10-100 ATP)
+  - [x] Emergency spore replenishment balance
+- [x] **Player Progression**
+  - [x] Health upgrade scaling
+  - [x] Movement speed vs. game balance
+  - [x] Invincibility frame tuning
 
 ## **Phase 3: Visual Polish (Week 5-6) - MEDIUM PRIORITY**
 

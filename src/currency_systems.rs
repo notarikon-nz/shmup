@@ -227,6 +227,17 @@ pub fn evolution_chamber_interaction(
                         width: 20.0,
                     };
                 }
+
+                if input_manager.just_pressed(InputAction::UpgradeMagnetRadius) && atp.amount >= 25 {
+                    atp.amount -= 25;
+                    upgrades.magnet_radius += 20.0; // Increase radius by 20px
+                }
+
+                if input_manager.just_pressed(InputAction::UpgradeMagnetStrength) && atp.amount >= 30 {
+                    atp.amount -= 30;
+                    upgrades.magnet_strength += 0.3; // 30% stronger pull
+                }
+
             }
         }
     }
@@ -479,7 +490,7 @@ pub fn spawn_biological_powerups(
         let power_type = if (time.elapsed_secs() * 987.654).sin().abs() < 0.05 {
             PowerUpType::CellularRegeneration { amount: 1 } // Use as extra life marker
         } else {
-            match (time.elapsed_secs() as u32 / 18) % 9 {
+            match (time.elapsed_secs() as u32 / 18) % 10 {
                 0 => PowerUpType::CellularRegeneration { amount: 30 },
                 1 => PowerUpType::CellWall { duration: 12.0 },
                 2 => PowerUpType::Flagella { multiplier: 1.6, duration: 10.0 },
@@ -488,7 +499,8 @@ pub fn spawn_biological_powerups(
                 5 => PowerUpType::Photosynthesis { energy_regen: 8.0, duration: 15.0 },
                 6 => PowerUpType::Chemotaxis { homing_strength: 2.5, duration: 12.0 },
                 7 => PowerUpType::Osmoregulation { immunity_duration: 10.0 },
-                _ => PowerUpType::BinaryFission { clone_duration: 20.0 },
+                8 => PowerUpType::Osmoregulation { immunity_duration: 10.0 },
+                _ => PowerUpType::MagneticField { radius_boost: 40.0, strength_boost: 0.5, duration: 20.0 },
             }
         };
 
@@ -649,6 +661,14 @@ pub fn handle_biological_powerup_collection(
                             clone_timer: 0.5,
                         });
                     }
+
+                    PowerUpType::MagneticField { radius_boost, strength_boost, duration } => {
+                        commands.entity(player_entity).insert(TemporaryMagnetBoost {
+                            timer: 20.0,
+                            radius_boost: 40.0,
+                            strength_boost: 0.5,
+                        });
+                    }                    
                 }
 
                 commands.entity(powerup_entity)
@@ -962,3 +982,53 @@ pub fn wave_completion_system(
     complete_current_wave(&mut wave_manager, time.elapsed_secs());
 }
 
+pub fn atp_magnet_system(
+    mut commands: Commands,
+    player_query: Query<(&Transform, &CellularUpgrades), With<Player>>,
+    mut atp_query: Query<(Entity, &mut Transform, &ATP, Option<&mut MagnetizedATP>), (Without<Player>, Without<AlreadyDespawned>)>,
+    time: Res<Time>,
+) {
+    if let Ok((player_transform, upgrades)) = player_query.single() {
+        let magnet_radius = 80.0 + upgrades.magnet_radius; // Base 80px radius
+        let magnet_strength = 1.0 + upgrades.magnet_strength;
+        
+        for (atp_entity, mut atp_transform, atp_component, magnetized) in atp_query.iter_mut() {
+            let distance = player_transform.translation.distance(atp_transform.translation);
+            
+            if distance <= magnet_radius {
+                // ATP is within magnet range
+                let direction = (player_transform.translation - atp_transform.translation).normalize_or_zero();
+                let pull_strength = (1.0 - (distance / magnet_radius)) * magnet_strength * 300.0; // Stronger when closer
+                
+                if let Some(mut magnetized) = magnetized {
+                    // Already magnetized, update pull
+                    magnetized.target_position = player_transform.translation;
+                    magnetized.pull_force = pull_strength;
+                } else {
+                    // First time in range, add magnetized component
+                    commands.entity(atp_entity).insert(MagnetizedATP {
+                        target_position: player_transform.translation,
+                        pull_force: pull_strength,
+                    });
+                }
+                
+                // Apply magnetic pull
+                let pull_velocity = direction * pull_strength * time.delta_secs();
+                atp_transform.translation += pull_velocity;
+                
+                // Add organic wobble to make it feel biological
+                let wobble_phase = time.elapsed_secs() * 4.0 + atp_transform.translation.x * 0.01;
+                let wobble = Vec3::new(
+                    wobble_phase.sin() * 3.0 * time.delta_secs(),
+                    (wobble_phase * 1.3).cos() * 2.0 * time.delta_secs(),
+                    0.0
+                );
+                atp_transform.translation += wobble;
+                
+            } else if magnetized.is_some() {
+                // Outside range, remove magnetized component
+                commands.entity(atp_entity).remove::<MagnetizedATP>();
+            }
+        }
+    }
+}
