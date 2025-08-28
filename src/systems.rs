@@ -414,17 +414,6 @@ pub fn spawn_enemy_system(
     }
 }
 
-fn get_enemy_collision_radius(enemy_type: EnemyType) -> f32 {
-    match enemy_type {
-        EnemyType::ViralParticle | EnemyType::Offspring => 8.0,
-        EnemyType::AggressiveBacteria | EnemyType::SwarmCell => 12.0,
-        EnemyType::ParasiticProtozoa | EnemyType::SuicidalSpore => 16.0,
-        EnemyType::BiofilmColony | EnemyType::ReproductiveVesicle => 20.0,
-        EnemyType::InfectedMacrophage => 24.0,
-    }
-}
-
-
 
 // ===== MASSIVELY OPTIMIZED COLLISION SYSTEM =====
 
@@ -438,8 +427,8 @@ pub fn collision_system(
     time: Res<Time>,
     fonts: Res<GameFonts>,
     projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<AlreadyDespawned>>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<AlreadyDespawned>)>,
-    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<Player>, Without<AlreadyDespawned>)>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>, Without<AlreadyDespawned>)>,
     mut achievement_events: EventWriter<AchievementEvent>,
 ) {
     let Ok((_, player_transform, player_collider, player, crit_stats)) = player_query.single() else { return };
@@ -449,96 +438,148 @@ pub fn collision_system(
     let player_radius = player_collider.radius;
     let time_seed = time.elapsed_secs();
     
-    // Separate friendly and enemy projectiles for better cache locality
-    let mut friendly_projectiles = Vec::new();
-    let mut enemy_projectiles = Vec::new();
+    // Track entities to remove to avoid double-processing
+    let mut projectiles_to_remove = std::collections::HashSet::new();
+    let mut enemies_to_remove = std::collections::HashSet::new();
     
-    for (entity, transform, collider, projectile) in projectile_query.iter() {
-        let proj_data = (entity, transform.translation, collider.radius, projectile);
-        if projectile.friendly {
-            friendly_projectiles.push(proj_data);
-        } else {
-            enemy_projectiles.push(proj_data);
-        }
-    }
-    
-    // Enemy projectiles vs player - optimized
-    for (proj_entity, proj_pos, proj_radius, projectile) in enemy_projectiles {
-        if check_collision_fast(player_pos, player_radius, proj_pos, proj_radius) {
-            player_hit_events.write(PlayerHit { position: proj_pos, damage: projectile.damage });
+    // Enemy projectiles vs player
+    for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
+        if projectiles_to_remove.contains(&proj_entity) { continue; }
+        if projectile.friendly { continue; }
+        
+        if check_collision_fast(player_pos, player_radius, proj_transform.translation, proj_collider.radius) {
+            player_hit_events.write(PlayerHit { 
+                position: proj_transform.translation, 
+                damage: projectile.damage 
+            });
             shake_events.write(AddScreenShake { amount: 0.5 });
-            explosion_events.write(SpawnExplosion { position: proj_pos, intensity: 0.8, enemy_type: None });
-            commands.entity(proj_entity).try_insert(AlreadyDespawned).despawn();
+            explosion_events.write(SpawnExplosion { 
+                position: proj_transform.translation, 
+                intensity: 0.8, 
+                enemy_type: None 
+            });
+            
+            commands.entity(proj_entity).insert(AlreadyDespawned).despawn();
+            projectiles_to_remove.insert(proj_entity);
         }
     }
     
-    // Player projectiles vs enemies - spatial optimization
-    let mut enemies_to_remove = Vec::new();
-    let mut projectiles_to_remove = Vec::new();
-    
-    for (proj_entity, proj_pos, proj_radius, projectile) in friendly_projectiles {
-        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, enemy_opt) in enemy_query.iter_mut() {
-            let Some(enemy) = enemy_opt else { continue; };
+    // Player projectiles vs enemies - ONE projectile per enemy per frame
+    for (proj_entity, proj_transform, proj_collider, projectile) in projectile_query.iter() {
+        if projectiles_to_remove.contains(&proj_entity) { continue; }
+        if !projectile.friendly { continue; }
+        
+        let proj_pos = proj_transform.translation;
+        let proj_radius = proj_collider.radius;
+        
+        // Find closest enemy that this projectile can hit
+        let mut closest_enemy: Option<(Entity, f32)> = None;
+        
+        for (enemy_entity, enemy_transform, enemy_collider, enemy_health, enemy_opt) in enemy_query.iter() {
+            if enemies_to_remove.contains(&enemy_entity) { continue; }
+            if enemy_opt.is_none() { continue; }
             
             if check_collision_fast(proj_pos, proj_radius, enemy_transform.translation, enemy_collider.radius) {
-                let seed = proj_pos.x * 0.1 + time_seed;
-                let (final_damage, is_crit) = calculate_crit_hit(projectile.damage, crit_stats, seed);
+                let distance_sq = proj_pos.distance_squared(enemy_transform.translation);
                 
-                enemy_health.0 -= final_damage;
-                enemy_hit_events.write(EnemyHit { entity: enemy_entity, position: enemy_transform.translation });
-                explosion_events.write(SpawnExplosion { position: proj_pos, intensity: 0.6, enemy_type: None });
-                spawn_damage_text_fast(&mut commands, enemy_transform.translation, final_damage, is_crit, &fonts);
-                projectiles_to_remove.push(proj_entity);
-                
-                if enemy_health.0 <= 0 {
-                    let enemy_type = &enemy.enemy_type;
-                    game_score.current += enemy_type.get_points();
+                if let Some((_, current_distance)) = closest_enemy {
+                    if distance_sq < current_distance {
+                        closest_enemy = Some((enemy_entity, distance_sq));
+                    }
+                } else {
+                    closest_enemy = Some((enemy_entity, distance_sq));
+                }
+            }
+        }
+        
+        // Process hit with closest enemy
+        if let Some((enemy_entity, _)) = closest_enemy {
+            if let Ok((_, enemy_transform, _, mut enemy_health, enemy_opt)) = enemy_query.get_mut(enemy_entity) {
+                if let Some(enemy) = enemy_opt {
+                    let seed = proj_pos.x * 0.1 + time_seed;
+                    let (final_damage, is_crit) = calculate_crit_hit(projectile.damage, crit_stats, seed);
                     
-                    let shake = match enemy_type {
-                        EnemyType::InfectedMacrophage => 0.8,
-                        EnemyType::ParasiticProtozoa => 0.4,
-                        _ => 0.2,
-                    };
-                    shake_events.write(AddScreenShake { amount: shake });
-                    explosion_events.write(SpawnExplosion { 
-                        position: enemy_transform.translation, 
-                        intensity: 1.0, 
-                        enemy_type: Some(enemy_type.clone()) 
+                    enemy_health.0 -= final_damage;
+                    enemy_hit_events.write(EnemyHit { 
+                        entity: enemy_entity, 
+                        position: enemy_transform.translation 
                     });
                     
-                    enemies_to_remove.push(enemy_entity);
-                    game_score.enemies_defeated += 1;
-                    achievement_events.write(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));
+                    explosion_events.write(SpawnExplosion { 
+                        position: proj_pos, 
+                        intensity: 0.6, 
+                        enemy_type: None 
+                    });
+                    
+                    spawn_damage_text_fast(&mut commands, enemy_transform.translation, final_damage, is_crit, &fonts);
+                    
+                    // Remove projectile
+                    commands.entity(proj_entity).insert(AlreadyDespawned).despawn();
+                    projectiles_to_remove.insert(proj_entity);
+                    
+                    // Check if enemy died
+                    if enemy_health.0 <= 0 {
+                        let enemy_type = &enemy.enemy_type;
+                        game_score.current += enemy_type.get_points();
+                        
+                        let shake = match enemy_type {
+                            EnemyType::InfectedMacrophage => 0.8,
+                            EnemyType::ParasiticProtozoa => 0.4,
+                            _ => 0.2,
+                        };
+                        shake_events.write(AddScreenShake { amount: shake });
+                        explosion_events.write(SpawnExplosion { 
+                            position: enemy_transform.translation, 
+                            intensity: 1.0, 
+                            enemy_type: Some(enemy_type.clone()) 
+                        });
+                        
+                        commands.entity(enemy_entity).insert(AlreadyDespawned).despawn();
+                        enemies_to_remove.insert(enemy_entity);
+                        game_score.enemies_defeated += 1;
+                        achievement_events.write(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));
+                    }
                 }
-                break; // Projectile can only hit one enemy
             }
         }
     }
     
-    // Batch cleanup
-    for entity in projectiles_to_remove {
-        commands.entity(entity).try_insert(AlreadyDespawned).despawn();
-    }
-    for entity in enemies_to_remove {
-        commands.entity(entity).try_insert(AlreadyDespawned).despawn();
-    }
-    
-    // Enemy vs player collision - simplified
+    // Enemy vs player collision
     for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health, enemy_opt) in enemy_query.iter_mut() {
+        if enemies_to_remove.contains(&enemy_entity) { continue; }
         if enemy_opt.is_none() { continue; }
         
         if check_collision_fast(player_pos, player_radius, enemy_transform.translation, enemy_collider.radius) {
-            player_hit_events.write(PlayerHit { position: enemy_transform.translation, damage: 20 });
+            player_hit_events.write(PlayerHit { 
+                position: enemy_transform.translation, 
+                damage: 20 
+            });
             shake_events.write(AddScreenShake { amount: 0.6 });
             
+            // Damage enemy from collision
             enemy_health.0 -= 30;
             if enemy_health.0 <= 0 {
                 game_score.current += 50;
                 achievement_events.write(AchievementEvent::EnemyKilled("Collision Kill".to_string()));
-                explosion_events.write(SpawnExplosion { position: enemy_transform.translation, intensity: 1.0, enemy_type: None });
-                commands.entity(enemy_entity).try_insert(AlreadyDespawned).despawn();
+                explosion_events.write(SpawnExplosion { 
+                    position: enemy_transform.translation, 
+                    intensity: 1.0, 
+                    enemy_type: None 
+                });
+                commands.entity(enemy_entity).insert(AlreadyDespawned).despawn();
             }
         }
+    }
+}
+
+// Also update the collision radius function to be more generous:
+fn get_enemy_collision_radius(enemy_type: EnemyType) -> f32 {
+    match enemy_type {
+        EnemyType::ViralParticle | EnemyType::Offspring => 12.0, // Increased from 8.0
+        EnemyType::AggressiveBacteria | EnemyType::SwarmCell => 16.0, // Increased from 12.0
+        EnemyType::ParasiticProtozoa | EnemyType::SuicidalSpore => 20.0, // Increased from 16.0
+        EnemyType::BiofilmColony | EnemyType::ReproductiveVesicle => 24.0, // Increased from 20.0
+        EnemyType::InfectedMacrophage => 28.0, // Increased from 24.0
     }
 }
 

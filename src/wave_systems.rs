@@ -268,25 +268,21 @@ impl WaveManager {
             },
         });
 
-        // Wave 5: Biofilm Colony Introduction
+        // Wave 5: Biofilm Colony Introduction - FIXED positioning
         patterns.push(WavePattern {
             wave_number: 5,
             wave_type: WaveType::Tutorial { focus_enemy: EnemyType::BiofilmColony },
             enemy_spawns: vec![EnemySpawn {
                 enemy_type: EnemyType::BiofilmColony,
                 spawn_count: 2,
-                spawn_positions: vec![SpawnPosition::TopLeft, SpawnPosition::TopRight],
-                ai_override: Some(EnemyAI::Turret {
-                    rotation: 0.0,
-                    shoot_timer: 0.0,
-                    detection_range: 280.0,
-                }),
+                spawn_positions: vec![SpawnPosition::TopCenter], // Move to center instead of sides
+                ai_override: Some(EnemyAI::Linear { direction: Vec2::new(0.0, -1.0) }), // Make them move down instead of being turrets
                 health_multiplier: 1.2,
-                speed_multiplier: 0.0,
-                spawn_delay: 3.0,
+                speed_multiplier: 0.3, // Slow movement
+                spawn_delay: 2.0,
             }],
             environmental_effects: vec![],
-            narrative_context: "Stationary biofilm detected. Strategic positioning critical.".to_string(),
+            narrative_context: "Mobile biofilm colonies detected. Eliminate before they establish position.".to_string(),
             completion_rewards: WaveRewards {
                 atp_bonus: (ATP_BASE_REWARD as f32 * ATP_WAVE_MULTIPLIER.powi(4)) as u32,
                 powerup_guarantee: Some(PowerUpType::MitochondriaOvercharge { rate_multiplier: 1.5, duration: 12.0 }),
@@ -294,8 +290,8 @@ impl WaveManager {
                 score_multiplier: 1.5,
             },
             spawn_timing: SpawnTiming {
-                initial_delay: 3.0,
-                spawn_interval: 8.0,
+                initial_delay: 2.0,
+                spawn_interval: 5.0,
                 burst_spawning: false,
                 adaptive_timing: false,
             },
@@ -337,7 +333,7 @@ impl WaveManager {
                     ai_override: None,
                     health_multiplier: 1.0 + (wave_num - 6) as f32 * 0.1,
                     speed_multiplier: 1.0 + (wave_num - 6) as f32 * 0.05,
-                    spawn_delay: i as f32 * 2.0,
+                    spawn_delay: i as f32 * 1.0,
                 });
             }
 
@@ -415,7 +411,7 @@ impl WaveManager {
                     score_multiplier: 1.8 + (wave_num as f32 * 0.1),
                 },
                 spawn_timing: SpawnTiming {
-                    initial_delay: 2.0,
+                    initial_delay: 1.0,
                     spawn_interval: 1.0,
                     burst_spawning: false,
                     adaptive_timing: true,
@@ -435,17 +431,13 @@ impl WaveManager {
 
         for (i, wave_num) in (16..=20).enumerate() {
             let (boss_type, minion_types) = boss_configs[i].clone();
-
-            let boss_type_clone = boss_type.clone();
-            let boss_ai_override = Self::get_boss_ai(boss_type.clone());
-            let boss_type_description = Self::get_boss_description(boss_type.clone());
-
+            
             let mut enemy_spawns = vec![
                 EnemySpawn {
                     enemy_type: boss_type,
                     spawn_count: 1,
                     spawn_positions: vec![SpawnPosition::TopCenter],
-                    ai_override: boss_ai_override,
+                    ai_override: Self::get_boss_ai(boss_type),
                     health_multiplier: 2.0 + (wave_num - 16) as f32 * 0.5,
                     speed_multiplier: 1.2,
                     spawn_delay: 8.0,
@@ -472,7 +464,7 @@ impl WaveManager {
             patterns.push(WavePattern {
                 wave_number: wave_num,
                 wave_type: WaveType::MiniBoss {
-                    boss_type: boss_type_clone,
+                    boss_type,
                     minion_types,
                 },
                 enemy_spawns,
@@ -486,7 +478,7 @@ impl WaveManager {
                     }]
                 } else { vec![] },
                 narrative_context: format!("Major pathogen detected: {}. Coordinated response required.", 
-                    boss_type_description),
+                    Self::get_boss_description(boss_type)),
                 completion_rewards: WaveRewards {
                     atp_bonus: (ATP_BASE_REWARD as f32 * ATP_WAVE_MULTIPLIER.powi(wave_num as i32 - 1)) as u32 * 2,
                     powerup_guarantee: Some(PowerUpType::BinaryFission { clone_duration: 10.0 }),
@@ -580,6 +572,7 @@ impl WaveManager {
         }
     }
 
+
     fn get_boss_evolution_unlock(wave_num: u32) -> Option<String> {
         match wave_num {
             16 => Some("EnzymeBurst".to_string()),
@@ -629,38 +622,40 @@ impl SpawnPosition {
     pub fn get_world_positions(&self, count: u32) -> Vec<Vec3> {
         let mut positions = Vec::new();
         let screen_width = 1280.0;
-        let spawn_y = 400.0;
+        let spawn_y = 380.0; // Moved up from 400.0
 
         match self {
             SpawnPosition::TopCenter => {
                 for i in 0..count {
                     let x_offset = (i as f32 - (count - 1) as f32 / 2.0) * 40.0;
-                    positions.push(Vec3::new(x_offset, spawn_y, 0.0));
+                    positions.push(Vec3::new(x_offset.clamp(-500.0, 500.0), spawn_y, 0.0));
                 }
             }
             SpawnPosition::TopLeft => {
                 for i in 0..count {
-                    positions.push(Vec3::new(-screen_width * 0.3 - i as f32 * 30.0, spawn_y, 0.0));
+                    let x = (-screen_width * 0.4 - i as f32 * 30.0).max(-580.0);
+                    positions.push(Vec3::new(x, spawn_y, 0.0));
                 }
             }
             SpawnPosition::TopRight => {
                 for i in 0..count {
-                    positions.push(Vec3::new(screen_width * 0.3 + i as f32 * 30.0, spawn_y, 0.0));
+                    let x = (screen_width * 0.4 + i as f32 * 30.0).min(580.0);
+                    positions.push(Vec3::new(x, spawn_y, 0.0));
                 }
             }
             SpawnPosition::SidesAlternating => {
                 for i in 0..count {
                     let side = if i % 2 == 0 { -1.0 } else { 1.0 };
-                    let x = side * (screen_width * 0.4 + (i / 2) as f32 * 20.0);
-                    positions.push(Vec3::new(x, spawn_y - i as f32 * 15.0, 0.0));
+                    let x = (side * (screen_width * 0.35 + (i / 2) as f32 * 15.0)).clamp(-580.0, 580.0);
+                    positions.push(Vec3::new(x, spawn_y - i as f32 * 25.0, 0.0));
                 }
             }
             SpawnPosition::DiagonalApproach { angle } => {
                 let rad = angle.to_radians();
                 for i in 0..count {
-                    let distance = 300.0 + i as f32 * 50.0;
-                    let x = rad.sin() * distance;
-                    let y = spawn_y + rad.cos() * distance * 0.3;
+                    let distance = 200.0 + i as f32 * 40.0; // Reduced distance
+                    let x = (rad.sin() * distance).clamp(-580.0, 580.0);
+                    let y = spawn_y + rad.cos() * distance * 0.2; // Reduced Y spread
                     positions.push(Vec3::new(x, y, 0.0));
                 }
             }
@@ -671,19 +666,20 @@ impl SpawnPosition {
                         if arm * points_per_arm + point >= count { break; }
                         
                         let angle = (arm as f32 * std::f32::consts::TAU / *arms as f32) + 
-                                   (point as f32 * 0.5);
-                        let r = *radius * (0.5 + point as f32 * 0.5 / points_per_arm as f32);
-                        let x = angle.cos() * r;
-                        let y = spawn_y + angle.sin() * r * 0.3;
+                                   (point as f32 * 0.4);
+                        let r = (*radius * 0.8) * (0.3 + point as f32 * 0.7 / points_per_arm as f32); // Tighter spiral
+                        let x = (angle.cos() * r).clamp(-580.0, 580.0);
+                        let y = spawn_y + (angle.sin() * r * 0.2).max(-50.0); // Keep enemies higher
                         positions.push(Vec3::new(x, y, 0.0));
                     }
                 }
             }
             SpawnPosition::RandomScattered { area } => {
                 let mut rng = rand::rng();
+                let actual_area = area.min(1100.0); // Constrain to screen width
                 for _ in 0..count {
-                    let x = rng.random_range(-area / 2.0..area / 2.0);
-                    let y = spawn_y + rng.random_range(-50.0..100.0);
+                    let x = rng.random_range(-actual_area / 2.0..actual_area / 2.0).clamp(-580.0, 580.0);
+                    let y = spawn_y + rng.random_range(-30.0..50.0); // Smaller Y variance, bias upward
                     positions.push(Vec3::new(x, y, 0.0));
                 }
             }
@@ -734,7 +730,7 @@ pub fn wave_spawning_system(
             spawn_events.write(SpawnEnemy {
                 position: queued.position,
                 ai_type: queued.ai_type.clone(),
-                enemy_type: queued.enemy_type.clone(),
+                enemy_type: queued.enemy_type,
             });
             false // Remove from queue
         } else {
@@ -742,6 +738,7 @@ pub fn wave_spawning_system(
         }
     });
 }
+
 
 pub fn environmental_hazard_system(
     mut commands: Commands,
@@ -809,6 +806,7 @@ pub struct ActiveHazard {
 
 // ===== HELPER FUNCTIONS =====
 pub fn complete_current_wave(wave_manager: &mut WaveManager, current_time: f32) {
+    println!("Wave {} completed!", wave_manager.current_wave);
     wave_manager.wave_active = false;
     wave_manager.wave_complete_time = current_time;
     wave_manager.current_wave += 1;
@@ -818,9 +816,9 @@ pub fn complete_current_wave(wave_manager: &mut WaveManager, current_time: f32) 
     }
 }
 
-fn should_start_next_wave(wave_manager: &WaveManager, enemy_spawner: &EnemySpawner, current_time: f32) -> bool {
+fn should_start_next_wave(wave_manager: &WaveManager, _enemy_spawner: &EnemySpawner, current_time: f32) -> bool {
     let time_since_complete = current_time - wave_manager.wave_complete_time;
-    let min_delay = if wave_manager.current_wave <= TUTORIAL_WAVE_COUNT { 5.0 } else { 3.0 };
+    let min_delay = if wave_manager.current_wave <= TUTORIAL_WAVE_COUNT { 3.0 } else { 2.0 };
     
     time_since_complete >= min_delay
 }
@@ -830,14 +828,45 @@ fn start_wave(
     spawn_events: &mut EventWriter<SpawnEnemy>,
     current_time: f32,
 ) {
+    println!("Starting wave {}", wave_manager.current_wave);
     wave_manager.wave_active = true;
     wave_manager.wave_start_time = current_time;
     wave_manager.enemies_remaining = 0;
 
-    if let Some(pattern) = wave_manager.clone().get_current_wave_pattern() {
-        schedule_wave_spawns(pattern, spawn_events, current_time, wave_manager);
+    let mut wave_manager_clone = wave_manager.clone();
+
+    if let Some(pattern) = wave_manager.get_current_wave_pattern() {
+        schedule_wave_spawns(pattern, spawn_events, current_time, &mut wave_manager_clone);
     } else if wave_manager.current_wave >= ENDLESS_START_WAVE {
         generate_endless_wave(wave_manager, spawn_events, current_time);
+    } else {
+        // Fallback for missing wave patterns
+        println!("No pattern found for wave {}, using fallback", wave_manager.current_wave);
+        generate_fallback_wave(wave_manager, spawn_events, current_time);
+    }
+}
+
+fn generate_fallback_wave(
+    wave_manager: &mut WaveManager,
+    spawn_events: &mut EventWriter<SpawnEnemy>,
+    _current_time: f32,
+) {
+    let enemy_count = 3 + wave_manager.current_wave;
+    let enemy_type = match wave_manager.current_wave % 4 {
+        0 => EnemyType::ViralParticle,
+        1 => EnemyType::AggressiveBacteria,
+        2 => EnemyType::ParasiticProtozoa,
+        _ => EnemyType::SwarmCell,
+    };
+
+    for i in 0..enemy_count {
+        let x_offset = (i as f32 - (enemy_count - 1) as f32 / 2.0) * 60.0;
+        spawn_events.write(SpawnEnemy {
+            position: Vec3::new(x_offset, 400.0, 0.0),
+            ai_type: get_default_ai_for_enemy(enemy_type),
+            enemy_type,
+        });
+        wave_manager.enemies_remaining += 1;
     }
 }
 
@@ -894,12 +923,11 @@ fn generate_endless_wave(
         let enemy_type = enemy_types[rng.random_range(0..enemy_types.len())];
         let spawn_pos = SpawnPosition::RandomScattered { area: 600.0 };
         let positions = spawn_pos.get_world_positions(1);
-        let enemy_type_clone = enemy_type.clone();
-
+        
         spawn_events.write(SpawnEnemy {
             position: positions[0],
             ai_type: get_default_ai_for_enemy(enemy_type),
-            enemy_type: enemy_type_clone,
+            enemy_type,
         });
         
         wave_manager.enemies_remaining += 1;

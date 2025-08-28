@@ -115,10 +115,11 @@ fn main() {
             biological_movement_system,      // Player movement with fluid dynamics
             enhanced_shooting_system,        // Evolution-based weapon systems
 
-            spawn_enemies,               // Wave-based enemy spawning, replaced by following 3 functions
+            // spawn_enemies,               // Wave-based enemy spawning, replaced by following 3 functions
             wave_progression_system,
             wave_spawning_system,
             environmental_hazard_system,
+            wave_completion_system,
 
             spawn_biological_powerups,      // ATP and evolution power-ups
             spawn_evolution_powerups,       // Advanced evolutionary upgrades
@@ -503,8 +504,8 @@ pub fn reset_biological_game_state(
     mut input_state: ResMut<OldInputState>,
     mut game_started: ResMut<GameStarted>,
     mut shooting_state: ResMut<ShootingState>,
-    mut fluid_environment: ResMut<FluidEnvironment>,
-    mut chemical_environment: ResMut<ChemicalEnvironment>,
+    (mut fluid_environment, mut chemical_environment) : (ResMut<FluidEnvironment>,ResMut<ChemicalEnvironment>),
+    mut wave_manager: ResMut<WaveManager>,
     // Despawn all game entities
     (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, (With<Projectile>, Without<AlreadyDespawned>)>),
     explosion_query: Query<Entity, With<Explosion>>,
@@ -543,6 +544,13 @@ pub fn reset_biological_game_state(
     game_score.current = 0;
     game_score.score_multiplier = 1.0;
     game_score.multiplier_timer = 0.0;
+
+    wave_manager.current_wave = 1;
+    wave_manager.wave_active = false;
+    wave_manager.enemies_remaining = 0;
+    wave_manager.wave_complete_time = 0.0;
+    wave_manager.difficulty_multiplier = 1.0;
+
     enemy_spawner.spawn_timer = 2.0;
     enemy_spawner.wave_timer = 0.0;
     enemy_spawner.enemies_spawned = 0;
