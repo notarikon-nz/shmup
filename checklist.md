@@ -46,22 +46,22 @@
 ## **Phase 2: Content & Balance (Week 3-4) - HIGH PRIORITY**
 
 ### **2.1 Wave Design & Progression**
-- [ ] **Enemy Wave Patterns (20+ waves)**
-  - [ ] Waves 1-5: Tutorial progression (single enemy types)
-  - [ ] Waves 6-10: Mixed enemy formations
-  - [ ] Waves 11-15: Environmental hazards + enemies
-  - [ ] Waves 16-20: Mini-boss encounters
-  - [ ] Waves 21+: Endless mode with increasing difficulty
+- [x] **Enemy Wave Patterns (20+ waves)**
+  - [x] Waves 1-5: Tutorial progression (single enemy types)
+  - [x] Waves 6-10: Mixed enemy formations
+  - [x] Waves 11-15: Environmental hazards + enemies
+  - [x] Waves 16-20: Mini-boss encounters
+  - [x] Waves 21+: Endless mode with increasing difficulty
 - [ ] **Spawn Pattern Variety**
-  - [ ] Side spawns, diagonal approaches, spiral formations
-  - [ ] Boss enemies with multiple phases
+  - [x] Side spawns, diagonal approaches, spiral formations
+  - [x] Boss enemies with multiple phases
     - [ ] Boss enemies have their own healthbar at top of screen
-  - [ ] Environmental storytelling through enemy placement
+  - [x] Environmental storytelling through enemy placement
 - [ ] **Difficulty Curve Balancing**
-  - [ ] Health scaling per wave
-  - [ ] Fire rate and movement speed adjustments
-  - [ ] ATP reward optimization
-  - [ ] Power-up spawn rate tuning
+  - [x] Health scaling per wave
+  - [x] Fire rate and movement speed adjustments
+  - [x] ATP reward optimization
+  - [x] Power-up spawn rate tuning
 
 ### **2.2 Evolution System Balance**
 - [ ] **Weapon Balance Testing**
@@ -84,7 +84,6 @@
   - [ ] Projectile trails (different per evolution type)
   - [ ] Enemy death explosions (biological bursting effects)
   - [ ] Player damage indicators (membrane disruption visual)
-  - [ ] Critical hit sparkle effects
 - [ ] **Environmental Particles**
   - [ ] Tidal current flow indicators
   - [ ] King tide wave particles
