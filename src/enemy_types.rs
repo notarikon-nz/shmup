@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct Enemy {
     pub ai_type: EnemyAI,
     pub health: i32,
@@ -11,7 +11,7 @@ pub struct Enemy {
 }
 
 // New: Chemical properties affecting AI behavior
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChemicalSignature {
     pub ph_preference: f32,
     pub oxygen_tolerance: f32,
@@ -19,7 +19,7 @@ pub struct ChemicalSignature {
     pub releases_toxins: bool,
 }
 
-#[derive(Clone, PartialEq, Copy, Eq, Hash)]
+#[derive(Clone, PartialEq, Copy, Eq, Hash, Debug)]
 pub enum EnemyType {
     // Updated names for biological theme
     ViralParticle,          // Basic
@@ -33,7 +33,7 @@ pub enum EnemyType {
     Offspring,              // SpawnerMinion
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub enum EnemyAI {
     Static,
     Linear { direction: Vec2 },
@@ -76,7 +76,7 @@ pub enum EnemyAI {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChemicalType {
     PlayerPheromones,
     NutrientGradient,

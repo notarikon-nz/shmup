@@ -534,7 +534,7 @@ pub fn collision_system(
                             enemy_type: Some(enemy_type.clone()) 
                         });
                         
-                        commands.entity(enemy_entity).insert(AlreadyDespawned).despawn();
+                        commands.entity(enemy_entity).try_insert(AlreadyDespawned).try_despawn();
                         enemies_to_remove.insert(enemy_entity);
                         game_score.enemies_defeated += 1;
                         achievement_events.write(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));

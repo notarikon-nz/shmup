@@ -6,7 +6,7 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use Cosmic_Tidal_Pool::*;
 use crate::lighting::PerformantLightingPlugin;
 use cosmic_ui::prelude::*;
-
+use crate::balance_systems::*;
 
 
 fn main() {
@@ -53,6 +53,7 @@ fn main() {
         .init_resource::<DiagnosticsStore>()
         .init_resource::<MenuSettings>() 
         .init_resource::<WaveManager>()
+        .init_resource::<BalanceAnalyzer>()
 
         // ===== GAME STATE MANAGEMENT =====
         .init_state::<GameState>() // Playing, Paused, GameOver states
@@ -68,6 +69,7 @@ fn main() {
         .add_event::<SpawnEnhancedExplosion>()  // Advanced explosion system
         .add_event::<TidalEvent>()              // King tides, current reversals
         .add_event::<AchievementEvent>()        // Achievement progression tracking
+        .add_event::<BalanceAdjustmentEvent>()
 
         // ===== STARTUP SYSTEMS (Run Once) =====
         .add_systems(Startup, (
@@ -87,6 +89,7 @@ fn main() {
             setup_audio_system, // replaces vv
             // start_ambient_music.after(load_biological_assets), // Begin ocean ambience
 
+            initialize_balance_analyzer,
             // NEW: Spawn the Cosmic UI HUD
             // spawn_game_hud.after(load_game_fonts),
         ))
@@ -214,6 +217,23 @@ fn main() {
             tidal_movement_response_system, // Enhanced player response to currents
         ).run_if(in_state(GameState::Playing)))
 
+        // ===== BALANCE ANALYSIS SYSTEMS (ADD TO UPDATE) =====
+        .add_systems(Update, (
+            // Core balance analysis systems
+            real_time_balance_analysis,
+            weapon_performance_tracking,
+            atp_economy_analysis,
+            progression_balance_system,
+            
+            // Balance testing and tuning
+            auto_balance_tuning_system,
+            handle_balance_adjustments,
+            
+            // Debug and UI systems
+            balance_debug_ui,
+            balance_debug_commands,
+        ).run_if(in_state(GameState::Playing)))
+
         // ===== ENEMY AI AND COMBAT SYSTEMS =====
         .add_systems(Update, (
             enemy_shooting,                 // Enemy projectile attacks
@@ -296,6 +316,11 @@ fn main() {
 
         // ===== GAME STATE TRANSITION SYSTEMS =====
         
+        .add_systems(OnExit(GameState::Playing), (
+            finalize_balance_session,
+            save_balance_data_system,
+        ))
+
         // When transitioning TO game over state
         .add_systems(OnEnter(GameState::GameOver), (
             save_high_score_to_file,        // Persist high score data
@@ -696,3 +721,501 @@ pub fn init_current_generator(mut commands: Commands) {
 }
 
 
+
+// System to finalize balance session data when game ends
+pub fn finalize_balance_session(
+    mut balance_analyzer: ResMut<BalanceAnalyzer>,
+    player_query: Query<(&Player, &EvolutionSystem, &ATP)>,
+    game_score: Res<GameScore>,
+    wave_manager: Res<WaveManager>,
+    time: Res<Time>,
+) {
+    if let Ok((player, evolution_system, atp)) = player_query.single() {
+
+        let mut balance_analyzer_clone = balance_analyzer.clone();
+        let session = &mut balance_analyzer.real_time_balance.current_session;
+        
+        // Finalize session data
+        session.end_time = time.elapsed_secs();
+        session.final_score = game_score.current;
+        session.atp_collected = game_score.total_atp_collected as u32;
+        session.waves_reached = wave_manager.current_wave;
+        
+        // Track final evolution
+        let final_evolution = evolution_system.primary_evolution.get_display_name().to_string();
+        if !session.evolutions_used.contains(&final_evolution) {
+            session.evolutions_used.push(final_evolution);
+        }
+        
+        // Move session to historical data
+        let completed_session = session.clone();
+        
+
+        balance_analyzer_clone.real_time_balance.historical_data.push(completed_session);
+        
+        // Reset for next session
+        *session = BalanceSession {
+            start_time: time.elapsed_secs(),
+            end_time: 0.0,
+            waves_reached: 0,
+            evolutions_used: Vec::new(),
+            atp_collected: 0,
+            atp_spent: 0,
+            upgrades_purchased: Vec::new(),
+            deaths: 0,
+            final_score: 0,
+            balance_issues: Vec::new(),
+        };
+    }
+}
+
+// System to save balance data to file
+pub fn save_balance_data_system(balance_analyzer: Res<BalanceAnalyzer>) {
+    save_balance_data(&balance_analyzer);
+}
+
+// Enhanced achievement tracking for balance analysis
+pub fn enhanced_balance_achievement_tracking(
+    mut balance_analyzer: ResMut<BalanceAnalyzer>,
+    mut achievement_events: EventReader<AchievementEvent>,
+    time: Res<Time>,
+) {
+    for event in achievement_events.read() {
+
+        let mut balance_analyzer_clone = balance_analyzer.clone();
+        let session = &mut balance_analyzer.real_time_balance.current_session;
+        
+        match event {
+            AchievementEvent::EnemyKilled(enemy_type) => {
+                // Track kills per weapon type (would need weapon identification)
+                for weapon_stats in balance_analyzer.weapon_stats.values_mut() {
+                    weapon_stats.kill_count += 1; // Simplified
+                }
+            }
+            AchievementEvent::EvolutionReached(evolution_name) => {
+                let unlock_time = time.elapsed_secs() - session.start_time;
+                balance_analyzer.atp_economy.evolution_unlock_times.insert(
+                    evolution_name.clone(), 
+                    unlock_time
+                );
+            }
+            AchievementEvent::ShotFired => {
+                // Update accuracy tracking for current weapon
+                if let Some(current_weapon) = session.evolutions_used.last() {
+                    if let Some(weapon_stats) = balance_analyzer_clone.weapon_stats.get_mut(current_weapon) {
+                        // Would need to track shots per weapon
+                    }
+                }
+            }
+            AchievementEvent::ShotHit => {
+                // Similar to ShotFired but for hits
+            }
+            _ => {}
+        }
+    }
+}
+
+// Modified ATP collection system to track economy data
+pub fn enhanced_atp_collection_tracking(
+    mut balance_analyzer: ResMut<BalanceAnalyzer>,
+    mut explosion_events: EventReader<SpawnExplosion>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    let mut atp_this_frame = 0u32;
+    
+    for event in explosion_events.read() {
+        if let Some(enemy_type) = &event.enemy_type {
+            // Calculate ATP that would be generated
+            for &(ref stored_enemy_type, atp_amount, drop_chance) in &ATP_GENERATION_RATES {
+                if std::mem::discriminant(enemy_type) == std::mem::discriminant(stored_enemy_type) {
+                    if (event.position.x * 123.456).sin().abs() < drop_chance {
+                        atp_this_frame += atp_amount;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    if atp_this_frame > 0 {
+        // Update generation rate (exponential moving average)
+        let generation_rate = atp_this_frame as f32 / dt;
+        balance_analyzer.atp_economy.generation_rate_per_second = 
+            balance_analyzer.atp_economy.generation_rate_per_second * 0.9 + generation_rate * 0.1;
+    }
+}
+
+// System to apply balance adjustments to actual game values
+pub fn apply_balance_adjustments_to_gameplay(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut projectile_query: Query<&mut Projectile>,
+    mut evolution_query: Query<&mut EvolutionSystem>,
+    mut player_query: Query<&mut Player>,
+) {
+    // Apply active balance adjustments to live gameplay
+    for adjustment in &balance_analyzer.real_time_balance.active_adjustments {
+        if !adjustment.active { continue; }
+        
+        match &adjustment.adjustment_type {
+            AdjustmentType::DamageMultiplier => {
+                // Apply damage multiplier to projectiles
+                for mut projectile in projectile_query.iter_mut() {
+                    if projectile.friendly {
+                        projectile.damage = ((projectile.damage as f32) * adjustment.multiplier) as i32;
+                    }
+                }
+            }
+            AdjustmentType::MovementSpeed => {
+                // Apply movement speed adjustment to player
+                for mut player in player_query.iter_mut() {
+                    player.speed *= adjustment.multiplier;
+                }
+            }
+            AdjustmentType::InvincibilityDuration => {
+                // Modify invincibility timer
+                for mut player in player_query.iter_mut() {
+                    if player.invincible_timer > 0.0 {
+                        player.invincible_timer *= adjustment.multiplier;
+                    }
+                }
+            }
+            _ => {
+                // Other adjustment types would be handled here
+            }
+        }
+    }
+}
+
+// Balance-aware enemy spawning that considers current balance state
+pub fn balance_aware_enemy_spawning(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut enemy_spawner: ResMut<EnemySpawner>,
+    player_query: Query<(&EvolutionSystem, &CellularUpgrades)>,
+) {
+    if let Ok((evolution_system, upgrades)) = player_query.single() {
+        let player_power_level = calculate_current_player_power(&evolution_system, &upgrades);
+        
+        // Adjust spawn rates based on balance analysis
+        let economy_health = balance_analyzer.atp_economy.economy_health;
+        
+        // If economy is struggling, spawn more ATP-generous enemies
+        if economy_health < 0.4 {
+            enemy_spawner.spawn_timer *= 0.9; // Spawn enemies 10% faster for more ATP
+        }
+        
+        // If player is overpowered, increase difficulty
+        if player_power_level > 2.0 {
+            enemy_spawner.spawn_timer *= 0.8; // Spawn 20% faster
+        }
+        
+        // If weapons are underperforming, reduce spawn rate
+        let average_weapon_efficiency = balance_analyzer.weapon_stats.values()
+            .map(|w| w.cost_efficiency)
+            .sum::<f32>() / balance_analyzer.weapon_stats.len().max(1) as f32;
+            
+        if average_weapon_efficiency < 1.0 {
+            enemy_spawner.spawn_timer *= 1.1; // Spawn 10% slower
+        }
+    }
+}
+
+// Calculate current player power level for balance adjustments
+fn calculate_current_player_power(
+    evolution_system: &EvolutionSystem,
+    upgrades: &CellularUpgrades,
+) -> f32 {
+    let weapon_power = match &evolution_system.primary_evolution {
+        EvolutionType::CytoplasmicSpray { .. } => 1.0,
+        EvolutionType::PseudopodNetwork { .. } => 1.5,
+        EvolutionType::BioluminescentBeam { .. } => 2.0,
+        EvolutionType::SymbioticHunters { .. } => 2.2,
+        EvolutionType::EnzymeBurst { .. } => 1.8,
+        EvolutionType::ToxinCloud { .. } => 2.1,
+        EvolutionType::ElectricDischarge { .. } => 2.5,
+    };
+    
+    let upgrade_power = (upgrades.damage_amplification + upgrades.movement_efficiency + upgrades.metabolic_rate) / 3.0;
+    let adaptation_power = (evolution_system.cellular_adaptations.metabolic_efficiency + 
+                           evolution_system.cellular_adaptations.membrane_permeability) / 2.0;
+    
+    weapon_power * upgrade_power * adaptation_power
+}
+
+// Enhanced weapon performance tracking that identifies specific weapons
+pub fn detailed_weapon_performance_tracking(
+    mut balance_analyzer: ResMut<BalanceAnalyzer>,
+    projectile_query: Query<&Projectile, Added<Projectile>>,
+    player_query: Query<&EvolutionSystem, With<Player>>,
+    mut collision_events: EventReader<EnemyHit>,
+    time: Res<Time>,
+) {
+    if let Ok(evolution_system) = player_query.single() {
+        let current_weapon = evolution_system.primary_evolution.get_display_name().to_string();
+        
+        // Track new projectiles fired
+        let projectiles_fired = projectile_query.iter().filter(|p| p.friendly).count() as u32;
+        if projectiles_fired > 0 {
+            if let Some(weapon_stats) = balance_analyzer.weapon_stats.get_mut(&current_weapon) {
+                // Update fire rate and usage
+                weapon_stats.usage_frequency += projectiles_fired;
+            }
+        }
+        
+        // Track hits for accuracy
+        let hits_this_frame = collision_events.read().count() as u32;
+        if hits_this_frame > 0 {
+            if let Some(weapon_stats) = balance_analyzer.weapon_stats.get_mut(&current_weapon) {
+                // Update accuracy (simplified calculation)
+                if weapon_stats.usage_frequency > 0 {
+                    weapon_stats.accuracy_rate = hits_this_frame as f32 / weapon_stats.usage_frequency as f32;
+                }
+            }
+        }
+    }
+}
+
+// Balance-influenced power-up spawning
+pub fn balance_influenced_powerup_spawning(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut powerup_events: EventWriter<SpawnPowerUp>,
+    player_query: Query<(&Transform, &Health, &EvolutionSystem)>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    *spawn_timer += time.delta_secs();
+    
+    if *spawn_timer >= 20.0 { // Check every 20 seconds
+        *spawn_timer = 0.0;
+        
+        if let Ok((transform, health, evolution_system)) = player_query.single() {
+            let mut spawn_powerup = false;
+            let mut powerup_type = PowerUpType::CellularRegeneration { amount: 30 };
+            
+            // Check balance issues and spawn appropriate power-ups
+            for issue in &balance_analyzer.real_time_balance.current_session.balance_issues {
+                match issue.issue_type {
+                    BalanceIssueType::ATPStarvation => {
+                        // Spawn ATP-generating power-up or reduce costs temporarily
+                        powerup_type = PowerUpType::SymbioticBoost { multiplier: 2.0, duration: 15.0 };
+                        spawn_powerup = true;
+                        break;
+                    }
+                    BalanceIssueType::WeaponUnderPowered => {
+                        // Spawn damage-boosting power-up
+                        powerup_type = PowerUpType::MitochondriaOvercharge { rate_multiplier: 1.5, duration: 20.0 };
+                        spawn_powerup = true;
+                        break;
+                    }
+                    BalanceIssueType::ProgressionTooSlow => {
+                        // Spawn speed-boosting power-up
+                        powerup_type = PowerUpType::Flagella { multiplier: 1.4, duration: 15.0 };
+                        spawn_powerup = true;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            
+            // Also check player health for emergency healing
+            if health.0 < 30 {
+                powerup_type = PowerUpType::CellularRegeneration { amount: 50 };
+                spawn_powerup = true;
+            }
+            
+            if spawn_powerup {
+                powerup_events.send(SpawnPowerUp {
+                    position: transform.translation + Vec3::new(0.0, 50.0, 0.0),
+                    power_type: powerup_type,
+                });
+            }
+        }
+    }
+}
+
+// Balance metrics for achievement system integration
+pub fn balance_achievements_system(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut achievement_events: EventWriter<AchievementEvent>,
+    mut tracked_achievements: Local<Vec<String>>,
+) {
+    // Track balance-related achievements
+    
+    // Perfect Balance achievement - maintain good balance for extended time
+    if balance_analyzer.atp_economy.economy_health > 0.6 && 
+       balance_analyzer.atp_economy.economy_health < 0.8 {
+        if !tracked_achievements.contains(&"perfect_balance".to_string()) {
+            tracked_achievements.push("perfect_balance".to_string());
+            // Would trigger achievement after sustained balance
+        }
+    }
+    
+    // Weapon Master achievement - high efficiency with multiple weapons
+    let high_efficiency_weapons = balance_analyzer.weapon_stats.values()
+        .filter(|w| w.cost_efficiency > 2.0)
+        .count();
+        
+    if high_efficiency_weapons >= 3 && !tracked_achievements.contains(&"weapon_master".to_string()) {
+        tracked_achievements.push("weapon_master".to_string());
+        achievement_events.send(AchievementEvent::EvolutionReached("WeaponMaster".to_string()));
+    }
+    
+    // Economy Expert achievement - maintain healthy ATP economy
+    if balance_analyzer.atp_economy.economy_health > 0.8 && 
+       !tracked_achievements.contains(&"economy_expert".to_string()) {
+        tracked_achievements.push("economy_expert".to_string());
+        // Custom achievement event for economy management
+    }
+}
+
+// Dynamic difficulty adjustment based on balance analysis
+pub fn dynamic_difficulty_from_balance(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut wave_manager: ResMut<WaveManager>,
+    player_query: Query<(&Player, &Health, &EvolutionSystem)>,
+    time: Res<Time>,
+) {
+    if let Ok((player, health, evolution_system)) = player_query.single() {
+        let mut difficulty_adjustment = 1.0;
+        
+        // Analyze player performance vs expected performance
+        let expected_wave = (time.elapsed_secs() / 45.0) as u32; // Expect 1 wave per 45 seconds
+        let wave_performance = wave_manager.current_wave as f32 / expected_wave.max(1) as f32;
+        
+        // Check weapon efficiency
+        let current_weapon = evolution_system.primary_evolution.get_display_name();
+        if let Some(weapon_stats) = balance_analyzer.weapon_stats.get(current_weapon) {
+            if weapon_stats.cost_efficiency > 3.0 {
+                difficulty_adjustment += 0.2; // Increase difficulty if weapon is very efficient
+            } else if weapon_stats.cost_efficiency < 1.0 {
+                difficulty_adjustment -= 0.15; // Decrease difficulty if weapon is struggling
+            }
+        }
+        
+        // Check ATP economy health
+        if balance_analyzer.atp_economy.economy_health < 0.3 {
+            difficulty_adjustment -= 0.1; // Ease up if economy is struggling
+        } else if balance_analyzer.atp_economy.economy_health > 0.8 {
+            difficulty_adjustment += 0.1; // Ramp up if economy is too healthy
+        }
+        
+        // Check player health trend
+        let health_percentage = health.0 as f32 / 100.0;
+        if health_percentage < 0.3 {
+            difficulty_adjustment -= 0.05; // Slight relief for low health
+        }
+        
+        // Apply adjustment to wave manager
+        wave_manager.difficulty_multiplier = (wave_manager.difficulty_multiplier * 0.95) + (difficulty_adjustment * 0.05);
+        wave_manager.difficulty_multiplier = wave_manager.difficulty_multiplier.clamp(0.5, 3.0);
+    }
+}
+
+// Balance-aware evolution chamber spawning
+pub fn balanced_evolution_chamber_spawning(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    mut commands: Commands,
+    player_query: Query<(&Transform, &ATP, &EvolutionSystem), With<Player>>,
+    chamber_query: Query<Entity, With<EvolutionChamber>>,
+    assets: Option<Res<GameAssets>>,
+    time: Res<Time>,
+    mut spawn_timer: Local<f32>,
+) {
+    *spawn_timer += time.delta_secs();
+    
+    // Spawn evolution chambers based on balance needs
+    if *spawn_timer >= 90.0 && chamber_query.is_empty() {
+        *spawn_timer = 0.0;
+        
+        if let Ok((transform, atp, evolution_system)) = player_query.single() {
+            let should_spawn = if balance_analyzer.atp_economy.economy_health > 0.7 {
+                // Player has good ATP economy, offer evolution opportunity
+                true
+            } else if atp.amount > 100 {
+                // Player has saved up ATP, give them a chance to spend it
+                true
+            } else {
+                // Check if current weapon is underperforming
+                let current_weapon = evolution_system.primary_evolution.get_display_name();
+                balance_analyzer.weapon_stats.get(current_weapon)
+                    .map(|stats| stats.cost_efficiency < 1.5)
+                    .unwrap_or(false)
+            };
+            
+            if should_spawn {
+                if let Some(assets) = assets {
+                    commands.spawn((
+                        Sprite {
+                            image: assets.enemy_texture.clone(),
+                            color: Color::srgb(0.3, 0.9, 0.6),
+                            custom_size: Some(Vec2::splat(60.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(0.0, 380.0, 0.0),
+                        EvolutionChamber,
+                        BioluminescentParticle {
+                            base_color: Color::srgb(0.3, 0.9, 0.6),
+                            pulse_frequency: 1.0,
+                            pulse_intensity: 0.6,
+                            organic_motion: OrganicMotion {
+                                undulation_speed: 0.8,
+                                response_to_current: 0.2,
+                            },
+                        },
+                    ));
+                }
+            }
+        }
+    }
+}
+
+// Performance monitoring for balance impact
+pub fn balance_performance_monitor(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    diagnostics: Res<DiagnosticsStore>,
+    mut performance_timer: Local<f32>,
+    time: Res<Time>,
+) {
+    *performance_timer += time.delta_secs();
+    
+    if *performance_timer >= 5.0 {
+        *performance_timer = 0.0;
+        
+        if let Some(fps) = diagnostics.get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS) {
+            if let Some(fps_value) = fps.smoothed() {
+                // If balance system is causing performance issues
+                if fps_value < 30.0 && balance_analyzer.debug_mode {
+                    println!("Warning: Balance system may be impacting performance. FPS: {:.1}", fps_value);
+                    
+                    // Could automatically disable some balance features here
+                }
+            }
+        }
+    }
+}
+
+// Balance data export for external analysis
+pub fn export_balance_data_system(
+    balance_analyzer: Res<BalanceAnalyzer>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::F10) {
+        let export_data = serde_json::json!({
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "weapon_performance": balance_analyzer.weapon_stats,
+            "atp_economy": balance_analyzer.atp_economy,
+            "progression_metrics": balance_analyzer.progression_metrics,
+            "current_session": balance_analyzer.real_time_balance.current_session,
+            "balance_issues": balance_analyzer.real_time_balance.current_session.balance_issues
+        });
+        
+        let filename = format!("balance_export_{}.json", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+        if let Ok(json_string) = serde_json::to_string_pretty(&export_data) {
+            if let Err(e) = std::fs::write(&filename, json_string) {
+                eprintln!("Failed to export balance data: {}", e);
+            } else {
+                println!("Balance data exported to: {}", filename);
+            }
+        }
+    }
+}
