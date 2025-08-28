@@ -928,12 +928,13 @@ pub fn wave_completion_system(
     let Ok(player_transform) = player_query.single() else { return };
     
     if let Some(pattern) = wave_manager.get_current_wave_pattern() {
-        // Award ATP bonus
-        game_score.total_atp_collected += pattern.completion_rewards.atp_bonus as u64;
+        // Award ATP bonus with overflow protection
+        let atp_bonus = pattern.completion_rewards.atp_bonus as u64;
+        game_score.total_atp_collected = game_score.total_atp_collected.saturating_add(atp_bonus);
         
-        // Apply score multiplier
-        let wave_bonus = (game_score.current as f32 * pattern.completion_rewards.score_multiplier) as u32;
-        game_score.current += wave_bonus;
+        // Apply score multiplier with overflow protection
+        let wave_bonus = ((game_score.current as f64 * pattern.completion_rewards.score_multiplier as f64) as u64).min(u32::MAX as u64) as u32;
+        game_score.current = game_score.current.saturating_add(wave_bonus);
         
         // Guarantee power-up spawn
         if let Some(powerup_type) = &pattern.completion_rewards.powerup_guarantee {

@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_hanabi::prelude::*;
 use bevy::window::WindowResolution;
 use bevy::sprite::Anchor;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
@@ -391,7 +390,7 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
 
 
 /// Set up environmental background elements with current indicators
-pub fn setup_biological_background(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn setup_biological_background(mut commands: Commands) {
 
     // Add some ambient current indicators
     for i in 0..5 {
