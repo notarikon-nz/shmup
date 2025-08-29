@@ -7,6 +7,7 @@ use Cosmic_Tidal_Pool::*;
 use crate::lighting::PerformantLightingPlugin;
 use cosmic_ui::prelude::*;
 use crate::balance_systems::*;
+use crate::achievements::*;
 
 
 fn main() {
@@ -79,13 +80,15 @@ fn main() {
             load_biological_assets,         // Load unique enemy sprites and audio
             // load_game_fonts,                // Load custom game font
             load_high_scores_from_file,     // Load persistent high score data
+            load_persistent_achievements,
             init_particle_pool,             // Pre-allocate particle system
             init_fluid_environment,         // Initialize water current simulation
             init_chemical_zones,            // Place initial pH and oxygen zones
             init_current_generator,         // Set up thermal vents and major currents
             setup_achievement_system,       // Initialize Steam-ready achievements
             init_procedural_background,     // Set up dynamic background generation
-            
+        ))
+        .add_systems(Startup, (
             setup_audio_system, // replaces vv
             // start_ambient_music.after(load_biological_assets), // Begin ocean ambience
 
@@ -98,6 +101,7 @@ fn main() {
             setup_biological_ui,            // Create UI with biological terminology
             setup_fps_ui,
             setup_wave_ui,
+            setup_upgrade_indicators_ui,
         ))
 
         // ===== CORE GAME LOOP SYSTEMS =====
@@ -107,6 +111,8 @@ fn main() {
             audio_cleanup_system,
             // handle_pause_input,     // ESC/P key pause toggle
             fps_text_update_system,
+            update_upgrade_indicators,
+            enhanced_evolution_ui_with_limits,            
         ))
 
         // ===== PRIMARY GAMEPLAY SYSTEMS (Playing State Only) =====
@@ -314,6 +320,8 @@ fn main() {
             debug_atp_spawner,              // F2: Spawn 1000 ATP for testing
             debug_spawn_evolution_chamber,  // F3: Spawn evolution chamber
             debug_trigger_king_tide,        // F4: Force trigger king tide event
+
+            robust_despawn_system,          // Better Despawn System
         ).run_if(in_state(GameState::Playing)))
 
         // ===== GAME STATE TRANSITION SYSTEMS =====
@@ -321,6 +329,7 @@ fn main() {
         .add_systems(OnExit(GameState::Playing), (
             finalize_balance_session,
             save_balance_data_system,
+            save_achievements_on_exit,
         ))
 
         // When transitioning TO game over state
@@ -411,10 +420,9 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
             damage_per_second_outside_range: 5,
         },
         CriticalHitStats::default(),
+        UpgradeLimits::default(), // No more unlimited upgrades
     ));
 }
-
-
 
 /// Set up environmental background elements with current indicators
 pub fn setup_biological_background(mut commands: Commands) {

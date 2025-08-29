@@ -5,6 +5,7 @@ use crate::events::*;
 use std::f32::consts::TAU;
 use bevy::audio::*;
 use crate::physics::*;
+use crate::despawn::{SafeDespawn};
 
 #[derive(Component, Clone)]
 pub struct TidalMovementIndicator {
@@ -163,7 +164,7 @@ fn update_existing_tidal_indicators(
         indicator.lifetime -= delta_time;
         
         if indicator.lifetime <= 0.0 {
-            commands.entity(entity).insert(AlreadyDespawned).despawn();
+            commands.entity(entity).safe_despawn();
             continue;
         }
 
@@ -611,7 +612,7 @@ pub fn update_fluid_motion_visualizers(
             
             if current.length() < 5.0 {
                 // Current too weak, remove visualizer
-                commands.entity(entity).insert(AlreadyDespawned).despawn();
+                commands.entity(entity).safe_despawn();
                 continue;
             }
             
@@ -645,7 +646,7 @@ pub fn update_fluid_motion_visualizers(
             // Remove if too far from player
             let distance = transform.translation.distance(player_transform.translation);
             if distance > 300.0 {
-                commands.entity(entity).insert(AlreadyDespawned).despawn();
+                commands.entity(entity).safe_despawn();
             }
         }
     }
@@ -663,7 +664,7 @@ pub fn update_tidal_wave_effects(
         wave.propagation_distance += wave.wave_speed * time.delta_secs();
         
         if wave.propagation_distance >= wave.max_distance {
-            commands.entity(entity).insert(AlreadyDespawned).despawn();
+            commands.entity(entity).safe_despawn();
             continue;
         }
         

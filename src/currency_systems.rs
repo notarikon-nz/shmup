@@ -153,91 +153,95 @@ pub fn move_atp(
 
 // Evolution Chamber interaction (renamed from upgrade_station_interaction)
 pub fn evolution_chamber_interaction(
-    commands: Commands,
-    input_manager: Res<InputManager>, // Changed from keyboard
+    mut commands: Commands,
+    input_manager: Res<InputManager>,
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
-    mut player_query: Query<(&Transform, &mut ATP, &mut EvolutionSystem, &mut CellularUpgrades), With<Player>>,
+    mut player_query: Query<(
+        &Transform, 
+        &mut ATP, 
+        &mut EvolutionSystem, 
+        &mut CellularUpgrades,
+        &mut UpgradeLimits
+    ), With<Player>>,
 ) {
-    if let Ok((player_transform, mut atp, mut evolution_system, mut upgrades)) = player_query.single_mut() {
+    if let Ok((player_transform, mut atp, mut evolution_system, mut upgrades, mut limits)) = player_query.single_mut() {
         for chamber_transform in chamber_query.iter() {
             let distance = player_transform.translation.distance(chamber_transform.translation);
             if distance < 80.0 {
-                // Player is near evolution chamber - use new input actions
                 
-                if input_manager.just_pressed(InputAction::UpgradeDamage) && atp.amount >= 10 {
+                // Damage upgrade with limit check
+                if input_manager.just_pressed(InputAction::UpgradeDamage) && 
+                   limits.damage_level < limits.damage_max && atp.amount >= 10 {
                     atp.amount -= 10;
-                    upgrades.damage_amplification *= 1.2;
-                    evolution_system.cellular_adaptations.membrane_permeability *= 1.2;
-                    println!("Upgraded damage!");
+                    limits.damage_level += 1;
+                    upgrades.damage_amplification *= 1.15; // 15% per level
+                    evolution_system.cellular_adaptations.membrane_permeability *= 1.15;
+                    println!("Upgraded damage! Level {}/{}", limits.damage_level, limits.damage_max);
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeMetabolic) && atp.amount >= 15 {
+                // Shield upgrade with limit check  
+                if input_manager.just_pressed(InputAction::UpgradeMetabolic) && 
+                   limits.shield_level < limits.shield_max && atp.amount >= 15 {
                     atp.amount -= 15;
-                    upgrades.metabolic_rate *= 1.3;
-                    evolution_system.cellular_adaptations.metabolic_efficiency *= 1.3;
+                    limits.shield_level += 1;
+                    // Shield effectiveness would be handled in combat system
+                    println!("Upgraded shield! Level {}/{}", limits.shield_level, limits.shield_max);
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeCellular) && atp.amount >= 20 {
+                // Metabolic upgrade with limit check
+                if input_manager.just_pressed(InputAction::UpgradeMetabolic) && 
+                   limits.metabolic_level < limits.metabolic_max && atp.amount >= 15 {
+                    atp.amount -= 15;
+                    limits.metabolic_level += 1;
+                    upgrades.metabolic_rate *= 1.2;
+                    evolution_system.cellular_adaptations.metabolic_efficiency *= 1.2;
+                }
+
+                // Cellular upgrade with limit check
+                if input_manager.just_pressed(InputAction::UpgradeCellular) && 
+                   limits.cellular_level < limits.cellular_max && atp.amount >= 20 {
                     atp.amount -= 20;
+                    limits.cellular_level += 1;
                     upgrades.max_health += 25;
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeEnzyme) && atp.amount >= 25 {
+                // Enzyme upgrade with limit check
+                if input_manager.just_pressed(InputAction::UpgradeEnzyme) && 
+                   limits.enzyme_level < limits.enzyme_max && atp.amount >= 25 {
                     atp.amount -= 25;
+                    limits.enzyme_level += 1;
                     evolution_system.cellular_adaptations.extremophile_traits = true;
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeBioluminescence) && atp.amount >= 30 {
+                // Bioluminescence upgrade with limit check
+                if input_manager.just_pressed(InputAction::UpgradeBioluminescence) && 
+                   limits.bioluminescence_level < limits.bioluminescence_max && atp.amount >= 30 {
                     atp.amount -= 30;
+                    limits.bioluminescence_level += 1;
                     evolution_system.cellular_adaptations.biofilm_formation = true;
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeSpore) && atp.amount >= 20 {
+                // Emergency spore with bomb limit (max 3)
+                if input_manager.just_pressed(InputAction::UpgradeSpore) && 
+                   evolution_system.emergency_spores < 3 && atp.amount >= 20 {
                     atp.amount -= 20;
                     evolution_system.emergency_spores += 1;
                 }
 
-                if input_manager.just_pressed(InputAction::EvolvePseudopod) && atp.amount >= 50 {
-                    atp.amount -= 50;
-                    evolution_system.primary_evolution = EvolutionType::PseudopodNetwork {
-                        damage: 8,
-                        fire_rate: 0.15,
-                        tendril_count: 5,
-                        spread_angle: 0.6,
-                    };
-                    println!("Evolved to Pseudopod Network!");
-                }
-
-                if input_manager.just_pressed(InputAction::EvolveSymbiotic) && atp.amount >= 75 {
-                    atp.amount -= 75;
-                    evolution_system.primary_evolution = EvolutionType::SymbioticHunters {
-                        damage: 25,
-                        fire_rate: 0.8,
-                        homing_strength: 2.0,
-                        blast_radius: 50.0,
-                    };
-                }
-
-                if input_manager.just_pressed(InputAction::EvolveBioluminescent) && atp.amount >= 100 {
-                    atp.amount -= 100;
-                    evolution_system.primary_evolution = EvolutionType::BioluminescentBeam {
-                        damage: 15,
-                        charge_time: 1.0,
-                        duration: 2.0,
-                        width: 20.0,
-                    };
-                }
-
-                if input_manager.just_pressed(InputAction::UpgradeMagnetRadius) && atp.amount >= 25 {
+                // Magnet upgrades with limits
+                if input_manager.just_pressed(InputAction::UpgradeMagnetRadius) && 
+                   limits.magnet_radius_level < limits.magnet_radius_max && atp.amount >= 25 {
                     atp.amount -= 25;
-                    upgrades.magnet_radius += 20.0; // Increase radius by 20px
+                    limits.magnet_radius_level += 1;
+                    upgrades.magnet_radius += 20.0;
                 }
 
-                if input_manager.just_pressed(InputAction::UpgradeMagnetStrength) && atp.amount >= 30 {
+                if input_manager.just_pressed(InputAction::UpgradeMagnetStrength) && 
+                   limits.magnet_strength_level < limits.magnet_strength_max && atp.amount >= 30 {
                     atp.amount -= 30;
-                    upgrades.magnet_strength += 0.3; // 30% stronger pull
+                    limits.magnet_strength_level += 1;
+                    upgrades.magnet_strength += 0.3;
                 }
-
             }
         }
     }

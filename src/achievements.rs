@@ -537,8 +537,37 @@ pub fn load_achievements(achievement_manager: &mut AchievementManager) {
     }
 }
 
+pub fn load_achievements_from_file() -> PersistentAchievements {
+    if let Ok(content) = std::fs::read_to_string("achievements_persistent.json") {
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        PersistentAchievements::default()
+    }
+}
+
+
 #[derive(Serialize, Deserialize)]
 pub struct AchievementSaveData {
     pub unlocked_achievements: Vec<String>,
     pub lifetime_stats: LifetimeStats,
+}
+
+pub fn save_achievements_on_exit(achievement_manager: Res<AchievementManager>) {
+    save_achievements(&achievement_manager);
+}
+
+pub fn load_persistent_achievements(mut achievement_manager: ResMut<AchievementManager>) {
+    let persistent = load_achievements_from_file();
+    achievement_manager.unlocked_achievements = persistent.unlocked;
+    achievement_manager.lifetime_stats.total_games_played = persistent.total_games;
+    achievement_manager.lifetime_stats.total_playtime = persistent.total_playtime;
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PersistentAchievements {
+    pub unlocked: Vec<String>,
+    pub progress: std::collections::HashMap<String, f32>,
+    pub last_updated: String,
+    pub total_games: u32,
+    pub total_playtime: f32,
 }

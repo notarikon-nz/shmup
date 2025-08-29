@@ -7,6 +7,7 @@ use crate::achievements::*;
 use crate::enemy_types::*;
 use crate::physics::*;
 use crate::wave_systems::*;
+use crate::despawn::{SafeDespawn};
 
 // ===== PERFORMANCE CONSTANTS =====
 const MAX_PARTICLES: usize = 200;
@@ -459,7 +460,7 @@ pub fn collision_system(
                 enemy_type: None 
             });
             
-            commands.entity(proj_entity).insert(AlreadyDespawned).despawn();
+            commands.entity(proj_entity).safe_despawn();
             projectiles_to_remove.insert(proj_entity);
         }
     }
@@ -514,7 +515,7 @@ pub fn collision_system(
                     spawn_damage_text_fast(&mut commands, enemy_transform.translation, final_damage, is_crit, &fonts);
                     
                     // Remove projectile
-                    commands.entity(proj_entity).insert(AlreadyDespawned).despawn();
+                    commands.entity(proj_entity).safe_despawn();
                     projectiles_to_remove.insert(proj_entity);
                     
                     // Check if enemy died
@@ -566,7 +567,7 @@ pub fn collision_system(
                     intensity: 1.0, 
                     enemy_type: None 
                 });
-                commands.entity(enemy_entity).insert(AlreadyDespawned).despawn();
+                commands.entity(enemy_entity).safe_despawn();
             }
         }
     }
@@ -708,7 +709,13 @@ pub fn enemy_flash_system(
     mut commands: Commands,
     mut flash_query: Query<(Entity, &mut FlashEffect, &mut Sprite)>,
     mut enemy_hit_events: EventReader<EnemyHit>,
-    enemy_query: Query<&Sprite, (With<Enemy>, Without<FlashEffect>)>,
+    // UPDATED: Now returns (Entity, &Sprite) and filters out despawned entities
+    enemy_query: Query<(&Sprite), (
+        With<Enemy>, 
+        Without<FlashEffect>, 
+        Without<AlreadyDespawned>, 
+        Without<PendingDespawn>
+    )>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
@@ -716,7 +723,7 @@ pub fn enemy_flash_system(
     // Add flash effects to hit enemies
     for event in enemy_hit_events.read() {
         if let Ok(sprite) = enemy_query.get(event.entity) {
-            commands.entity(event.entity).insert(FlashEffect {
+            commands.entity(event.entity).try_insert(FlashEffect {
                 timer: 0.0, duration: 0.15,
                 original_color: sprite.color,
                 flash_color: Color::WHITE,
@@ -733,7 +740,7 @@ pub fn enemy_flash_system(
     for (entity, flash, mut sprite) in flash_query.iter_mut() {
         if flash.timer >= flash.duration {
             sprite.color = flash.original_color;
-            commands.entity(entity).remove::<FlashEffect>();
+            commands.entity(entity).try_remove::<FlashEffect>();
         } else {
             let progress = flash.timer / flash.duration;
             let intensity = if progress < 0.3 { 

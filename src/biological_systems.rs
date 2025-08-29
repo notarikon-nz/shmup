@@ -3,6 +3,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use crate::despawn::{SafeDespawn};
 use std::f32::consts::{TAU};
 
 // Constants to replace magic numbers
@@ -595,7 +596,7 @@ fn process_existing_corals(
     }
     
     for entity in corals_to_remove {
-        commands.entity(entity).insert(AlreadyDespawned).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 
@@ -747,7 +748,7 @@ fn update_microscopic_debris(
     }
     
     for entity in entities_to_despawn {
-        commands.entity(entity).insert(AlreadyDespawned).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 

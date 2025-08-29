@@ -1,0 +1,102 @@
+{
+  "weapon_performance_history": [
+    {
+      "Symbiotic Hunters": {
+        "evolution_name": "Symbiotic Hunters",
+        "theoretical_dps": 31.25,
+        "actual_dps": 0.0,
+        "atp_cost": 75,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 0.24187307,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Pseudopod Network": {
+        "evolution_name": "Pseudopod Network",
+        "theoretical_dps": 266.66666,
+        "actual_dps": 0.0,
+        "atp_cost": 50,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 1.0,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Electric Discharge": {
+        "evolution_name": "Electric Discharge",
+        "theoretical_dps": 80.0,
+        "actual_dps": 0.0,
+        "atp_cost": 150,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 0.31164783,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Cytoplasmic Spray": {
+        "evolution_name": "Cytoplasmic Spray",
+        "theoretical_dps": 100.0,
+        "actual_dps": 0.0,
+        "atp_cost": 0,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 1.0,
+        "usage_frequency": 1,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Enzyme Burst": {
+        "evolution_name": "Enzyme Burst",
+        "theoretical_dps": 600.0,
+        "actual_dps": 0.0,
+        "atp_cost": 60,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 1.0,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Toxin Cloud": {
+        "evolution_name": "Toxin Cloud",
+        "theoretical_dps": 12.0,
+        "actual_dps": 0.0,
+        "atp_cost": 90,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 0.07756949,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      },
+      "Bioluminescent Beam": {
+        "evolution_name": "Bioluminescent Beam",
+        "theoretical_dps": 120.0,
+        "actual_dps": 0.0,
+        "atp_cost": 100,
+        "cost_efficiency": 0.0,
+        "late_game_viability": 0.6988934,
+        "usage_frequency": 0,
+        "kill_count": 10,
+        "accuracy_rate": 0.0,
+        "upgrade_impact": 1.0
+      }
+    }
+  ],
+  "balance_sessions": [],
+  "optimization_recommendations": [
+    "Consider reducing cost of Symbiotic Hunters (only 0.0% usage)",
+    "Consider reducing cost of Pseudopod Network (only 0.0% usage)",
+    "Consider reducing cost of Electric Discharge (only 0.0% usage)",
+    "Consider nerfing Cytoplasmic Spray or buffing alternatives (100.0% usage)",
+    "Consider reducing cost of Enzyme Burst (only 0.0% usage)",
+    "Consider reducing cost of Toxin Cloud (only 0.0% usage)",
+    "Consider reducing cost of Bioluminescent Beam (only 0.0% usage)",
+    "Increase ATP generation rates across all enemies",
+    "Consider reducing upgrade costs by 10-20%"
+  ]
+}

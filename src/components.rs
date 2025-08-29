@@ -1151,3 +1151,45 @@ pub struct MagnetizedATP {
     pub pull_force: f32,
 }
 
+// Better Despawn
+#[derive(Component)]
+pub struct PendingDespawn {
+    pub delay: f32,
+}
+
+#[derive(Component)]
+pub struct DespawnProtected; // Prevents accidental despawning of critical entities
+
+
+// Upgrade Limits & UI Indicators
+
+// Upgrade limits
+#[derive(Component, Clone, Default)]
+pub struct UpgradeLimits {
+    pub damage_level: u32,
+    pub damage_max: u32,
+    pub shield_level: u32, 
+    pub shield_max: u32,
+    pub metabolic_level: u32,
+    pub metabolic_max: u32,
+    pub cellular_level: u32,
+    pub cellular_max: u32,
+    pub enzyme_level: u32,
+    pub enzyme_max: u32,
+    pub bioluminescence_level: u32,
+    pub bioluminescence_max: u32,
+    pub magnet_radius_level: u32,
+    pub magnet_radius_max: u32,
+    pub magnet_strength_level: u32,
+    pub magnet_strength_max: u32,
+}
+
+// UI components
+#[derive(Component)] pub struct ShieldIndicatorUI;
+#[derive(Component)] pub struct DamageIndicatorUI; 
+#[derive(Component)] pub struct BombIndicatorUI;
+#[derive(Component)] pub struct ShieldLevelText;
+#[derive(Component)] pub struct DamageLevelText;
+#[derive(Component)] pub struct BombLevelText;
+
+

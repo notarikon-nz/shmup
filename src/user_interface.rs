@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::wave_systems::*;
 use crate::enemy_types::{Enemy};
+use crate::despawn::*;
 
 // ===== CONSTANTS =====
 const UI_FONT_SIZE_LARGE: f32 = 48.0;
@@ -187,6 +188,28 @@ pub fn update_biological_ui(
     }
 }
 
+pub fn enhanced_evolution_ui_with_limits(
+    mut commands: Commands,
+    chamber_query: Query<&Transform, With<EvolutionChamber>>,
+    player_query: Query<(&Transform, &ATP, &UpgradeLimits), With<Player>>,
+    existing_ui_query: Query<Entity, With<EvolutionUI>>,
+    fonts: Res<GameFonts>,
+) {
+    if let Ok((player_transform, atp, limits)) = player_query.single() {
+        let near_chamber = chamber_query.iter().any(|chamber_transform| {
+            player_transform.translation.distance(chamber_transform.translation) < 80.0
+        });
+
+        match (near_chamber, existing_ui_query.single()) {
+            (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
+            (false, Ok(entity)) => { 
+                commands.entity(entity).safe_despawn_delayed(0.1);
+            },
+            _ => {},
+        }
+    }
+}
+
 // ===== HEALTH BAR UPDATE =====
 pub fn update_health_bar(
     player_query: Query<(&Health, &CellularUpgrades), With<Player>>,
@@ -233,67 +256,102 @@ pub fn update_tidal_ui(
 pub fn update_evolution_ui(
     mut commands: Commands,
     chamber_query: Query<&Transform, With<EvolutionChamber>>,
-    player_query: Query<(&Transform, &ATP), With<Player>>,
+    player_query: Query<(&Transform, &ATP, &UpgradeLimits), With<Player>>,
     existing_ui_query: Query<Entity, With<EvolutionUI>>,
     fonts: Res<GameFonts>,
 ) {
-    if let Ok((player_transform, atp)) = player_query.single() {
+    if let Ok((player_transform, atp, limits)) = player_query.single() {
         let near_chamber = chamber_query.iter().any(|chamber_transform| {
             player_transform.translation.distance(chamber_transform.translation) < EVOLUTION_CHAMBER_DISTANCE
         });
 
         match (near_chamber, existing_ui_query.single()) {
-            (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts),
-            (false, Ok(entity)) => { commands.entity(entity).despawn(); },
+            (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
+            (false, Ok(entity)) => { 
+                if let Ok(mut entity_commands) = commands.get_entity(entity) {
+                    entity_commands.despawn();
+                }
+            },
             _ => {},
         }
     }
 }
 
-fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32, fonts: &GameFonts) {
+fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32, fonts: &GameFonts, limits: &UpgradeLimits) {
     let evolutions = [
-        ("1   Membrane Reinforcement (10 ATP)", 10, "Increases projectile damage by 20%"),
-        ("2   Metabolic Enhancement (15 ATP)", 15, "+30% movement speed & fire rate"),
-        ("3   Cellular Integrity (20 ATP)", 20, "+25 Maximum Health Points"),
-        ("4   Enzyme Production (25 ATP)", 25, "Immunity to environmental toxins"),
-        ("5   Bioluminescence (30 ATP)", 30, "Enhanced coordination abilities"),
-        ("6   Emergency Spore (20 ATP)", 20, "+1 Emergency reproductive blast"),
-        ("7   Pseudopod Network (50 ATP)", 50, "Multi-directional tendril weapon"),
-        ("8   Symbiotic Hunters (75 ATP)", 75, "Homing cooperative organisms"),
-        ("9   Bioluminescent Beam (100 ATP)", 100, "Concentrated energy discharge"),
-        ("0   Magnet Radius (25 ATP)", 25, "Increase ATP collection radius by 20px"),
-        ("-   Magnet Strength (30 ATP)", 30, "Increase magnetic pull force by 30%"),        
+        ("1   Membrane Reinforcement (10 ATP)", 10, "Increases projectile damage by 15%", limits.damage_level, limits.damage_max),
+        ("2   Metabolic Enhancement (15 ATP)", 15, "+20% movement speed & fire rate", limits.metabolic_level, limits.metabolic_max),
+        ("3   Cellular Integrity (20 ATP)", 20, "+25 Maximum Health Points", limits.cellular_level, limits.cellular_max),
+        ("4   Enzyme Production (25 ATP)", 25, "Immunity to environmental toxins", limits.enzyme_level, limits.enzyme_max),
+        ("5   Bioluminescence (30 ATP)", 30, "Enhanced coordination abilities", limits.bioluminescence_level, limits.bioluminescence_max),
+        ("6   Emergency Spore (20 ATP)", 20, "+1 Emergency reproductive blast", 0, 3), // Special case for spores
+        ("7   Pseudopod Network (50 ATP)", 50, "Multi-directional tendril weapon", 0, 1),
+        ("8   Symbiotic Hunters (75 ATP)", 75, "Homing cooperative organisms", 0, 1),
+        ("9   Bioluminescent Beam (100 ATP)", 100, "Concentrated energy discharge", 0, 1),
+        ("0   Magnet Radius (25 ATP)", 25, "Increase ATP collection radius by 20px", limits.magnet_radius_level, limits.magnet_radius_max),
+        ("-   Magnet Strength (30 ATP)", 30, "Increase magnetic pull force by 30%", limits.magnet_strength_level, limits.magnet_strength_max),
     ];
 
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(UI_PADDING), top: Val::Px(120.0),
-            width: Val::Px(420.0), padding: UiRect::all(Val::Px(UI_MARGIN)),
+            left: Val::Px(20.0), top: Val::Px(120.0),
+            width: Val::Px(480.0), padding: UiRect::all(Val::Px(10.0)),
             flex_direction: FlexDirection::Column,
             border: UiRect::all(Val::Px(2.0)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.05, 0.2, 0.15, 0.95)),
-        BorderColor(COLOR_BORDER),
+        BorderColor(Color::srgb(0.4, 0.8, 0.6)),
         EvolutionUI,
     )).with_children(|parent| {
-        spawn_ui_text(parent, "EVOLUTION CHAMBER", fonts.default_font.clone(), 22.0, 
-                     Color::srgb(0.3, 1.0, 0.7), Node { margin: UiRect::bottom(Val::Px(UI_MARGIN)), ..default() });
+        parent.spawn((
+            Text::new("EVOLUTION CHAMBER"),
+            TextFont { font: fonts.default_font.clone(), font_size: 22.0, ..default() },
+            TextColor(Color::srgb(0.3, 1.0, 0.7)),
+        ));
         
-        spawn_ui_text(parent, &format!("ATP Available: {}⚡", atp_amount), fonts.default_font.clone(), UI_FONT_SIZE_SMALL,
-                     COLOR_ATP, Node { margin: UiRect::bottom(Val::Px(15.0)), ..default() });
+        parent.spawn((
+            Text::new(&format!("ATP Available: {}⚡", atp_amount)),
+            TextFont { font: fonts.default_font.clone(), font_size: 16.0, ..default() },
+            TextColor(Color::srgb(1.0, 1.0, 0.3)),
+        ));
 
-        for (title, cost, effect) in evolutions {
-            let color = if atp_amount >= cost { Color::srgb(0.9, 1.0, 0.9) } else { Color::srgb(0.5, 0.6, 0.5) };
-            spawn_ui_text(parent, title, fonts.default_font.clone(), 14.0, color,
-                         Node { margin: UiRect::bottom(Val::Px(2.0)), ..default() });
-            spawn_ui_text(parent, effect, fonts.default_font.clone(), UI_FONT_SIZE_TINY, Color::srgb(0.8, 0.9, 0.8),
-                         Node { margin: UiRect::bottom(Val::Px(8.0)), ..default() });
+        for (title, cost, effect, current_level, max_level) in evolutions {
+            let can_afford = atp_amount >= cost;
+            let can_upgrade = current_level < max_level;
+            let color = if can_afford && can_upgrade { 
+                Color::srgb(0.9, 1.0, 0.9) 
+            } else if !can_upgrade {
+                Color::srgb(0.8, 0.8, 0.2) // Maxed out - yellowish
+            } else { 
+                Color::srgb(0.5, 0.6, 0.5) // Can't afford - dim
+            };
+            
+            let level_display = if max_level > 1 { 
+                format!(" [{}/{}]", current_level, max_level) 
+            } else { 
+                String::new() 
+            };
+            
+            parent.spawn((
+                Text::new(&format!("{}{}", title, level_display)),
+                TextFont { font: fonts.default_font.clone(), font_size: 14.0, ..default() },
+                TextColor(color),
+            ));
+            
+            parent.spawn((
+                Text::new(effect),
+                TextFont { font: fonts.default_font.clone(), font_size: 11.0, ..default() },
+                TextColor(Color::srgb(0.8, 0.9, 0.8)),
+            ));
         }
 
-        spawn_ui_text(parent, "Stand near chamber and press number keys to evolve", fonts.default_font.clone(), UI_FONT_SIZE_TINY,
-                     Color::srgb(0.6, 0.9, 0.8), Node { margin: UiRect::top(Val::Px(UI_MARGIN)), ..default() });
+        parent.spawn((
+            Text::new("Stand near chamber and press number keys to evolve"),
+            TextFont { font: fonts.default_font.clone(), font_size: 10.0, ..default() },
+            TextColor(Color::srgb(0.6, 0.9, 0.8)),
+        ));
     });
 }
 
@@ -494,6 +552,148 @@ pub fn wave_ui_system(
             progress_bar.width = Val::Px(200.0 * progress.clamp(0.0, 1.0));
         } else {
             progress_bar.width = Val::Px(0.0);
+        }
+    }
+}
+
+// Top-left upgrade indicators (similar to Sky Force Reloaded)
+pub fn setup_upgrade_indicators_ui(mut commands: Commands, fonts: Res<GameFonts>) {
+    let font = fonts.default_font.clone();
+    
+    // Shield indicator (leftmost)
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            top: Val::Px(20.0),
+            width: Val::Px(60.0),
+            height: Val::Px(60.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(2.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.1, 0.3, 0.5, 0.8)),
+        BorderColor(Color::srgb(0.4, 0.8, 0.6)),
+        ShieldIndicatorUI,
+    )).with_children(|parent| {
+        parent.spawn((
+            Text::new("🛡️"),
+            TextFont { font: font.clone(), font_size: 24.0, ..default() },
+            TextColor(Color::WHITE),
+        ));
+        parent.spawn((
+            Text::new("0/5"),
+            TextFont { font: font.clone(), font_size: 12.0, ..default() },
+            TextColor(Color::srgb(0.8, 0.8, 0.8)),
+            ShieldLevelText,
+        ));
+    });
+
+    // Damage indicator (center)
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(90.0),
+            top: Val::Px(20.0),
+            width: Val::Px(60.0),
+            height: Val::Px(60.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(2.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.5, 0.1, 0.1, 0.8)),
+        BorderColor(Color::srgb(0.8, 0.4, 0.4)),
+        DamageIndicatorUI,
+    )).with_children(|parent| {
+        parent.spawn((
+            Text::new("⚔️"),
+            TextFont { font: font.clone(), font_size: 24.0, ..default() },
+            TextColor(Color::WHITE),
+        ));
+        parent.spawn((
+            Text::new("0/5"),
+            TextFont { font: font.clone(), font_size: 12.0, ..default() },
+            TextColor(Color::srgb(0.8, 0.8, 0.8)),
+            DamageLevelText,
+        ));
+    });
+
+    // Bomb indicator (rightmost)
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(160.0),
+            top: Val::Px(20.0),
+            width: Val::Px(60.0),
+            height: Val::Px(60.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(2.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.5, 0.3, 0.1, 0.8)),
+        BorderColor(Color::srgb(0.8, 0.6, 0.2)),
+        BombIndicatorUI,
+    )).with_children(|parent| {
+        parent.spawn((
+            Text::new("💣"),
+            TextFont { font: font.clone(), font_size: 24.0, ..default() },
+            TextColor(Color::WHITE),
+        ));
+        parent.spawn((
+            Text::new("3/3"),
+            TextFont { font: font.clone(), font_size: 12.0, ..default() },
+            TextColor(Color::srgb(0.8, 0.8, 0.8)),
+            BombLevelText,
+        ));
+    });
+}
+
+// Update upgrade indicators
+pub fn update_upgrade_indicators(
+    player_query: Query<(&UpgradeLimits, &EvolutionSystem), With<Player>>,
+    mut shield_text: Query<&mut Text, With<ShieldLevelText>>,
+    mut damage_text: Query<&mut Text, (With<DamageLevelText>, Without<ShieldLevelText>)>,
+    mut bomb_text: Query<&mut Text, (With<BombLevelText>, Without<ShieldLevelText>, Without<DamageLevelText>)>,
+    mut shield_bg: Query<&mut BackgroundColor, With<ShieldIndicatorUI>>,
+    mut damage_bg: Query<&mut BackgroundColor, (With<DamageIndicatorUI>, Without<ShieldIndicatorUI>)>,
+    mut bomb_bg: Query<&mut BackgroundColor, (With<BombIndicatorUI>, Without<ShieldIndicatorUI>, Without<DamageIndicatorUI>)>,
+) {
+    if let Ok((limits, evolution_system)) = player_query.single() {
+        // Update shield indicator
+        if let Ok(mut text) = shield_text.single_mut() {
+            **text = format!("{}/{}", limits.shield_level, limits.shield_max);
+            
+            // Change background color based on level
+            if let Ok(mut bg) = shield_bg.single_mut() {
+                let intensity = limits.shield_level as f32 / limits.shield_max as f32;
+                *bg = BackgroundColor(Color::srgba(0.1, 0.3 + intensity * 0.4, 0.5 + intensity * 0.3, 0.8));
+            }
+        }
+
+        // Update damage indicator
+        if let Ok(mut text) = damage_text.single_mut() {
+            **text = format!("{}/{}", limits.damage_level, limits.damage_max);
+            
+            if let Ok(mut bg) = damage_bg.single_mut() {
+                let intensity = limits.damage_level as f32 / limits.damage_max as f32;
+                *bg = BackgroundColor(Color::srgba(0.5 + intensity * 0.3, 0.1, 0.1, 0.8));
+            }
+        }
+
+        // Update bomb indicator
+        if let Ok(mut text) = bomb_text.single_mut() {
+            **text = format!("{}/3", evolution_system.emergency_spores);
+            
+            if let Ok(mut bg) = bomb_bg.single_mut() {
+                let intensity = evolution_system.emergency_spores as f32 / 3.0;
+                *bg = BackgroundColor(Color::srgba(0.5, 0.3 + intensity * 0.3, 0.1, 0.8));
+            }
         }
     }
 }

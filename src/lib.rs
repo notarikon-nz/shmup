@@ -27,6 +27,7 @@ pub mod physics;
 pub mod menu_systems;
 pub mod wave_systems;
 pub mod balance_systems;
+pub mod despawn;
 
 pub use menu_systems::*;
 pub use components::*;
@@ -55,3 +56,4 @@ pub use player::*;
 pub use physics::*;
 pub use wave_systems::*;
 pub use balance_systems::*;
+pub use despawn::*;

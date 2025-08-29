@@ -4,6 +4,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::physics::{world_to_grid_pos, sample_current, sample_ph, sample_oxygen};
+use crate::despawn::{SafeDespawn};
 use std::collections::HashMap;
 
 // ===== CONSTANTS =====
@@ -473,7 +474,7 @@ pub fn cell_division_system(
                         }
                     }
                     
-                    commands.entity(enemy_entity).insert(AlreadyDespawned).despawn();
+                    commands.entity(enemy_entity).safe_despawn();
                 }
             }
         }
@@ -499,7 +500,7 @@ pub fn symbiotic_pair_system(
         if let Some(partner) = partner_entity {
             if pair_query.get(partner).is_err() {
                 explosion_events.write(SpawnExplosion { position, intensity: 1.2, enemy_type: None });
-                commands.entity(entity).insert(AlreadyDespawned).despawn();
+                commands.entity(entity).safe_despawn();
             }
         }
     }
@@ -762,7 +763,7 @@ pub fn chemical_trail_system(
     for (trail_entity, mut trail, _) in trail_query.iter_mut() {
         trail.strength -= trail.decay_rate * time.delta_secs();
         if trail.strength <= 0.0 {
-            commands.entity(trail_entity).insert(AlreadyDespawned).despawn();
+            commands.entity(trail_entity).safe_despawn();
         }
     }
 }
