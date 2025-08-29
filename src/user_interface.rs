@@ -203,7 +203,7 @@ pub fn enhanced_evolution_ui_with_limits(
         match (near_chamber, existing_ui_query.single()) {
             (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
             (false, Ok(entity)) => { 
-                commands.entity(entity).safe_despawn_delayed(0.1);
+                commands.entity(entity).despawn_recursive();
             },
             _ => {},
         }
@@ -266,8 +266,12 @@ pub fn update_evolution_ui(
         });
 
         match (near_chamber, existing_ui_query.single()) {
-            (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
+            (true, Err(_)) => {
+                info!("within range, spawning ui");
+                spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits)
+            },
             (false, Ok(entity)) => { 
+                info!("outside range, despawning ui");
                 if let Ok(mut entity_commands) = commands.get_entity(entity) {
                     entity_commands.despawn();
                 }
@@ -276,6 +280,10 @@ pub fn update_evolution_ui(
         }
     }
 }
+
+// Spawn on Pause or Every 5 Levels?
+// Unlock items from drops or achievenets, or achieve via unlocks
+// Split values across two memory locations to make cheating more difficult
 
 fn spawn_evolution_ui(commands: &mut Commands, atp_amount: u32, fonts: &GameFonts, limits: &UpgradeLimits) {
     let evolutions = [

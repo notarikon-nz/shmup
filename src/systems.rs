@@ -427,9 +427,9 @@ pub fn collision_system(
     mut game_score: ResMut<GameScore>,
     time: Res<Time>,
     fonts: Res<GameFonts>,
-    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), Without<AlreadyDespawned>>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<Player>, Without<AlreadyDespawned>)>,
-    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>, Without<AlreadyDespawned>)>,
+    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), (Without<PendingDespawn>, Without<AlreadyDespawned>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<Player>, Without<PendingDespawn>, Without<AlreadyDespawned>)>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>, Without<PendingDespawn>, Without<AlreadyDespawned>)>,
     mut achievement_events: EventWriter<AchievementEvent>,
 ) {
     let Ok((_, player_transform, player_collider, player, crit_stats)) = player_query.single() else { return };

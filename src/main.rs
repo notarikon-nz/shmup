@@ -309,10 +309,11 @@ fn main() {
         // ===== USER INTERFACE SYSTEMS =====
         .add_systems(Update, (
             update_cell_wall_timer_ui,      // Shield duration display
-            update_evolution_ui,            // Evolution chamber upgrade menu
+            enhanced_evolution_ui_with_limits, // Evolution chamber upgrade menu
             update_tidal_ui,                // Tide status indicator
             update_biological_ui,           // ATP, score, lives, ecosystem status
             wave_ui_system,
+            update_evolution_ui,
         ).run_if(in_state(GameState::Playing)))
 
         // ===== DEBUG SYSTEMS (Development Only) =====
