@@ -27,10 +27,10 @@ fn main() {
         .add_plugins(input::InputPlugin)        // Remappable input (keyboard, gamepad)
         .add_plugins(PerformantLightingPlugin)
         .add_plugins(MenuSystemsPlugin)
-
-        // ===== NEW: COSMIC UI SETUP =====
         .add_plugins(CosmicUIPlugin)              // Add the Cosmic UI plugin
         // .register_hud::<BiologicalGameHUD>()      // Register your HUD (generates all update systems!)
+
+        .add_sub_state::<IsPaused>()
 
         .insert_resource(ClearColor(Color::srgb(0.05, 0.15, 0.25))) // Deep ocean background
 
@@ -55,6 +55,10 @@ fn main() {
         .init_resource::<MenuSettings>() 
         .init_resource::<WaveManager>()
         .init_resource::<BalanceAnalyzer>()
+        .init_resource::<CardCollection>()
+        .init_resource::<StageProgress>()
+        .init_resource::<PauseMenuState>()
+        .init_state::<IsPaused>()
 
         // ===== GAME STATE MANAGEMENT =====
         .init_state::<GameState>() // Playing, Paused, GameOver states
@@ -71,6 +75,8 @@ fn main() {
         .add_event::<TidalEvent>()              // King tides, current reversals
         .add_event::<AchievementEvent>()        // Achievement progression tracking
         .add_event::<BalanceAdjustmentEvent>()
+        .add_event::<SpawnCardEvent>()
+        .add_event::<SpawnGreenBoxEvent>()
 
         // ===== STARTUP SYSTEMS (Run Once) =====
         .add_systems(Startup, (
@@ -95,9 +101,23 @@ fn main() {
             initialize_balance_analyzer,
             // NEW: Spawn the Cosmic UI HUD
             // spawn_game_hud.after(load_game_fonts),
+
+            reset_biological_game_state,
         ))
 
+        // Pause state management
+        .add_systems(OnEnter(IsPaused::Paused), setup_enhanced_pause_menu)
+        .add_systems(Update, (
+                        pause_menu_navigation_system, 
+
+                    ).run_if(in_state((IsPaused::Paused))))
+        .add_systems(OnExit(IsPaused::Paused), cleanup_pause_ui)
+
+        // Game Play
+
         .add_systems(OnEnter(GameState::Playing), (
+            
+
             setup_biological_ui,            // Create UI with biological terminology
             setup_fps_ui,
             setup_wave_ui,
@@ -141,7 +161,7 @@ fn main() {
             // Special enemy behaviors
             link_symbiotic_pairs,           // Connect paired organisms
             spawn_evolution_chambers,       // Player upgrade stations
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
         
         // ===== PROCEDURAL BACKGROUND SYSTEMS =====
         .add_systems(Update, (
@@ -166,7 +186,7 @@ fn main() {
             //microscopic_debris_system,      // Story fragments in debris
             //bioluminescent_warning_system,  // Emergency lighting for dangers
             //environmental_narrative_system, // Dynamic environmental storytelling
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== SPECIAL EFFECT SYSTEMS =====
         .add_systems(Update, (
@@ -174,7 +194,7 @@ fn main() {
             extra_life_collection_system,   // Handle life gain with celebration
             // update_dynamic_lights,          // Bioluminescent lighting effects
             // render_light_effects,           // Convert lighting to visual sprites
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== PARTICLE AND EFFECT SYSTEMS =====
         .add_systems(Update, (        
@@ -195,7 +215,7 @@ fn main() {
             // NEW: Add Cosmic UI animation systems
             update_progress_bars,
             animate_status_indicators,            
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== PROJECTILE AND MOVEMENT SYSTEMS =====
         .add_systems(Update, (
@@ -207,7 +227,7 @@ fn main() {
             move_biological_powerups,       // Organic floating animation for power-ups
             move_atp,                       // ATP energy particles with current response
             collect_atp_with_energy_transfer, // Enhanced ATP collection with particles
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== FEEDBACK AND UI SYSTEMS =====
         .add_systems(Update, (
@@ -218,12 +238,15 @@ fn main() {
             screen_shake_system,            // Camera shake for impacts
 
             // Advanced tidal feedback systems
-            enhanced_tidal_feedback_system, // Visual indicators for currents/tides
+            // ALLEGED CRASH POINT
+            //enhanced_tidal_feedback_system, // Visual indicators for currents/tides
+
+
             update_fluid_motion_visualizers, // Current flow visualization
             update_tidal_wave_effects,      // King tide wave propagation
             tidal_audio_feedback_system,    // Sound cues for tidal events
             tidal_movement_response_system, // Enhanced player response to currents
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== BALANCE ANALYSIS SYSTEMS (ADD TO UPDATE) =====
         .add_systems(Update, (
@@ -240,7 +263,7 @@ fn main() {
             // Debug and UI systems
             balance_debug_ui,
             balance_debug_commands,
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== ENEMY AI AND COMBAT SYSTEMS =====
         .add_systems(Update, (
@@ -251,7 +274,7 @@ fn main() {
             update_formations,              // Colony coordination and movement
             formation_coordination_system,  // Chemical signaling between colony members
             procedural_colony_spawning,     // Dynamic enemy group generation
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== COLLISION AND INTERACTION SYSTEMS =====
         .add_systems(Update, (            
@@ -261,7 +284,7 @@ fn main() {
             evolution_chamber_interaction,  // Player upgrades at evolution chambers
             handle_biological_powerup_collection, // Power-up effects application
             damage_text_system,             // Floating combat damage numbers
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== BIOLOGICAL ENVIRONMENT SIMULATION =====
         .add_systems(Update, (
@@ -304,7 +327,7 @@ fn main() {
             update_health_bar,              // Update UI health display
             check_game_over,                // Transition to game over state
             handle_restart_input,           // R key restart functionality
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== USER INTERFACE SYSTEMS =====
         .add_systems(Update, (
@@ -314,7 +337,7 @@ fn main() {
             update_biological_ui,           // ATP, score, lives, ecosystem status
             wave_ui_system,
             update_evolution_ui,
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
 
         // ===== DEBUG SYSTEMS (Development Only) =====
         .add_systems(Update, (
@@ -323,7 +346,21 @@ fn main() {
             debug_trigger_king_tide,        // F4: Force trigger king tide event
 
             robust_despawn_system,          // Better Despawn System
-        ).run_if(in_state(GameState::Playing)))
+        ).run_if(in_state(IsPaused::Running)))
+
+        .add_systems(Update, (
+            enhanced_shooting_system, 
+            wing_cannon_collision_system, 
+            auto_missile_system,
+
+        ).run_if(in_state(IsPaused::Running)))
+
+        .add_systems(Update, 
+            (stage_completion_system, card_pickup_system, spawn_card_system)
+        )
+        .add_systems(OnEnter(GameState::StageSummary), setup_stage_summary_ui)
+        .add_systems(Update, stage_summary_button_system.run_if(in_state(GameState::StageSummary)))
+        .add_systems(OnExit(GameState::StageSummary), cleanup_stage_summary_ui)
 
         // ===== GAME STATE TRANSITION SYSTEMS =====
         
@@ -341,15 +378,10 @@ fn main() {
         ).chain()) // Ensure save happens before UI
         
         // When leaving game over state
-        .add_systems(OnExit(GameState::GameOver), cleanup_game_over_ui)
-        
-        // When starting/restarting a game
-        .add_systems(OnEnter(GameState::Playing), reset_biological_game_state)
-        
-        // Pause state management
-        .add_systems(OnEnter(GameState::Paused), setup_pause_ui)
-        // .add_systems(OnEnter(GameState::Paused), setup_pause_ui_cosmic)
-        .add_systems(OnExit(GameState::Paused), cleanup_pause_ui)
+        .add_systems(OnExit(GameState::GameOver), (
+        cleanup_game_over_ui,
+        reset_biological_game_state,
+    ))
         
         // Game over input handling
         .add_systems(Update, (
@@ -423,6 +455,8 @@ pub fn spawn_biological_player(mut commands: Commands, asset_server: Res<AssetSe
         CriticalHitStats::default(),
         UpgradeLimits::default(), // No more unlimited upgrades
     ));
+
+    // apply_permanent_card_effects_to_player();
 }
 
 /// Set up environmental background elements with current indicators
@@ -482,6 +516,20 @@ pub fn load_biological_assets(mut commands: Commands, asset_server: Res<AssetSer
         sfx_explosion: asset_server.load("audio/cell_burst.ogg"),
         sfx_powerup: asset_server.load("audio/evolution.ogg"),
         music: asset_server.load("audio/tidal_pool_ambience.ogg"),
+
+        permanent_card_texture: asset_server.load("textures/permanent_card_texture.png"),
+        temporal_card_texture: asset_server.load("textures/temporal_card_texture.png"),
+        green_box_texture: asset_server.load("textures/green_box_texture.png"),
+        
+        // Infrastructure textures
+        infrastructure_pipe_texture: asset_server.load("textures/infrastructure_pipe_texture.png"),
+        infrastructure_vat_texture: asset_server.load("textures/infrastructure_vat_texture.png"),
+        infrastructure_emitter_texture: asset_server.load("textures/infrastructure_emitter_texture.png"),
+        infrastructure_factory_texture: asset_server.load("textures/infrastructure_factory_texture.png"),
+        
+        // Wing cannon and missile textures
+        wing_cannon_texture: asset_server.load("textures/wing_cannon_texture.png"),
+        missile_texture: asset_server.load("textures/missile_texture.png"),
     };
     commands.insert_resource(assets);
 }
@@ -506,12 +554,18 @@ pub fn init_chemical_zones(mut commands: Commands) {
                 radius: 150.0,
                 ph_level: 5.5, // Acidic zone
                 intensity: 0.8,
+                center: Vec2::new(0.0,0.0),
+                oxygen_level: 0.0,
+                toxicity: 0.8,
             },
             resources::ChemicalZone {
                 position: Vec2::new(200.0, -100.0),
                 radius: 120.0,
                 ph_level: 8.5, // Alkaline zone
                 intensity: 0.6,
+                center: Vec2::new(0.0,0.0),
+                oxygen_level: 0.0,
+                toxicity: 0.6,                
             },
         ],
         oxygen_zones: vec![
@@ -1035,7 +1089,7 @@ pub fn balance_influenced_powerup_spawning(
             }
             
             if spawn_powerup {
-                powerup_events.send(SpawnPowerUp {
+                powerup_events.write(SpawnPowerUp {
                     position: transform.translation + Vec3::new(0.0, 50.0, 0.0),
                     power_type: powerup_type,
                 });
@@ -1068,7 +1122,7 @@ pub fn balance_achievements_system(
         
     if high_efficiency_weapons >= 3 && !tracked_achievements.contains(&"weapon_master".to_string()) {
         tracked_achievements.push("weapon_master".to_string());
-        achievement_events.send(AchievementEvent::EvolutionReached("WeaponMaster".to_string()));
+        achievement_events.write(AchievementEvent::EvolutionReached("WeaponMaster".to_string()));
     }
     
     // Economy Expert achievement - maintain healthy ATP economy

@@ -56,6 +56,9 @@ pub fn save_high_score_to_file(
         evolution_type: current_evolution.clone(),
         waves_survived,
         time_played: current_time,
+        cards_collected: 0,
+        stages_reached: 0,
+        survival_time: 0.0,
     };
     
     // Add to scores and sort

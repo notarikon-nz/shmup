@@ -3,8 +3,31 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
-use crate::achievements::*;
 use crate::input::*;
+
+// ===== CONSTANTS =====
+const WING_CANNON_OFFSET: f32 = 25.0; // Distance from center
+const WING_CANNON_Y_OFFSET: f32 = 10.0;
+const MISSILE_LAUNCH_OFFSET: f32 = 20.0;
+const MISSILE_Y_OFFSET: f32 = -15.0;
+
+// Wing Cannon stats per level
+const WING_CANNON_STATS: [(f32, i32, f32, u32); 5] = [
+    (1.2, 25, 12.0, 2), // fire_rate, damage, size, pierce
+    (1.0, 35, 14.0, 3),
+    (0.8, 50, 16.0, 4),
+    (0.6, 70, 18.0, 5),
+    (0.5, 95, 20.0, 6),
+];
+
+// Missile system stats per level
+const MISSILE_STATS: [(f32, i32, f32, f32, bool); 5] = [
+    (2.5, 80, 400.0, 200.0, false), // fire_rate, damage, speed, range, dual
+    (2.0, 110, 450.0, 250.0, false),
+    (1.8, 150, 500.0, 300.0, false),
+    (1.5, 200, 550.0, 350.0, true),
+    (1.2, 260, 600.0, 400.0, true),
+];
 
 // New components for biological weapons
 #[derive(Component)]
@@ -26,6 +49,48 @@ pub struct ElectricArc {
     pub max_duration: f32,
     pub target_entity: Option<Entity>,
 }
+
+
+pub fn setup_player_weapons(
+    mut commands: Commands,
+    player_query: Query<(Entity, &UpgradeLimits), With<Player>>,
+) {
+    if let Ok((player_entity, limits)) = player_query.single() {
+        // Setup Wing Cannons if purchased
+        if limits.wing_cannon_level > 0 {
+            let (fire_rate, damage, size, pierce) = WING_CANNON_STATS[(limits.wing_cannon_level - 1) as usize];
+            
+            commands.entity(player_entity).insert((
+                WingCannon {
+                    level: limits.wing_cannon_level,
+                    fire_timer: 0.0,
+                    fire_rate,
+                    damage,
+                    projectile_size: size,
+                    side: WingCannonSide::Left,
+                },
+            ));
+        }
+
+        // Setup Missile System if purchased
+        if limits.missile_level > 0 {
+            let (fire_rate, damage, speed, range, dual) = MISSILE_STATS[(limits.missile_level - 1) as usize];
+            
+            commands.entity(player_entity).insert((
+                MissileSystem {
+                    level: limits.missile_level,
+                    fire_timer: 0.0,
+                    fire_rate,
+                    damage,
+                    missile_speed: speed,
+                    homing_range: range,
+                    dual_launch: dual,
+                },
+            ));
+        }
+    }
+}
+
 
 // UNIFIED SYSTEM
 
@@ -377,135 +442,407 @@ fn find_nearest_enemy(
 
 pub fn enhanced_shooting_system(
     mut commands: Commands,
-    input_manager: Res<InputManager>, // Changed from InputState and keyboard
-    mut player_query: Query<(&Transform, &mut EvolutionSystem), With<Player>>,
-    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<MissileProjectile>, Without<SporeWave>, Without<LaserBeam>, Without<ToxinCloudEffect>)>,
+    input_manager: Res<InputManager>,
+    mut player_query: Query<(
+        &Transform, 
+        &mut EvolutionSystem, 
+        &CellularUpgrades,
+        Option<&mut WingCannon>,
+        Option<&mut MissileSystem>
+    ), With<Player>>,
+    enemy_query: Query<(Entity, &Transform, &Enemy), (Without<AutoMissile>, Without<Player>)>,
     assets: Option<Res<GameAssets>>,
-    mitochondria_query: Query<&MitochondriaOvercharge>,
-    chemotaxis_query: Query<&ChemotaxisActive>,
-    binary_fission_query: Query<&BinaryFissionActive>,
     time: Res<Time>,
-    mut shoot_timer: Local<f32>,
-    mut beam_charging: Local<bool>,
-    mut beam_charge_timer: Local<f32>,
-    mut toxin_cloud_timer: Local<f32>,
-    mut achievement_events: EventWriter<AchievementEvent>,
+    mut main_cannon_timer: Local<f32>,
 ) {
-    if let Some(assets) = assets {
-        *shoot_timer -= time.delta_secs();
-        *toxin_cloud_timer -= time.delta_secs();
+    let Some(assets) = assets else { return };
+    
+    *main_cannon_timer -= time.delta_secs();
+    
+    if let Ok((player_transform, mut evolution_system, upgrades, wing_cannon, missile_system)) = player_query.single_mut() {
+        let shooting = input_manager.pressed(InputAction::Shoot);
         
-        if let Ok((player_transform, mut evolution_system)) = player_query.single_mut() {
-            let evolution = evolution_system.primary_evolution.clone();
-            let adaptations = &evolution_system.cellular_adaptations;
+        // ===== MAIN CANNON (Enhanced) =====
+        if shooting && *main_cannon_timer <= 0.0 {
+            spawn_enhanced_main_cannon_projectiles(
+                &mut commands,
+                &assets,
+                player_transform,
+                &evolution_system,
+                upgrades
+            );
             
-            // Check shooting input
-            let shooting = input_manager.pressed(InputAction::Shoot);
-            
-            // Get rate multiplier from mitochondria overcharge
-            let rate_multiplier = mitochondria_query.iter().next()
-                .map(|mito| mito.rate_multiplier)
-                .unwrap_or(1.0);
-            
-            // Track evolution achievements
-            match &evolution {
-                EvolutionType::PseudopodNetwork { .. } => {
-                    achievement_events.write(AchievementEvent::EvolutionReached("PseudopodNetwork".to_string()));
-                }
-                EvolutionType::BioluminescentBeam { .. } => {
-                    achievement_events.write(AchievementEvent::EvolutionReached("BioluminescentBeam".to_string()));
-                }
-                EvolutionType::SymbioticHunters { .. } => {
-                    achievement_events.write(AchievementEvent::EvolutionReached("SymbioticHunters".to_string()));
-                }
-                EvolutionType::ElectricDischarge { .. } => {
-                    achievement_events.write(AchievementEvent::EvolutionReached("ElectricDischarge".to_string()));
-                }
-                _ => {}
-            }
+            let base_fire_rate = evolution_system.primary_evolution.get_fire_rate();
+            *main_cannon_timer = base_fire_rate / upgrades.metabolic_rate;
+        }
 
-            // Get homing enhancement from chemotaxis
-            let homing_bonus = chemotaxis_query.iter().next()
-                .map(|chemo| chemo.homing_strength)
-                .unwrap_or(0.0);
+        // ===== WING CANNONS =====
+        if let Some(mut wing_cannon) = wing_cannon {
+            wing_cannon.fire_timer -= time.delta_secs();
             
-            match evolution {
-                EvolutionType::CytoplasmicSpray { damage, fire_rate } => {
-                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                        spawn_cytoplasmic_projectile(&mut commands, &assets, player_transform, damage, adaptations);
-                        *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
-                    }
-                }
+            if shooting && wing_cannon.fire_timer <= 0.0 {
+                spawn_wing_cannon_projectiles(
+                    &mut commands,
+                    &assets,
+                    player_transform,
+                    &wing_cannon,
+                    upgrades
+                );
+                wing_cannon.fire_timer = wing_cannon.fire_rate / upgrades.metabolic_rate;
+            }
+        }
+
+        // ===== MISSILE SYSTEM =====
+        if let Some(mut missile_system) = missile_system {
+            missile_system.fire_timer -= time.delta_secs();
+            
+            if missile_system.fire_timer <= 0.0 {
+                let target = find_strongest_enemy_in_range(
+                    &enemy_query,
+                    player_transform.translation,
+                    missile_system.homing_range
+                );
                 
-                EvolutionType::PseudopodNetwork { damage, fire_rate, tendril_count, spread_angle } => {
-                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                        spawn_pseudopod_network(&mut commands, &assets, player_transform, damage, tendril_count, spread_angle, adaptations);
-                        *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
-                    }
-                }
-                
-                EvolutionType::BioluminescentBeam { damage, charge_time, duration, width } => {
-                    if input_manager.pressed(InputAction::Shoot) {
-                        if !*beam_charging {
-                            *beam_charging = true;
-                            *beam_charge_timer = 0.0;
-                        }
-                        *beam_charge_timer += time.delta_secs();
-                        
-                        if *beam_charge_timer >= charge_time {
-                            spawn_bioluminescent_beam(&mut commands, &assets, player_transform, damage, duration, width, adaptations);
-                            *beam_charging = false;
-                            *beam_charge_timer = 0.0;
-                        }
-                    } else {
-                        *beam_charging = false;
-                        *beam_charge_timer = 0.0;
-                    }
-                }
-                
-                EvolutionType::SymbioticHunters { damage, fire_rate, homing_strength, blast_radius } => {
-                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                        let target = find_nearest_enemy(&enemy_query, player_transform.translation);
-                        let enhanced_homing = homing_strength + homing_bonus;
-                        spawn_symbiotic_hunter(&mut commands, &assets, player_transform, damage, target, enhanced_homing, blast_radius, adaptations);
-                        *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
-                    }
-                }
-                
-                EvolutionType::EnzymeBurst { damage, fire_rate, acid_damage } => {
-                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                        spawn_enzyme_burst(&mut commands, &assets, player_transform, damage, acid_damage, adaptations);
-                        *shoot_timer = fire_rate / (adaptations.metabolic_efficiency * rate_multiplier);
-                    }
-                }
-                
-                EvolutionType::ToxinCloud { damage_per_second, cloud_radius, duration } => {
-                    if input_manager.pressed(InputAction::Shoot) && *toxin_cloud_timer <= 0.0 {
-                        spawn_toxin_cloud(&mut commands, &assets, player_transform, damage_per_second, cloud_radius, duration, adaptations);
-                        *toxin_cloud_timer = 3.0; // Cooldown for toxin clouds
-                    }
-                }
-                
-                EvolutionType::ElectricDischarge { damage, chain_count, range } => {
-                    if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                        spawn_electric_discharge(&mut commands, &assets, player_transform, &enemy_query, damage, chain_count, range, adaptations);
-                        *shoot_timer = 1.5 / adaptations.metabolic_efficiency;
-                    }
+                if target.is_some() {
+                    spawn_auto_missiles(
+                        &mut commands,
+                        &assets,
+                        player_transform,
+                        &missile_system,
+                        target
+                    );
+                    missile_system.fire_timer = missile_system.fire_rate;
                 }
             }
+        }
+
+        // ===== EMERGENCY SPORE =====
+        if input_manager.just_pressed(InputAction::EmergencySpore) && evolution_system.emergency_spores > 0 {
+            spawn_emergency_spore(&mut commands, &assets, player_transform.translation);
+            evolution_system.emergency_spores -= 1;
+        }
+    }
+}
+
+fn spawn_enhanced_main_cannon_projectiles(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    player_transform: &Transform,
+    evolution_system: &EvolutionSystem,
+    upgrades: &CellularUpgrades,
+) {
+    let damage_level = upgrades.damage_amplification;
+    let base_damage = evolution_system.primary_evolution.get_base_damage();
+    let final_damage = (base_damage as f32 * damage_level) as i32;
+    
+    // Determine number of projectiles based on damage level
+    let projectile_count = match damage_level as u32 {
+        1..=1 => 1,
+        2..=2 => 2, // Add second projectile
+        3..=3 => 3, // Add third projectile
+        4..=4 => 4, // Four projectiles
+        _ => 5,     // Maximum five projectiles
+    } as f32;
+    
+    let base_size = 8.0 + (damage_level - 1.0) * 2.0; // Size increases with level
+    
+    // Spawn multiple projectiles in a tight spread
+    for i in 0..(projectile_count as u32) {
+        let offset_x = if projectile_count == 1.0 {
+            0.0
+        } else {
+            (i as f32 - (projectile_count - 1.0) / 2.0) * 12.0
+        };
+        
+        commands.spawn((
+            Sprite {
+                image: assets.projectile_texture.clone(),
+                color: Color::srgb(0.4, 0.9, 0.7),
+                custom_size: Some(Vec2::splat(base_size)),
+                ..default()
+            },
+            Transform::from_translation(
+                player_transform.translation + Vec3::new(offset_x, 30.0, 0.0)
+            ),
+            Projectile {
+                velocity: Vec2::new(0.0, 850.0),
+                damage: final_damage,
+                friendly: true,
+                organic_trail: true,
+            },
+            Collider { radius: base_size / 2.0 },
+            BioluminescentParticle {
+                base_color: Color::srgb(0.4, 0.9, 0.7),
+                pulse_frequency: 3.0,
+                pulse_intensity: 0.6,
+                organic_motion: OrganicMotion {
+                    undulation_speed: 2.0,
+                    response_to_current: 0.3,
+                },
+            },
+        ));
+    }
+}
+
+fn spawn_wing_cannon_projectiles(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    player_transform: &Transform,
+    wing_cannon: &WingCannon,
+    upgrades: &CellularUpgrades,
+) {
+    let enhanced_damage = (wing_cannon.damage as f32 * upgrades.damage_amplification) as i32;
+    
+    // Color progression: Yellow (level 1) to Green (level 5)
+    let color = match wing_cannon.level {
+        1 => Color::srgb(1.0, 0.9, 0.2),      // Yellow
+        2 => Color::srgb(0.9, 0.9, 0.3),      // Yellow-Green
+        3 => Color::srgb(0.7, 0.9, 0.4),      // Light Green
+        4 => Color::srgb(0.5, 0.9, 0.5),      // Green
+        _ => Color::srgb(0.3, 1.0, 0.6),      // Bright Green
+    };
+    
+    // Spawn left wing projectile
+    commands.spawn((
+        Sprite {
+            image: assets.projectile_texture.clone(),
+            color,
+            custom_size: Some(Vec2::splat(wing_cannon.projectile_size)),
+            ..default()
+        },
+        Transform::from_translation(
+            player_transform.translation + Vec3::new(-WING_CANNON_OFFSET, WING_CANNON_Y_OFFSET, 0.0)
+        ),
+        Projectile {
+            velocity: Vec2::new(0.0, 750.0),
+            damage: enhanced_damage,
+            friendly: true,
+            organic_trail: false,
+        },
+        WingCannonProjectile {
+            pierce_count: 0,
+            max_pierce: wing_cannon.level + 1,
+            damage_falloff: 0.8, // 20% damage reduction per pierce
+        },
+        Collider { radius: wing_cannon.projectile_size / 2.0 },
+    ));
+    
+    // Spawn right wing projectile
+    commands.spawn((
+        Sprite {
+            image: assets.projectile_texture.clone(),
+            color,
+            custom_size: Some(Vec2::splat(wing_cannon.projectile_size)),
+            ..default()
+        },
+        Transform::from_translation(
+            player_transform.translation + Vec3::new(WING_CANNON_OFFSET, WING_CANNON_Y_OFFSET, 0.0)
+        ),
+        Projectile {
+            velocity: Vec2::new(0.0, 750.0),
+            damage: enhanced_damage,
+            friendly: true,
+            organic_trail: false,
+        },
+        WingCannonProjectile {
+            pierce_count: 0,
+            max_pierce: wing_cannon.level + 1,
+            damage_falloff: 0.8,
+        },
+        Collider { radius: wing_cannon.projectile_size / 2.0 },
+    ));
+}
+
+fn spawn_auto_missiles(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    player_transform: &Transform,
+    missile_system: &MissileSystem,
+    target: Option<Entity>,
+) {
+    let missile_count = if missile_system.dual_launch { 2 } else { 1 };
+    
+    for i in 0..missile_count {
+        let offset_x = if missile_count == 1 { 0.0 } else { (i as f32 - 0.5) * 30.0 };
+        
+        commands.spawn((
+            Sprite {
+                image: assets.projectile_texture.clone(),
+                color: Color::srgb(0.9, 0.5, 0.3), // Orange missile color
+                custom_size: Some(Vec2::splat(10.0)),
+                ..default()
+            },
+            Transform::from_translation(
+                player_transform.translation + Vec3::new(offset_x, MISSILE_Y_OFFSET, 0.0)
+            ),
+            Projectile {
+                velocity: Vec2::new(0.0, missile_system.missile_speed),
+                damage: missile_system.damage,
+                friendly: true,
+                organic_trail: true,
+            },
+            AutoMissile {
+                target,
+                homing_strength: 2.0,
+                speed: missile_system.missile_speed,
+                damage: missile_system.damage,
+                retarget_timer: 0.0,
+            },
+            ExplosiveProjectile {
+                blast_radius: 40.0,
+                blast_damage: missile_system.damage / 2,
+                organic_explosion: true,
+            },
+            Collider { radius: 8.0 },
+            BioluminescentParticle {
+                base_color: Color::srgb(0.9, 0.5, 0.3),
+                pulse_frequency: 4.0,
+                pulse_intensity: 0.7,
+                organic_motion: OrganicMotion {
+                    undulation_speed: 3.0,
+                    response_to_current: 0.2,
+                },
+            },
+        ));
+    }
+}
+
+fn find_strongest_enemy_in_range(
+    enemy_query: &Query<(Entity, &Transform, &Enemy), (Without<AutoMissile>, Without<Player>)>,
+    player_pos: Vec3,
+    range: f32,
+) -> Option<Entity> {
+    enemy_query
+        .iter()
+        .filter(|(_, transform, _)| {
+            player_pos.distance(transform.translation) <= range
+        })
+        .max_by(|(_, _, a), (_, _, b)| {
+            // Prioritize by enemy type strength (boss > heavy > normal)
+            let strength_a = match a.enemy_type {
+                EnemyType::InfectedMacrophage => 100,
+                EnemyType::ReproductiveVesicle => 80,
+                EnemyType::ParasiticProtozoa => 60,
+                EnemyType::BiofilmColony => 50,
+                EnemyType::SwarmCell => 40,
+                EnemyType::AggressiveBacteria => 30,
+                EnemyType::SuicidalSpore => 20,
+                EnemyType::ViralParticle => 10,
+                EnemyType::Offspring => 5,
+            };
+            let strength_b = match b.enemy_type {
+                EnemyType::InfectedMacrophage => 100,
+                EnemyType::ReproductiveVesicle => 80,
+                EnemyType::ParasiticProtozoa => 60,
+                EnemyType::BiofilmColony => 50,
+                EnemyType::SwarmCell => 40,
+                EnemyType::AggressiveBacteria => 30,
+                EnemyType::SuicidalSpore => 20,
+                EnemyType::ViralParticle => 10,
+                EnemyType::Offspring => 5,
+            };
+            strength_a.cmp(&strength_b)
+        })
+        .map(|(entity, _, _)| entity)
+}
+
+pub fn wing_cannon_collision_system(
+    mut commands: Commands,
+    mut projectile_query: Query<(Entity, &Transform, &Collider, &mut Projectile, &mut WingCannonProjectile)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<WingCannonProjectile>)>,
+    mut explosion_events: EventWriter<SpawnExplosion>,
+) {
+    for (proj_entity, proj_transform, proj_collider, mut projectile, mut wing_cannon) in projectile_query.iter_mut() {
+        for (enemy_entity, enemy_transform, enemy_collider, mut enemy_health) in enemy_query.iter_mut() {
+            let distance = proj_transform.translation.distance(enemy_transform.translation);
             
-            // Binary fission - spawn clone projectiles
-            if let Some(binary_fission) = binary_fission_query.iter().next() {
-                if input_manager.pressed(InputAction::Shoot) && *shoot_timer <= 0.0 {
-                    // Spawn additional projectile for binary fission
-                    spawn_clone_projectile(&mut commands, &assets, player_transform, &evolution, adaptations);
+            if distance < proj_collider.radius + enemy_collider.radius {
+                // Apply damage with falloff
+                let actual_damage = (projectile.damage as f32 * wing_cannon.damage_falloff.powi(wing_cannon.pierce_count as i32)) as i32;
+                enemy_health.0 -= actual_damage;
+                
+                // Spawn hit effect
+                explosion_events.write(SpawnExplosion {
+                    position: enemy_transform.translation,
+                    intensity: 0.6,
+                    enemy_type: None,
+                });
+                
+                wing_cannon.pierce_count += 1;
+                
+                // Check if projectile should be destroyed
+                if wing_cannon.pierce_count >= wing_cannon.max_pierce {
+                    commands.entity(proj_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
+                    break;
+                } else {
+                    // Reduce damage for next hit
+                    projectile.damage = actual_damage;
                 }
+                
+                // Check if enemy died
+                if enemy_health.0 <= 0 {
+                    explosion_events.write(SpawnExplosion {
+                        position: enemy_transform.translation,
+                        intensity: 1.0,
+                        enemy_type: None,
+                    });
+                    commands.entity(enemy_entity)
+                        .insert(AlreadyDespawned)
+                        .despawn();
+                }
+                
+                break; // Only hit one enemy per frame per projectile
             }
+        }
+    }
+}
+
+pub fn auto_missile_system(
+    mut missile_query: Query<(Entity, &mut Transform, &mut Projectile, &mut AutoMissile)>,
+    enemy_query: Query<(Entity, &Transform, &Enemy), (Without<AutoMissile>, Without<Player>)>,
+    time: Res<Time>,
+) {
+    for (missile_entity, mut missile_transform, mut projectile, mut auto_missile) in missile_query.iter_mut() {
+        auto_missile.retarget_timer += time.delta_secs();
+        
+        // Retarget every 0.5 seconds or if target is lost
+        if auto_missile.retarget_timer > 0.5 {
+            auto_missile.retarget_timer = 0.0;
             
-            // Emergency spore activation - now uses dedicated action
-            if input_manager.just_pressed(InputAction::EmergencySpore) && evolution_system.emergency_spores > 0 {
-                spawn_emergency_spore(&mut commands, &assets, player_transform.translation);
-                evolution_system.emergency_spores -= 1;
+            if let Some(target_entity) = auto_missile.target {
+                // Check if current target still exists
+                if enemy_query.get(target_entity).is_err() {
+                    auto_missile.target = find_strongest_enemy_in_range(
+                        &enemy_query,
+                        missile_transform.translation,
+                        300.0 // Retarget range
+                    );
+                }
+            } else {
+                auto_missile.target = find_strongest_enemy_in_range(
+                    &enemy_query,
+                    missile_transform.translation,
+                    300.0
+                );
+            }
+        }
+        
+        // Homing behavior
+        if let Some(target_entity) = auto_missile.target {
+            if let Ok((_, target_transform, _)) = enemy_query.get(target_entity) {
+                let direction_to_target = (target_transform.translation - missile_transform.translation).normalize_or_zero();
+                let current_direction = projectile.velocity.normalize_or_zero();
+                
+                // Smooth homing
+                let homing_rate = auto_missile.homing_strength * time.delta_secs();
+                let new_direction = (current_direction + direction_to_target.truncate() * homing_rate).normalize_or_zero();
+                projectile.velocity = new_direction * auto_missile.speed;
+                
+                // Update rotation
+                let angle = new_direction.y.atan2(new_direction.x) - std::f32::consts::FRAC_PI_2;
+                missile_transform.rotation = Quat::from_rotation_z(angle);
             }
         }
     }
@@ -828,15 +1165,11 @@ fn spawn_clone_projectile(
 }
 
 // Spawn emergency spore (replaces smart bomb)
-fn spawn_emergency_spore(
-    commands: &mut Commands,
-    assets: &GameAssets,
-    position: Vec3,
-) {
+fn spawn_emergency_spore(commands: &mut Commands, assets: &GameAssets, position: Vec3) {
     commands.spawn((
         Sprite {
             image: assets.explosion_texture.clone(),
-            color: Color::srgb(1.0, 0.8, 0.3), // Warm spore color
+            color: Color::srgb(1.0, 0.8, 0.3),
             ..default()
         },
         Transform::from_translation(position),
@@ -845,7 +1178,7 @@ fn spawn_emergency_spore(
             max_time: 2.5,
             current_radius: 0.0,
             max_radius: 600.0,
-            damage: 120,
+            damage: 150, // Increased damage for new system
         },
         BioluminescentParticle {
             base_color: Color::srgb(1.0, 0.8, 0.3),
@@ -858,6 +1191,4 @@ fn spawn_emergency_spore(
         },
     ));
 }
-
-
 

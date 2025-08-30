@@ -11,8 +11,7 @@ use crate::wave_systems::*;
 // FIXED: ATP pickup system - resolved query conflicts
 pub fn atp_pickup_system(
     mut commands: Commands,
-    // FIXED: Separate the ATP pickup query from player query
-    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>, Without<AlreadyDespawned>)>,
+    atp_query: Query<(Entity, &Transform, &Collider, &ATP), (With<ATP>, Without<Player>, Without<PendingDespawn>, Without<AlreadyDespawned>)>,
     mut player_query: Query<(&Transform, &Collider, &mut ATP), With<Player>>,
     mut game_score: ResMut<GameScore>,
     mut achievement_events: EventWriter<AchievementEvent>,
@@ -25,7 +24,7 @@ pub fn atp_pickup_system(
                 player_atp.amount += atp_component.amount;
                 game_score.current += atp_component.amount * 10; // ATP also gives points
                 commands.entity(atp_entity)
-                    .try_insert(AlreadyDespawned)
+                    // .try_insert(AlreadyDespawned)
                     .despawn();
 
                 // stats tracking

@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-use serde::{Serialize, Deserialize};
-use crate::components::{AlreadyDespawned, PendingDespawn, DespawnProtected};
+use crate::components::{AlreadyDespawned, PendingDespawn};
 
 // Safer despawning system - prevents double despawns and crashes
 pub fn robust_despawn_system(

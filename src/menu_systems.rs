@@ -573,8 +573,6 @@ pub fn global_input_system(
     if keyboard.just_pressed(KeyCode::Escape) {
         match current_state.get() {
             GameState::Settings | GameState::HighScores => next_state.set(GameState::TitleScreen),
-            GameState::Playing => next_state.set(GameState::Paused),
-            GameState::Paused => next_state.set(GameState::Playing),
             _ => {}
         }
     }

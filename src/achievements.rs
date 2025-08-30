@@ -346,7 +346,15 @@ pub enum AchievementEvent {
     BossDefeated,
     PerfectWave, // No damage taken
     SpeedRun { wave_number: u32, time: f32 }, // Completed wave under time limit
+    
+    PerfectStage { stage_number: u32 },
+    MaxMultiplier { stage_number: u32 },
 
+    FirstFiveStages,
+    FirstTenStages,
+    TwentyStages,
+    FiftyStages,
+    FullDeck,
 }
 
 fn check_achievement_progress(

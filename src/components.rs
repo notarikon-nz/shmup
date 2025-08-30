@@ -1164,11 +1164,12 @@ pub struct DespawnProtected; // Prevents accidental despawning of critical entit
 // Upgrade Limits & UI Indicators
 
 // Upgrade limits
-#[derive(Component, Clone, Default)]
+#[derive(Component, Clone)]
 pub struct UpgradeLimits {
+    // Original upgrades
     pub damage_level: u32,
     pub damage_max: u32,
-    pub shield_level: u32, 
+    pub shield_level: u32,
     pub shield_max: u32,
     pub metabolic_level: u32,
     pub metabolic_max: u32,
@@ -1182,6 +1183,16 @@ pub struct UpgradeLimits {
     pub magnet_radius_max: u32,
     pub magnet_strength_level: u32,
     pub magnet_strength_max: u32,
+    
+    // New weapon systems
+    pub wing_cannon_level: u32,
+    pub wing_cannon_max: u32,
+    pub missile_level: u32,
+    pub missile_max: u32,
+    
+    // Support systems (for future drone implementation)
+    pub support_drone_level: u32,
+    pub support_drone_max: u32,
 }
 
 // UI components
@@ -1192,4 +1203,82 @@ pub struct UpgradeLimits {
 #[derive(Component)] pub struct DamageLevelText;
 #[derive(Component)] pub struct BombLevelText;
 
+
+// ===== NEW WEAPON SYSTEM COMPONENTS =====
+
+#[derive(Component)]
+pub struct WingCannon {
+    pub level: u32,
+    pub fire_timer: f32,
+    pub fire_rate: f32,
+    pub damage: i32,
+    pub projectile_size: f32,
+    pub side: WingCannonSide, // Left or Right
+}
+
+#[derive(Clone, Copy)]
+pub enum WingCannonSide {
+    Left,
+    Right,
+}
+
+#[derive(Component)]
+pub struct MissileSystem {
+    pub level: u32,
+    pub fire_timer: f32,
+    pub fire_rate: f32,
+    pub damage: i32,
+    pub missile_speed: f32,
+    pub homing_range: f32,
+    pub dual_launch: bool, // Launch two missiles at higher levels
+}
+
+#[derive(Component)]
+pub struct WingCannonProjectile {
+    pub pierce_count: u32,
+    pub max_pierce: u32,
+    pub damage_falloff: f32,
+}
+
+#[derive(Component)]
+pub struct AutoMissile {
+    pub target: Option<Entity>,
+    pub homing_strength: f32,
+    pub speed: f32,
+    pub damage: i32,
+    pub retarget_timer: f32,
+}
+
+// Add to UpgradeLimits
+impl Default for UpgradeLimits {
+    fn default() -> Self {
+        Self {
+            damage_level: 0,
+            damage_max: 5,
+            shield_level: 0,
+            shield_max: 5,
+            metabolic_level: 0,
+            metabolic_max: 5,
+            cellular_level: 0,
+            cellular_max: 5,
+            enzyme_level: 0,
+            enzyme_max: 5,
+            bioluminescence_level: 0,
+            bioluminescence_max: 3,
+            magnet_radius_level: 0,
+            magnet_radius_max: 4,
+            magnet_strength_level: 0,
+            magnet_strength_max: 4,
+            // NEW WEAPON LIMITS
+            wing_cannon_level: 0,
+            wing_cannon_max: 5,
+            missile_level: 0,
+            missile_max: 5,
+
+            support_drone_level: 0,
+            support_drone_max: 0,
+
+        }
+    }
+}
 

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::components::{PowerUpType, ParticleConfig, ExplosionType};
 use crate::enemy_types::{EnemyAI, EnemyType};
+use crate::card_system::{CardType};
 
 #[derive(Event)]
 pub struct SpawnExplosion {
@@ -63,3 +64,18 @@ pub enum TidalEvent {
     LowTideReached,
     CurrentReversal { new_direction: Vec2 },
 }
+
+// Card System
+
+#[derive(Event)]
+pub struct SpawnCardEvent {
+    pub position: Vec3,
+    pub card_type: CardType,
+}
+
+#[derive(Event)]
+pub struct SpawnGreenBoxEvent {
+    pub position: Vec3,
+    pub stage_number: u32,
+}
+

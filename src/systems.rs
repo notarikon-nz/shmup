@@ -172,7 +172,7 @@ pub fn cleanup_offscreen(
         let distance_sq = pos.x * pos.x + pos.y * pos.y;
         
         if distance_sq > bounds_sq {
-            commands.entity(entity).try_insert(AlreadyDespawned).despawn();
+            commands.entity(entity).safe_despawn_delayed(0.1);
         }
     }
 }
@@ -710,7 +710,7 @@ pub fn enemy_flash_system(
     mut flash_query: Query<(Entity, &mut FlashEffect, &mut Sprite)>,
     mut enemy_hit_events: EventReader<EnemyHit>,
     // UPDATED: Now returns (Entity, &Sprite) and filters out despawned entities
-    enemy_query: Query<(&Sprite), (
+    enemy_query: Query<&Sprite, (
         With<Enemy>, 
         Without<FlashEffect>, 
         Without<AlreadyDespawned>, 

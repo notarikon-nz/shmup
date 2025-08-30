@@ -4,7 +4,6 @@ use crate::components::*;
 use crate::resources::*;
 use crate::wave_systems::*;
 use crate::enemy_types::{Enemy};
-use crate::despawn::*;
 
 // ===== CONSTANTS =====
 const UI_FONT_SIZE_LARGE: f32 = 48.0;
@@ -203,7 +202,7 @@ pub fn enhanced_evolution_ui_with_limits(
         match (near_chamber, existing_ui_query.single()) {
             (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
             (false, Ok(entity)) => { 
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             },
             _ => {},
         }

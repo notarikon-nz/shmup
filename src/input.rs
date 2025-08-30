@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::input::gamepad::{GamepadConnection, GamepadConnectionEvent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::resources::{GameState};
+use crate::resources::{GameState, IsPaused};
 
 // ===== INPUT ACTIONS =====
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -529,15 +529,17 @@ pub fn gamepad_connection_system(
 // ===== CONVENIENCE SYSTEMS FOR COMMON PATTERNS =====
 
 // System for handling pause input
+
+// https://github.com/bevyengine/bevy/blob/main/examples/state/sub_states.rs
 pub fn handle_pause_input(
     input_manager: Res<InputManager>,
-    current_state: Res<State<GameState>>,
-    mut next_state: ResMut<NextState<GameState>>,
+     current_state: Res<State<IsPaused>>,
+    mut next_state: ResMut<NextState<IsPaused>>,
 ) {
     if input_manager.just_pressed(InputAction::Pause) {
         match current_state.get() {
-            GameState::Playing => next_state.set(GameState::Paused),
-            GameState::Paused => next_state.set(GameState::Playing),
+            IsPaused::Running => { next_state.set(IsPaused::Paused); },
+            IsPaused::Paused => { next_state.set(IsPaused::Running); },
             _ => {}
         }
     }

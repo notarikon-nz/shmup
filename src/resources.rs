@@ -1,6 +1,9 @@
 // src/resources.rs - Updated with complete menu system support
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap,HashSet};
+use crate::pause_menu::*;
+use crate::stage_summary::*;
 
 // ===== FONTS =====
 #[derive(Resource)]
@@ -42,6 +45,21 @@ pub struct GameAssets {
     pub sfx_explosion: Handle<AudioSource>,
     pub sfx_powerup: Handle<AudioSource>,
     pub music: Handle<AudioSource>,
+
+    // Card System
+    pub permanent_card_texture: Handle<Image>,
+    pub temporal_card_texture: Handle<Image>,
+    pub green_box_texture: Handle<Image>,
+    
+    // Infrastructure textures
+    pub infrastructure_pipe_texture: Handle<Image>,
+    pub infrastructure_vat_texture: Handle<Image>,
+    pub infrastructure_emitter_texture: Handle<Image>,
+    pub infrastructure_factory_texture: Handle<Image>,
+    
+    // Wing cannon and missile textures
+    pub wing_cannon_texture: Handle<Image>,
+    pub missile_texture: Handle<Image>,    
 }
 
 // ===== GAME STATES (Complete Menu System) =====
@@ -53,10 +71,25 @@ pub enum GameState {
     Settings,
     HighScores,
     Playing,
+    StageSummary, // New state
     Paused,
     GameOver,
     Controls, // Legacy - now used for Settings
     None,
+}
+
+// In this case, instead of deriving `States`, we derive `SubStates`
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+// And we need to add an attribute to let us know what the source state is
+// and what value it needs to have. This will ensure that unless we're
+// in [`AppState::InGame`], the [`IsPaused`] state resource
+// will not exist.
+#[source(GameState = GameState::Playing)]
+#[states(scoped_entities)]
+pub enum IsPaused {
+    #[default]
+    Running,
+    Paused,
 }
 
 // ===== MENU SYSTEM RESOURCES =====
@@ -138,23 +171,44 @@ pub struct ShootingState {
 #[derive(Resource)]
 pub struct FluidEnvironment {
     pub current_field: Vec<Vec2>,
-    pub grid_size: usize,
-    pub cell_size: f32,
+    pub grid_size: usize,      // Single dimension for square grid
+    pub cell_size: f32,        // 20.0 matches your biological systems
     pub tidal_phase: f32,
     pub turbulence_intensity: f32,
 }
 
+
 impl Default for FluidEnvironment {
-    fn default() -> Self {
-        Self {
-            current_field: vec![Vec2::ZERO; 64 * 64],
-            grid_size: 64,
-            cell_size: 20.0,
-            tidal_phase: 0.0,
-            turbulence_intensity: 0.3,
-        }
-    }
+   fn default() -> Self {
+       Self {
+           current_field: vec![Vec2::ZERO; 64 * 48], // 64x48 grid for 1024x768 screen
+           grid_size: 64 * 48,
+           cell_size: 16.0,
+           tidal_phase: 0.0, 
+           turbulence_intensity: 0.0,
+       }
+   }
 }
+
+#[derive(Clone)]
+pub struct TemperatureZone {
+    pub center: Vec2,
+    pub radius: f32,
+    pub temperature: f32, // Kelvin
+    pub intensity: f32,
+}
+
+#[derive(Clone, Default)]
+pub enum EnvironmentType {
+    #[default]
+    OpenOcean,
+    TidalPool,
+    DeepSea,
+    CoralReef,
+    PollutedWater,
+    ThermalVent,
+}
+
 
 #[derive(Resource, Clone)]
 pub struct ChemicalEnvironment {
@@ -171,6 +225,10 @@ pub struct ChemicalZone {
     pub radius: f32,
     pub ph_level: f32,
     pub intensity: f32,
+
+    pub center: Vec2,
+    pub toxicity: f32,
+    pub oxygen_level: f32,    
 }
 
 #[derive(Clone)]
@@ -403,17 +461,33 @@ pub struct GameScore {
     pub high_scores: Vec<u32>,
     pub score_multiplier: f32,
     pub multiplier_timer: f32,
-    pub high_score_data: Option<HighScoreData>,
+    
+    // Stage-specific scoring
+    pub stage_score: u32,
+    pub stage_atp_collected: u32,
+    pub stage_atp_total: u32,
+    
+    // Enhanced statistics
     pub total_atp_collected: u64,
     pub enemies_defeated: u32,
+    pub stages_completed: u32,
+    pub perfect_stages: u32,
+    pub cards_collected: u32,
+    pub infrastructure_destroyed: u32,
+    
+    // High score data with more detail
+    pub high_score_data: Option<HighScoreData>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct HighScoreData {
     pub scores: Vec<HighScoreEntry>,
     pub total_games_played: u32,
-    pub best_evolution_reached: String,
+    pub total_play_time: f32,
     pub longest_survival_time: f32,
+    pub best_evolution_reached: String,
+    pub total_cards_found: u32,
+    pub favorite_weapon_type: String,
     pub total_atp_collected: u64,
     pub enemies_defeated: u32,
 }
@@ -423,6 +497,9 @@ pub struct HighScoreEntry {
     pub score: u32,
     pub date: String,
     pub evolution_type: String,
+    pub stages_reached: u32,
+    pub cards_collected: u32,
+    pub survival_time: f32,
     pub waves_survived: u32,
     pub time_played: f32,
 }
@@ -435,21 +512,30 @@ impl Default for HighScoreData {
                     score: 10000,
                     date: "2025-01-01".to_string(),
                     evolution_type: "Cytoplasmic Spray".to_string(),
-                    waves_survived: 10,
+                    stages_reached: 10,
+                    cards_collected: 3,
+                    survival_time: 300.0,
+                    waves_survived: 50,
                     time_played: 300.0,
                 },
                 HighScoreEntry {
                     score: 7500,
                     date: "2025-01-01".to_string(),
                     evolution_type: "Pseudopod Network".to_string(),
-                    waves_survived: 8,
+                    stages_reached: 8,
+                    cards_collected: 2,
+                    survival_time: 240.0,
+                    waves_survived: 40,
                     time_played: 240.0,
                 },
                 HighScoreEntry {
                     score: 5000,
                     date: "2025-01-01".to_string(),
                     evolution_type: "Bioluminescent Beam".to_string(),
-                    waves_survived: 6,
+                    stages_reached: 6,
+                    cards_collected: 1,
+                    survival_time: 180.0,
+                    waves_survived: 30,
                     time_played: 180.0,
                 },
             ],
@@ -458,6 +544,9 @@ impl Default for HighScoreData {
             longest_survival_time: 300.0,
             total_atp_collected: 2500,
             enemies_defeated: 150,
+            favorite_weapon_type: "None".to_string(),
+            total_cards_found: 0,
+            total_play_time: 0.0,
         }
     }
 }
@@ -699,3 +788,332 @@ pub struct ColonySpawnPattern {
     pub spawn_delays: Vec<f32>,
     pub organism_types: Vec<String>,
 }
+
+// ===== WEAPON SYSTEM RESOURCES =====
+#[derive(Resource, Default)]
+pub struct WeaponSystemConfig {
+    pub main_cannon_enabled: bool,
+    pub wing_cannons_enabled: bool,
+    pub missile_system_enabled: bool,
+    pub support_drones_enabled: bool,
+    
+    // Firing patterns
+    pub main_cannon_pattern: MainCannonPattern,
+    pub wing_cannon_sync: bool,
+    pub missile_auto_target: bool,
+}
+
+#[derive(Default, Clone)]
+pub enum MainCannonPattern {
+    #[default]
+    Single,     // Single projectile
+    Double,     // Two projectiles side by side
+    Triple,     // Three projectiles in line
+    Spread,     // Fan pattern
+    Focused,    // Tight cluster
+}
+
+// ===== CARD SYSTEM INTEGRATION =====
+#[derive(Resource, Default)]
+pub struct CardSystemState {
+    // Card collection tracking
+    pub permanent_cards_owned: HashSet<String>,
+    pub temporal_cards_active: Vec<(String, f32)>, // (card_id, remaining_time)
+    
+    // Drop rate modifiers
+    pub base_drop_rate: f32,
+    pub drop_rate_multiplier: f32,
+    
+    // Card effects tracking
+    pub active_effects: HashMap<String, f32>, // effect_name -> strength/remaining_time
+    
+    // Statistics
+    pub total_cards_found: u32,
+    pub cards_found_this_run: u32,
+    pub green_boxes_collected: u32,
+}
+
+// ===== STAGE PROGRESS TRACKING =====
+#[derive(Resource, Default)]
+pub struct StageProgressTracker {
+    pub current_stage: u32,
+    pub current_wave_in_stage: u32,
+    pub waves_per_stage: u32,
+    
+    // Objectives tracking
+    pub enemies_killed_this_stage: u32,
+    pub total_enemies_this_stage: u32,
+    pub infrastructure_destroyed_this_stage: u32,
+    pub total_infrastructure_this_stage: u32,
+    pub damage_taken_this_stage: bool,
+    pub perfect_atp_collection: bool,
+    
+    // Performance metrics
+    pub stage_start_time: f32,
+    pub stage_completion_time: f32,
+    pub accuracy_this_stage: f32,
+    
+    // Bonus tracking
+    pub combo_multiplier: f32,
+    pub max_combo_this_stage: u32,
+    pub current_combo: u32,
+}
+
+// ===== PERFORMANCE METRICS =====
+#[derive(Resource, Default)]
+pub struct PerformanceMetrics {
+    pub entity_count: usize,
+    pub particle_count: usize,
+    pub projectile_count: usize,
+    pub enemy_count: usize,
+    
+    pub frame_time_ms: f32,
+    pub update_time_ms: f32,
+    pub render_time_ms: f32,
+    
+    pub memory_usage_mb: f32,
+    pub peak_entities_this_session: usize,
+    
+    // Optimization flags
+    pub particle_culling_active: bool,
+    pub entity_pooling_active: bool,
+    pub reduced_effects: bool,
+}
+
+// ===== AUDIO SYSTEM ENHANCEMENTS =====
+#[derive(Clone, Resource, Default)]
+pub struct EnhancedAudioSettings {
+    pub master_volume: f32,
+    pub sfx_volume: f32,
+    pub music_volume: f32,
+    pub ambient_volume: f32,
+    
+    // Dynamic audio
+    pub adaptive_audio: bool,
+    pub combat_intensity_scaling: bool,
+    pub environmental_audio: bool,
+    
+    // Audio pools for performance
+    pub max_concurrent_sfx: usize,
+    pub audio_fade_time: f32,
+}
+
+// ===== DIFFICULTY SCALING =====
+#[derive(Resource)]
+pub struct DifficultyScaling {
+    pub base_difficulty: f32,
+    pub current_difficulty: f32,
+    pub difficulty_curve: DifficultyProfile,
+    
+    // Scaling factors
+    pub enemy_health_multiplier: f32,
+    pub enemy_speed_multiplier: f32,
+    pub enemy_damage_multiplier: f32,
+    pub spawn_rate_multiplier: f32,
+    
+    // Player compensation
+    pub atp_reward_multiplier: f32,
+    pub card_drop_bonus: f32,
+    pub score_multiplier: f32,
+    
+    // Adaptive difficulty
+    pub player_skill_rating: f32,
+    pub recent_performance: Vec<f32>,
+    pub auto_adjust: bool,
+}
+
+#[derive(Clone)]
+pub enum DifficultyProfile {
+    Linear { rate: f32 },
+    Exponential { base: f32, exponent: f32 },
+    Stepped { thresholds: Vec<(u32, f32)> },
+    Adaptive { target_success_rate: f32 },
+}
+
+impl Default for DifficultyScaling {
+    fn default() -> Self {
+        Self {
+            base_difficulty: 1.0,
+            current_difficulty: 1.0,
+            difficulty_curve: DifficultyProfile::Linear { rate: 0.1 },
+            enemy_health_multiplier: 1.0,
+            enemy_speed_multiplier: 1.0,
+            enemy_damage_multiplier: 1.0,
+            spawn_rate_multiplier: 1.0,
+            atp_reward_multiplier: 1.0,
+            card_drop_bonus: 1.0,
+            score_multiplier: 1.0,
+            player_skill_rating: 0.5,
+            recent_performance: Vec::new(),
+            auto_adjust: true,
+        }
+    }
+}
+
+// ===== SAVE/LOAD SYSTEM =====
+#[derive(Resource, Default)]
+pub struct SaveGameData {
+    pub player_stats: PlayerPersistentStats,
+    pub unlocked_content: UnlockedContent,
+    pub settings: GameSettings,
+    pub achievements: Vec<String>,
+    pub high_scores: Vec<HighScoreEntry>,
+}
+
+#[derive(Default, Clone)]
+pub struct PlayerPersistentStats {
+    pub total_games_played: u32,
+    pub total_play_time_hours: f32,
+    pub total_score: u64,
+    pub total_enemies_defeated: u32,
+    pub total_atp_collected: u64,
+    pub total_cards_found: u32,
+    pub highest_stage_reached: u32,
+    pub perfect_stages_completed: u32,
+    pub favorite_evolution_type: String,
+    pub preferred_difficulty: f32,
+}
+
+#[derive(Default, Clone)]
+pub struct UnlockedContent {
+    pub evolution_types: Vec<String>,
+    pub card_types: Vec<String>,
+    pub difficulty_levels: Vec<String>,
+    pub achievements_unlocked: Vec<String>,
+    pub cosmetic_unlocks: Vec<String>,
+}
+
+
+#[derive(Default, Clone)]
+pub struct GameSettings {
+    pub audio: EnhancedAudioSettings,
+    pub graphics: GraphicsSettings,
+    pub controls: ControlSettings,
+    pub gameplay: GameplaySettings,
+}
+
+#[derive(Default, Clone)]
+pub struct GraphicsSettings {
+    pub fullscreen: bool,
+    pub vsync: bool,
+    pub particle_density: f32,
+    pub lighting_quality: LightingQuality,
+    pub post_processing: bool,
+    pub screen_shake_intensity: f32,
+}
+
+#[derive(Default, Clone)]
+pub enum LightingQuality {
+    #[default]
+    Medium,
+    Low,
+    High,
+    Ultra,
+}
+
+#[derive(Clone)]
+pub struct ControlSettings {
+    pub move_up: KeyCode,
+    pub move_down: KeyCode,
+    pub move_left: KeyCode,
+    pub move_right: KeyCode,
+    pub shoot: KeyCode,
+    pub emergency_spore: KeyCode,
+    pub pause: KeyCode,
+    
+    pub mouse_sensitivity: f32,
+    pub controller_deadzone: f32,
+    pub invert_y_axis: bool,
+}
+
+impl Default for ControlSettings {
+    fn default() -> Self {
+        Self {
+            move_up: KeyCode::ArrowUp,
+            move_down: KeyCode::ArrowDown,
+            move_left: KeyCode::ArrowLeft,
+            move_right: KeyCode::ArrowRight,
+            shoot: KeyCode::Space,
+            emergency_spore: KeyCode::KeyX,
+            pause: KeyCode::Escape,
+            mouse_sensitivity: 1.0,
+            controller_deadzone: 0.1,
+            invert_y_axis: false,
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct GameplaySettings {
+    pub auto_fire: bool,
+    pub show_damage_numbers: bool,
+    pub show_fps: bool,
+    pub colorblind_support: bool,
+    pub tutorial_hints: bool,
+    pub pause_on_focus_loss: bool,
+}
+
+// ===== RESOURCE INITIALIZATION =====
+pub fn setup_enhanced_resources(mut commands: Commands) {
+    commands.insert_resource(CardSystemState::default());
+    commands.insert_resource(StageProgressTracker::default());
+    commands.insert_resource(WeaponSystemConfig::default());
+    commands.insert_resource(DifficultyScaling::default());
+    commands.insert_resource(PerformanceMetrics::default());
+    commands.insert_resource(SaveGameData::default());
+    commands.insert_resource(PauseMenuState::default());
+    
+    // Initialize enhanced scoring
+    commands.insert_resource(GameScore::default());
+    
+    // Initialize stage summary
+    commands.insert_resource(StageSummaryData::default());
+}
+
+
+impl StageProgressTracker {
+    pub fn reset_for_new_stage(&mut self, stage_number: u32) {
+        self.current_stage = stage_number;
+        self.current_wave_in_stage = 0;
+        self.enemies_killed_this_stage = 0;
+        self.total_enemies_this_stage = 0;
+        self.infrastructure_destroyed_this_stage = 0;
+        self.total_infrastructure_this_stage = 0;
+        self.damage_taken_this_stage = false;
+        self.perfect_atp_collection = true;
+        self.stage_start_time = 0.0; // Set by time system
+        self.accuracy_this_stage = 1.0;
+        self.combo_multiplier = 1.0;
+        self.max_combo_this_stage = 0;
+        self.current_combo = 0;
+    }
+    
+    pub fn get_completion_percentage(&self) -> f32 {
+        if self.total_enemies_this_stage > 0 {
+            self.enemies_killed_this_stage as f32 / self.total_enemies_this_stage as f32
+        } else {
+            0.0
+        }
+    }
+    
+    pub fn get_objectives_completed(&self) -> u32 {
+        let mut completed = 0;
+        
+        // 70% enemies destroyed
+        if self.get_completion_percentage() >= 0.7 { completed += 1; }
+        
+        // 100% enemies destroyed
+        if self.get_completion_percentage() >= 1.0 { completed += 1; }
+        
+        // All infrastructure destroyed
+        if self.infrastructure_destroyed_this_stage >= self.total_infrastructure_this_stage && self.total_infrastructure_this_stage > 0 {
+            completed += 1;
+        }
+        
+        // No damage taken
+        if !self.damage_taken_this_stage { completed += 1; }
+        
+        completed
+    }
+}
+
