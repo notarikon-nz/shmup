@@ -1,9 +1,11 @@
 use bevy::prelude::*;
+use bevy_hanabi::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::despawn::*;
+use crate::hanabi_particles::*;
 
 #[derive(Resource)]
 pub struct EntityPools {

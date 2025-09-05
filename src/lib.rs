@@ -34,6 +34,8 @@ pub mod stage_summary;
 pub mod missile_trails;
 pub mod pause_system;
 pub mod constants;
+pub mod hanabi_particles;
+pub mod particle_bridge;
 
 
 pub use missile_trails::*;
@@ -70,3 +72,5 @@ pub use despawn::*;
 pub use card_system::*;
 pub use pause_menu::*;
 pub use stage_summary::*;
+pub use hanabi_particles::*;
+pub use particle_bridge::*;

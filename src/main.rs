@@ -30,6 +30,8 @@ fn main() {
         .add_plugins(PerformantLightingPlugin)
         .add_plugins(MenuSystemsPlugin)
         .add_plugins(CosmicUIPlugin)              // Add the Cosmic UI plugin
+        .add_plugins(HanabiParticlePlugin)        // Add hanabi particle system
+        .add_plugins(ParticleBridgePlugin)        // Bridge old and new particle systems
         // .register_hud::<BiologicalGameHUD>()      // Register your HUD (generates all update systems!)
 
         .add_plugins(ConsolidatedPausePlugin) // Replaces all scattered pause systems
@@ -200,7 +202,7 @@ fn main() {
             update_temporary_evolution_effects, // Temporary stat modifications
             consolidated_explosion_system,  // Multi-layered explosion rendering
 
-            unified_particle_system,        // All particle types in one system
+            // unified_particle_system replaced by hanabi systems
 
             // Environmental effects
             update_parallax,                // Background layer scrolling
@@ -325,7 +327,7 @@ fn main() {
             spawn_explosion_system,         // Create explosion entities from events
             spawn_enemy_system,             // Create enemy entities from events
             spawn_powerup_system,           // Create power-up entities from events
-            spawn_particles_system,         // Create particle effects from events
+            // spawn_particles_system replaced by hanabi systems
             spawn_atp_on_death,             // Drop ATP currency when enemies die
             handle_player_hit,              // Process player damage and lives
             update_health_bar,              // Update UI health display
