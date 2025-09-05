@@ -5,6 +5,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use crate::despawn::*;
 
 // This structure is designed to be compatible with future Bevy 2D lighting
 // or custom shader-based lighting systems
@@ -137,7 +138,7 @@ pub fn update_explosion_lights(
         glow.timer += time.delta_secs();
         
         if glow.timer >= glow.max_time {
-            commands.entity(entity).despawn();
+            commands.entity(entity).safe_despawn();
             continue;
         }
         
@@ -250,10 +251,10 @@ pub fn spawn_explosion_lights(
 // Clean up expired lights for performance
 pub fn cleanup_expired_lights(
     mut commands: Commands,
-    expired_query: Query<Entity, (With<PointLight2d>, With<AlreadyDespawned>)>,
+    expired_query: Query<Entity, (With<PointLight2d>, With<PendingDespawn>)>,
 ) {
     for entity in expired_query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 

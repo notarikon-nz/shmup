@@ -3,7 +3,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
-
+use crate::despawn::*;
 
 #[derive(Resource)]
 pub struct EntityPools {
@@ -61,7 +61,7 @@ pub fn optimized_explosion_system(
     mut commands: Commands,
     mut pools: ResMut<EntityPools>,
     mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), 
-        (With<Explosion>, Without<AlreadyDespawned>)>,
+        (With<Explosion>, Without<PendingDespawn>)>,
     mut explosion_events: EventReader<SpawnExplosion>,
     mut shake_events: EventWriter<AddScreenShake>,
     assets: Option<Res<GameAssets>>,
@@ -351,7 +351,7 @@ impl Default for Particle {
 
 pub fn consolidated_explosion_system(
     mut commands: Commands,
-    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), Without<AlreadyDespawned>>,
+    mut explosion_query: Query<(Entity, &mut Explosion, &mut Transform, &mut Sprite), Without<PendingDespawn>>,
     mut explosion_events: EventReader<SpawnExplosion>,
     mut shake_events: EventWriter<AddScreenShake>,
     assets: Option<Res<GameAssets>>,
@@ -428,8 +428,7 @@ pub fn consolidated_explosion_system(
             
             if explosion.timer >= explosion.max_time {
                 commands.entity(entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
             

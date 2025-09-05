@@ -8,7 +8,9 @@ use crate::lighting::PerformantLightingPlugin;
 use cosmic_ui::prelude::*;
 use crate::balance_systems::*;
 use crate::achievements::*;
-
+use crate::missile_trails::*;
+use crate::pause_system::*;
+use crate::despawn::*;
 
 fn main() {
     App::new()
@@ -29,6 +31,8 @@ fn main() {
         .add_plugins(MenuSystemsPlugin)
         .add_plugins(CosmicUIPlugin)              // Add the Cosmic UI plugin
         // .register_hud::<BiologicalGameHUD>()      // Register your HUD (generates all update systems!)
+
+        .add_plugins(ConsolidatedPausePlugin) // Replaces all scattered pause systems
 
         .add_sub_state::<IsPaused>()
 
@@ -105,19 +109,8 @@ fn main() {
             reset_biological_game_state,
         ))
 
-        // Pause state management
-        .add_systems(OnEnter(IsPaused::Paused), setup_enhanced_pause_menu)
-        .add_systems(Update, (
-                        pause_menu_navigation_system, 
-
-                    ).run_if(in_state((IsPaused::Paused))))
-        .add_systems(OnExit(IsPaused::Paused), cleanup_pause_ui)
-
         // Game Play
-
         .add_systems(OnEnter(GameState::Playing), (
-            
-
             setup_biological_ui,            // Create UI with biological terminology
             setup_fps_ui,
             setup_wave_ui,
@@ -130,6 +123,7 @@ fn main() {
             music_system, 
             audio_cleanup_system,
             // handle_pause_input,     // ESC/P key pause toggle
+
             fps_text_update_system,
             update_upgrade_indicators,
             enhanced_evolution_ui_with_limits,            
@@ -198,7 +192,8 @@ fn main() {
 
         // ===== PARTICLE AND EFFECT SYSTEMS =====
         .add_systems(Update, (        
-            performance_optimization_system, // Limit entity processing per frame
+            performance_optimization_system,    // Limit entity processing per frame
+            pause_performance_monitor,          // Monitor pause system health
             
             // Visual effects management
             update_biological_effects,      // Player power-up timers and visuals
@@ -286,6 +281,15 @@ fn main() {
             damage_text_system,             // Floating combat damage numbers
         ).run_if(in_state(IsPaused::Running)))
 
+        // missile trail systems 
+        .add_systems(Update, (
+            // Add these to your existing Update systems for Playing state
+            setup_missile_trails,           // Setup trails for new missiles
+            update_missile_trails,          // Update trail segments and rendering
+            cleanup_missile_trails,         // Clean up orphaned trail renderers
+            optimize_trail_performance,     // Performance monitoring
+        ).run_if(in_state(IsPaused::Running)))
+
         // ===== BIOLOGICAL ENVIRONMENT SIMULATION =====
         .add_systems(Update, (
             
@@ -345,7 +349,6 @@ fn main() {
             debug_spawn_evolution_chamber,  // F3: Spawn evolution chamber
             debug_trigger_king_tide,        // F4: Force trigger king tide event
 
-            robust_despawn_system,          // Better Despawn System
         ).run_if(in_state(IsPaused::Running)))
 
         .add_systems(Update, (
@@ -356,7 +359,7 @@ fn main() {
         ).run_if(in_state(IsPaused::Running)))
 
         .add_systems(Update, 
-            (stage_completion_system, card_pickup_system, spawn_card_system)
+            (stage_completion_system, card_pickup_system, spawn_card_system).chain()
         )
         .add_systems(OnEnter(GameState::StageSummary), setup_stage_summary_ui)
         .add_systems(Update, stage_summary_button_system.run_if(in_state(GameState::StageSummary)))
@@ -388,6 +391,10 @@ fn main() {
             handle_restart_button,          // UI button for restarting
         ).run_if(in_state(GameState::GameOver)))
 
+        // always run last
+        .add_systems(Update, 
+            robust_despawn_system,          // Better Despawn System
+        )        
         .run();
 }
 
@@ -596,7 +603,7 @@ pub fn reset_biological_game_state(
     (mut fluid_environment, mut chemical_environment) : (ResMut<FluidEnvironment>,ResMut<ChemicalEnvironment>),
     mut wave_manager: ResMut<WaveManager>,
     // Despawn all game entities
-    (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, (With<Projectile>, Without<AlreadyDespawned>)>),
+    (enemy_query, projectile_query): (Query<Entity, With<Enemy>>,Query<Entity, (With<Projectile>, Without<PendingDespawn>)>),
     explosion_query: Query<Entity, With<Explosion>>,
     (powerup_query,weapon_powerup_query): (Query<Entity, With<PowerUp>>, Query<Entity, With<EvolutionPowerUp>>),
     (currency_entity_query, upgrade_station_query): (Query<Entity, (With<ATP>, Without<Player>)>, Query<Entity, With<EvolutionChamber>>),
@@ -625,8 +632,7 @@ pub fn reset_biological_game_state(
         .chain(player_query.iter())
         .chain(upgrade_ui_query.iter()) {
         commands.entity(entity)
-            .insert(AlreadyDespawned)
-            .despawn();
+            .safe_despawn();
     }
     
     // Reset resources
@@ -697,7 +703,7 @@ pub fn reset_biological_game_state(
 // Enhanced particle system for organic effects
 pub fn update_organic_particles(
     mut commands: Commands,
-    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite, Option<&BioluminescentParticle>), Without<AlreadyDespawned>>,
+    mut particle_query: Query<(Entity, &mut Transform, &mut Particle, &mut Sprite, Option<&BioluminescentParticle>), Without<PendingDespawn>>,
     fluid_environment: Res<FluidEnvironment>,
     time: Res<Time>,
 ) {
@@ -706,8 +712,7 @@ pub fn update_organic_particles(
         
         if particle.lifetime >= particle.max_lifetime {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
             continue;
         }
 
@@ -1297,7 +1302,7 @@ pub fn render_magnet_field(
         if let Ok((player_transform, upgrades)) = player_query.single() {
             // Remove old field visual
             for entity in existing_field_query.iter() {
-                commands.entity(entity).despawn();
+                commands.entity(entity).safe_despawn();
             }
             
             // Create new field visual if magnet is upgraded

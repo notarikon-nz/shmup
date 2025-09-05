@@ -31,7 +31,13 @@ pub mod despawn;
 pub mod pause_menu;
 pub mod card_system;
 pub mod stage_summary;
+pub mod missile_trails;
+pub mod pause_system;
+pub mod constants;
 
+
+pub use missile_trails::*;
+pub use pause_system::*;
 
 pub use menu_systems::*;
 pub use components::*;

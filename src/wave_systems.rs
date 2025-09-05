@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
+use crate::despawn::*;
 use rand::Rng;
 
 // ===== CONSTANTS =====
@@ -1024,7 +1025,7 @@ fn spawn_environmental_hazard(
 
 fn cleanup_hazard(commands: &mut Commands, hazard: &ActiveHazard) {
     if let Some(entity) = hazard.entity {
-        commands.entity(entity).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 

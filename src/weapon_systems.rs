@@ -4,30 +4,8 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::input::*;
-
-// ===== CONSTANTS =====
-const WING_CANNON_OFFSET: f32 = 25.0; // Distance from center
-const WING_CANNON_Y_OFFSET: f32 = 10.0;
-const MISSILE_LAUNCH_OFFSET: f32 = 20.0;
-const MISSILE_Y_OFFSET: f32 = -15.0;
-
-// Wing Cannon stats per level
-const WING_CANNON_STATS: [(f32, i32, f32, u32); 5] = [
-    (1.2, 25, 12.0, 2), // fire_rate, damage, size, pierce
-    (1.0, 35, 14.0, 3),
-    (0.8, 50, 16.0, 4),
-    (0.6, 70, 18.0, 5),
-    (0.5, 95, 20.0, 6),
-];
-
-// Missile system stats per level
-const MISSILE_STATS: [(f32, i32, f32, f32, bool); 5] = [
-    (2.5, 80, 400.0, 200.0, false), // fire_rate, damage, speed, range, dual
-    (2.0, 110, 450.0, 250.0, false),
-    (1.8, 150, 500.0, 300.0, false),
-    (1.5, 200, 550.0, 350.0, true),
-    (1.2, 260, 600.0, 400.0, true),
-];
+use crate::constants::*;
+use crate::despawn::*;
 
 // New components for biological weapons
 #[derive(Component)]
@@ -194,8 +172,7 @@ pub fn unified_weapon_update_system(
             
             if laser.timer >= laser.max_duration {
                 commands.entity(entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
             
@@ -247,8 +224,7 @@ pub fn unified_weapon_update_system(
             
             if spore.timer >= spore.max_time {
                 commands.entity(spore_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
             
@@ -305,8 +281,7 @@ pub fn unified_weapon_update_system(
                             enemy_type: None,
                         });
                         commands.entity(enemy_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                     }
                 }
             }
@@ -321,8 +296,7 @@ pub fn unified_weapon_update_system(
             
             if cloud.timer >= cloud.max_duration {
                 commands.entity(cloud_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
             
@@ -348,8 +322,7 @@ pub fn unified_weapon_update_system(
                             enemy_type: None,
                         });
                         commands.entity(enemy_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                     }
                 }
             }
@@ -364,8 +337,7 @@ pub fn unified_weapon_update_system(
             
             if arc.timer >= arc.max_duration {
                 commands.entity(arc_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
             
@@ -413,8 +385,7 @@ pub fn unified_weapon_update_system(
                             enemy_type: None,
                         });
                         commands.entity(target_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                     }
                 }
             }
@@ -748,8 +719,8 @@ fn find_strongest_enemy_in_range(
 
 pub fn wing_cannon_collision_system(
     mut commands: Commands,
-    mut projectile_query: Query<(Entity, &Transform, &Collider, &mut Projectile, &mut WingCannonProjectile)>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<WingCannonProjectile>)>,
+    mut projectile_query: Query<(Entity, &Transform, &Collider, &mut Projectile, &mut WingCannonProjectile),(Without<PendingDespawn>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health), (With<Enemy>, Without<WingCannonProjectile>, Without<PendingDespawn>)>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
     for (proj_entity, proj_transform, proj_collider, mut projectile, mut wing_cannon) in projectile_query.iter_mut() {
@@ -773,8 +744,7 @@ pub fn wing_cannon_collision_system(
                 // Check if projectile should be destroyed
                 if wing_cannon.pierce_count >= wing_cannon.max_pierce {
                     commands.entity(proj_entity)
-                        .insert(AlreadyDespawned)
-                        .despawn();
+                        .safe_despawn();
                     break;
                 } else {
                     // Reduce damage for next hit
@@ -788,9 +758,7 @@ pub fn wing_cannon_collision_system(
                         intensity: 1.0,
                         enemy_type: None,
                     });
-                    commands.entity(enemy_entity)
-                        .insert(AlreadyDespawned)
-                        .despawn();
+                    commands.entity(enemy_entity).try_insert(PendingDespawn { delay: 0.1 });
                 }
                 
                 break; // Only hit one enemy per frame per projectile
@@ -808,7 +776,7 @@ pub fn auto_missile_system(
         auto_missile.retarget_timer += time.delta_secs();
         
         // Retarget every 0.5 seconds or if target is lost
-        if auto_missile.retarget_timer > 0.5 {
+        if auto_missile.retarget_timer > 0.2 {  // 0.2 from 0.5
             auto_missile.retarget_timer = 0.0;
             
             if let Some(target_entity) = auto_missile.target {
@@ -832,13 +800,27 @@ pub fn auto_missile_system(
         // Homing behavior
         if let Some(target_entity) = auto_missile.target {
             if let Ok((_, target_transform, _)) = enemy_query.get(target_entity) {
+
+                let target_pos = target_transform.translation;
+                let missile_pos = missile_transform.translation;
+                                
                 let direction_to_target = (target_transform.translation - missile_transform.translation).normalize_or_zero();
                 let current_direction = projectile.velocity.normalize_or_zero();
                 
                 // Smooth homing
-                let homing_rate = auto_missile.homing_strength * time.delta_secs();
+                let homing_rate = auto_missile.homing_strength * 4.0 * time.delta_secs(); // add 4x multiplier
                 let new_direction = (current_direction + direction_to_target.truncate() * homing_rate).normalize_or_zero();
-                projectile.velocity = new_direction * auto_missile.speed;
+
+                // Limit velocity to prevent overshooting
+                let distance_to_target = missile_pos.distance(target_pos);
+                let speed_multiplier = if distance_to_target < 100.0 {
+                    // Slow down when close to prevent overshooting
+                    (distance_to_target / 100.0).max(0.3)
+                } else {
+                    1.0
+                };
+
+                projectile.velocity = new_direction * auto_missile.speed * speed_multiplier;
                 
                 // Update rotation
                 let angle = new_direction.y.atan2(new_direction.x) - std::f32::consts::FRAC_PI_2;

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use std::time::Instant;
 use crate::*;
 
+
 /// Change detection system - runs in PreUpdate for maximum efficiency
 pub fn cosmic_ui_change_detection(
     // This system would be populated by the proc macro based on HUD bindings
@@ -77,7 +78,7 @@ pub fn cosmic_ui_cleanup(
         queue.notifications.retain_mut(|notification| {
             notification.lifetime -= time.delta_secs();
             if notification.lifetime <= 0.0 {
-                commands.entity(notification.entity).despawn();
+                commands.entity(notification.entity).try_despawn();
                 false
             } else {
                 true

@@ -268,7 +268,7 @@ pub fn daily_challenge_ui(
             spawn_daily_challenge_ui(&mut commands, &challenges, &fonts);
         } else {
             for entity in existing_ui.iter() {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).safe_despawn();
             }
         }
     }

@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::input::*;
 use crate::physics::*;
+use crate::despawn::*;
 
 /// Enhanced player movement with fluid dynamics and organic motion
 pub fn biological_movement_system(
@@ -110,7 +111,7 @@ pub fn update_biological_effects(
     mut commands: Commands,
     mut player_query: Query<(Entity, &mut Player, &Transform), With<Player>>,
     mut cell_wall_query: Query<(Entity, &mut CellWallReinforcement)>,
-    mut cell_wall_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<CellWallVisual>, Without<Player>, Without<AlreadyDespawned>)>,
+    mut cell_wall_visual_query: Query<(Entity, &mut Transform, &mut Sprite), (With<CellWallVisual>, Without<Player>, Without<PendingDespawn>)>,
     mut flagella_query: Query<(Entity, &mut FlagellaBoost)>,
     mut symbiotic_query: Query<(Entity, &mut SymbioticMultiplier)>,
     mut mitochondria_query: Query<(Entity, &mut MitochondriaOvercharge)>,
@@ -171,8 +172,7 @@ pub fn update_biological_effects(
             // Remove cell wall visual when expired
             for (cell_wall_visual_entity, _, _) in cell_wall_visual_query.iter() {
                 commands.entity(cell_wall_visual_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
             }
         }
     }

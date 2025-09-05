@@ -7,6 +7,7 @@ use crate::resources::*;
 use crate::enemy_types::*;
 use crate::achievements::*;
 use crate::wave_systems::{WaveManager};
+use crate::despawn::*;
 
 // ===== BALANCE CONSTANTS =====
 pub const ATP_GENERATION_RATES: [(EnemyType, u32, f32); 9] = [
@@ -447,7 +448,7 @@ pub fn balance_debug_ui(
         } else {
             // Remove debug UI
             for entity in debug_ui_query.iter() {
-                commands.entity(entity).despawn();
+                commands.entity(entity).safe_despawn();
             }
         }
     }

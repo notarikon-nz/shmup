@@ -5,13 +5,13 @@ use crate::components::{AlreadyDespawned, PendingDespawn};
 pub fn robust_despawn_system(
     mut commands: Commands,
     mut pending_query: Query<(Entity, &mut PendingDespawn)>,
-    already_despawned_query: Query<Entity, With<AlreadyDespawned>>,
+    already_despawned_query: Query<Entity, With<PendingDespawn>>,
     time: Res<Time>,
 ) {
     // Clean up any entities that got marked as already despawned
     for entity in already_despawned_query.iter() {
         if let Ok(mut entity_commands) = commands.get_entity(entity) {
-            entity_commands.despawn();
+            entity_commands.try_despawn();
         }
     }
     
@@ -21,7 +21,7 @@ pub fn robust_despawn_system(
         
         if pending.delay <= 0.0 {
             if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                entity_commands.despawn();
+                entity_commands.try_despawn();
             }
         }
     }
@@ -35,12 +35,12 @@ pub trait SafeDespawn {
 
 impl SafeDespawn for EntityCommands<'_> {
     fn safe_despawn(&mut self) -> &mut Self {
-        self.insert(PendingDespawn { delay: 0.016 }); // One frame delay
+        self.try_insert(PendingDespawn { delay: 0.016 }); // One frame delay
         self
     }
     
     fn safe_despawn_delayed(&mut self, delay: f32) -> &mut Self {
-        self.insert(PendingDespawn { delay });
+        self.try_insert(PendingDespawn { delay });
         self
     }
 }

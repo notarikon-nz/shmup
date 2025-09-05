@@ -4,6 +4,7 @@ use crate::resources::*;
 use crate::biological_systems::{sample_ph};
 use crate::events::{SpawnParticles};
 use crate::physics::*;
+use crate::despawn::*;
 
 pub fn unified_particle_system(
     mut commands: Commands,
@@ -16,23 +17,23 @@ pub fn unified_particle_system(
             &mut Particle,
             &mut Sprite,
             Option<&BioluminescentParticle>
-        ), (With<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<AlreadyDespawned>)>,
+        ), (With<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<PendingDespawn>)>,
 
         // Query 1: Standalone bioluminescent particles
         Query<(
             &mut Transform,
             &mut Sprite,
             &mut BioluminescentParticle
-        ), (With<BioluminescentParticle>, Without<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<AlreadyDespawned>)>,
+        ), (With<BioluminescentParticle>, Without<Particle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PheromoneParticle>, Without<PendingDespawn>)>,
 
         // Query 2: Particle emitters
-        Query<(&Transform, &mut ParticleEmitter), (Without<Particle>, Without<AlreadyDespawned>)>,
+        Query<(&Transform, &mut ParticleEmitter), (Without<Particle>, Without<PendingDespawn>)>,
 
         // Query 3: Thermal particles
-        Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite), (With<ThermalParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<AlreadyDespawned>)>,
+        Query<(Entity, &mut Transform, &mut ThermalParticle, &mut Sprite), (With<ThermalParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<PendingDespawn>)>,
 
         // Query 4: Pheromone particles
-        Query<(Entity, &mut Transform, &mut PheromoneParticle, &mut Sprite), (With<PheromoneParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<AlreadyDespawned>)>,
+        Query<(Entity, &mut Transform, &mut PheromoneParticle, &mut Sprite), (With<PheromoneParticle>, Without<Particle>, Without<BioluminescentParticle>, Without<ParticleEmitter>, Without<ThermalParticle>, Without<PendingDespawn>)>,
     )>,
 
     // Separate player query
@@ -52,8 +53,7 @@ pub fn unified_particle_system(
 
             if particle.lifetime >= particle.max_lifetime {
                 commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
                 continue;
             }
 
@@ -220,8 +220,7 @@ pub fn unified_particle_system(
             // FIXED: Check both heat intensity AND lifetime for despawning
             if thermal.heat_intensity <= 0.0 || thermal.lifetime >= thermal.max_lifetime {
                 commands.entity(entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
                 continue;
             }
 
@@ -263,8 +262,7 @@ pub fn unified_particle_system(
 
             if pheromone.strength <= 0.0 {
                 commands.entity(entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
             }
         }
     }
@@ -343,7 +341,7 @@ pub fn spawn_particles_system(
 
 pub fn particle_cleanup(
     mut commands: Commands,
-    particle_query: Query<(Entity, &Particle), (With<Particle>, Without<AlreadyDespawned>)>,
+    particle_query: Query<(Entity, &Particle), (With<Particle>, Without<PendingDespawn>)>,
     time: Res<Time>,
 ) {
     let current_time = time.elapsed_secs();
@@ -352,8 +350,7 @@ pub fn particle_cleanup(
     for (entity, particle) in particle_query.iter() {
         if particle.lifetime >= particle.max_lifetime {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
             cleanup_count += 1;
             
             // Limit cleanup per frame to prevent frame drops

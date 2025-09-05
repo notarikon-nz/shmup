@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use crate::components::*;
 use crate::resources::*;
+use crate::despawn::*;
 
 // Achievement System Components and Resources
 #[derive(Resource, Default)]
@@ -517,8 +518,7 @@ pub fn update_achievement_notifications(
         
         if notification.timer <= 0.0 {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
         }
     }
 }

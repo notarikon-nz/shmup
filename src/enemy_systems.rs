@@ -420,7 +420,7 @@ pub fn formation_coordination_system(
 
 pub fn cell_division_system(
     mut commands: Commands,
-    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &Health), Without<AlreadyDespawned>>,
+    mut enemy_query: Query<(Entity, &Transform, &mut Enemy, &Health), Without<PendingDespawn>>,
     mut spawn_events: EventWriter<SpawnEnemy>,
     assets: Option<Res<GameAssets>>,
     time: Res<Time>,
@@ -483,7 +483,7 @@ pub fn cell_division_system(
 
 pub fn symbiotic_pair_system(
     mut commands: Commands,
-    pair_query: Query<(Entity, &Transform, &Enemy), Without<AlreadyDespawned>>,
+    pair_query: Query<(Entity, &Transform, &Enemy), Without<PendingDespawn>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
     let pair_data: Vec<(Entity, Vec3, Option<Entity>)> = pair_query.iter()
@@ -668,8 +668,8 @@ fn spawn_colony_pattern(
 // ===== ENHANCED AI SYSTEMS =====
 
 pub fn predator_prey_system(
-    mut predator_query: Query<(&mut Transform, &mut Enemy, &PredatorPreyBehavior), Without<AlreadyDespawned>>,
-    prey_query: Query<(Entity, &Transform, &Enemy), (With<Enemy>, Without<PredatorPreyBehavior>, Without<AlreadyDespawned>)>,
+    mut predator_query: Query<(&mut Transform, &mut Enemy, &PredatorPreyBehavior), Without<PendingDespawn>>,
+    prey_query: Query<(Entity, &Transform, &Enemy), (With<Enemy>, Without<PredatorPreyBehavior>, Without<PendingDespawn>)>,
     player_query: Query<&Transform, With<Player>>,
     time: Res<Time>,
 ) {

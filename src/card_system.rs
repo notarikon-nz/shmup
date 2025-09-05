@@ -5,6 +5,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::wave_systems::*;
 use crate::enemy_types::*;
+use crate::despawn::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -289,7 +290,7 @@ fn generate_random_temporal_card(stage: u32) -> TemporalCard {
 
 pub fn card_pickup_system(
     mut commands: Commands,
-    card_query: Query<(Entity, &Transform, &Collider, &CardPickup), Without<AlreadyDespawned>>,
+    card_query: Query<(Entity, &Transform, &Collider, &CardPickup), Without<PendingDespawn>>,
     player_query: Query<(&Transform, &Collider), With<Player>>,
     mut card_collection: ResMut<CardCollection>,
     mut spawn_events: EventWriter<SpawnParticles>,
@@ -332,8 +333,7 @@ pub fn card_pickup_system(
                 });
 
                 commands.entity(card_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
             }
         }
     }
@@ -512,7 +512,7 @@ pub fn move_cards_and_boxes(
 
 pub fn green_box_collection_system(
     mut commands: Commands,
-    box_query: Query<(Entity, &Transform, &Collider, &GreenCardBox), Without<AlreadyDespawned>>,
+    box_query: Query<(Entity, &Transform, &Collider, &GreenCardBox), Without<PendingDespawn>>,
     player_query: Query<(&Transform, &Collider), With<Player>>,
     mut card_collection: ResMut<CardCollection>,
     mut spawn_card_events: EventWriter<SpawnCardEvent>,
@@ -535,8 +535,7 @@ pub fn green_box_collection_system(
                 });
 
                 commands.entity(box_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
             }
         }
     }

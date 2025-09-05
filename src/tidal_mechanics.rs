@@ -5,6 +5,7 @@ use crate::resources::*;
 use crate::events::*;
 use crate::enemy_types::*;
 use crate::achievements::*;
+use crate::despawn::*;
 
 pub fn advanced_tidal_system(
     mut tidal_physics: ResMut<TidalPoolPhysics>,
@@ -380,7 +381,7 @@ pub fn update_king_tide(
 // Update tidal debris
 pub fn update_tidal_debris(
     mut commands: Commands,
-    mut debris_query: Query<(Entity, &mut Transform, &mut TidalDebris), Without<AlreadyDespawned>>,
+    mut debris_query: Query<(Entity, &mut Transform, &mut TidalDebris), Without<PendingDespawn>>,
     time: Res<Time>,
 ) {
     for (entity, mut transform, mut debris) in debris_query.iter_mut() {
@@ -388,8 +389,7 @@ pub fn update_tidal_debris(
         
         if debris.lifetime >= debris.max_lifetime {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
             continue;
         }
         

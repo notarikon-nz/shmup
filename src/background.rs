@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::resources::*;
+use crate::despawn::*;
 use std::f32::consts::TAU;
 
 // New background system components
@@ -599,7 +600,7 @@ pub fn update_background_particles(
         &mut BackgroundParticle,
         &mut Sprite,
         Option<&mut BioluminescentParticle>
-    ), Without<AlreadyDespawned>>,
+    ), Without<PendingDespawn>>,
     fluid_environment: Res<FluidEnvironment>,
     time: Res<Time>,
 ) {
@@ -608,8 +609,7 @@ pub fn update_background_particles(
         
         if particle.lifecycle_timer >= particle.max_lifetime {
             commands.entity(entity)
-                .insert(AlreadyDespawned)
-                .despawn();
+                .safe_despawn();
             continue;
         }
         

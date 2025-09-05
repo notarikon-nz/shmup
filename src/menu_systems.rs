@@ -8,6 +8,7 @@ use rand::Rng;
 use crate::components::*;
 use crate::resources::*;
 use crate::input::*;
+use crate::despawn::*;
 
 // ===== CONSTANTS =====
 const LOADING_BAR_WIDTH: f32 = 400.0;
@@ -230,7 +231,7 @@ pub fn loading_system(
 
 pub fn cleanup_loading(mut commands: Commands, query: Query<Entity, Or<(With<LoadingBar>, With<Node>)>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).try_despawn();
     }
 }
 
@@ -527,19 +528,19 @@ pub fn update_menu_animations(
 // ===== CLEANUP SYSTEMS =====
 pub fn cleanup_title_screen(mut commands: Commands, query: Query<Entity, Or<(With<TitleScreen>, With<AnimatedParticle>)>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).try_despawn();
     }
 }
 
 pub fn cleanup_settings_menu(mut commands: Commands, query: Query<Entity, With<SettingsMenu>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).try_despawn();
     }
 }
 
 pub fn cleanup_high_scores_menu(mut commands: Commands, query: Query<Entity, With<HighScoreMenu>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).try_despawn();
     }
 }
 

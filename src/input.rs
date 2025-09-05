@@ -568,7 +568,6 @@ impl Plugin for InputPlugin {
                 input_update_system,
             ))
             .add_systems(Update, (
-                handle_pause_input,
                 handle_restart_input,
             ));
     }

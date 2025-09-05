@@ -8,6 +8,7 @@ use crate::enemy_types::*;
 use crate::events::*;
 use crate::achievements::*;
 use crate::input::*;
+use crate::despawn::*;
 use std::collections::HashSet;
 
 // ===== CONSTANTS =====
@@ -395,7 +396,7 @@ pub fn cleanup_stage_summary_ui(
     summary_query: Query<Entity, With<StageSummaryUI>>,
 ) {
     for entity in summary_query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 

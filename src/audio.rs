@@ -6,7 +6,7 @@ use crate::events::*;
 use crate::input::*;
 use crate::enemy_types::*;
 use crate::achievements::{AchievementEvent};
-
+use crate::despawn::*;
 // ===== CONSTANTS =====
 const MAX_CONCURRENT_SFX: usize = 20;
 const MAX_EXPLOSION_SFX_PER_FRAME: u8 = 2;
@@ -485,7 +485,7 @@ pub fn audio_cleanup_system(
     }
 
     for entity in entities_to_remove {
-        commands.entity(entity).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
 

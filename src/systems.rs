@@ -162,7 +162,8 @@ pub fn cleanup_offscreen(
         Without<Player>, Without<ParallaxLayer>, Without<HealthBarFill>, 
         Without<ScoreText>, Without<HighScoreText>, Without<HealthBar>,
         Without<LivesText>, Without<MultiplierText>, Without<CellWallVisual>,
-        Without<AlreadyDespawned>,
+        Without<PendingDespawn>, Without<PendingDespawn>,
+        Without<AutoMissile>
     )>,
 ) {
     let bounds_sq = OFFSCREEN_BOUNDS * OFFSCREEN_BOUNDS;
@@ -427,9 +428,9 @@ pub fn collision_system(
     mut game_score: ResMut<GameScore>,
     time: Res<Time>,
     fonts: Res<GameFonts>,
-    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), (Without<PendingDespawn>, Without<AlreadyDespawned>)>,
-    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<Player>, Without<PendingDespawn>, Without<AlreadyDespawned>)>,
-    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>, Without<PendingDespawn>, Without<AlreadyDespawned>)>,
+    projectile_query: Query<(Entity, &Transform, &Collider, &Projectile), (Without<PendingDespawn>)>,
+    mut enemy_query: Query<(Entity, &Transform, &Collider, &mut Health, Option<&Enemy>), (Without<Projectile>, Without<Player>, Without<PendingDespawn>)>,
+    player_query: Query<(Entity, &Transform, &Collider, &Player, &CriticalHitStats), (With<Player>, Without<Enemy>, Without<PendingDespawn>)>,
     mut achievement_events: EventWriter<AchievementEvent>,
 ) {
     let Ok((_, player_transform, player_collider, player, crit_stats)) = player_query.single() else { return };
@@ -461,7 +462,7 @@ pub fn collision_system(
             });
             
             commands.entity(proj_entity).safe_despawn();
-            projectiles_to_remove.insert(proj_entity);
+            projectiles_to_remove.insert(proj_entity); // huh? if above?
         }
     }
     
@@ -535,7 +536,7 @@ pub fn collision_system(
                             enemy_type: Some(enemy_type.clone()) 
                         });
                         
-                        commands.entity(enemy_entity).try_insert(AlreadyDespawned).try_despawn();
+                        commands.entity(enemy_entity).safe_despawn();
                         enemies_to_remove.insert(enemy_entity);
                         game_score.enemies_defeated += 1;
                         achievement_events.write(AchievementEvent::EnemyKilled(enemy_type.get_biological_description().to_string()));
@@ -601,7 +602,7 @@ pub fn save_high_score_system(mut game_score: ResMut<GameScore>) {
 
 pub fn check_game_over(
     mut commands: Commands,
-    player_query: Query<(Entity, &Health, &Transform, &Player), (With<Player>, Without<AlreadyDespawned>)>,
+    player_query: Query<(Entity, &Health, &Transform, &Player), (With<Player>, Without<PendingDespawn>)>,
     mut next_state: ResMut<NextState<GameState>>,
     mut explosion_events: EventWriter<SpawnExplosion>,
 ) {
@@ -612,7 +613,7 @@ pub fn check_game_over(
                 intensity: 2.5,
                 enemy_type: None,
             });
-            commands.entity(entity).try_insert(AlreadyDespawned).despawn();
+            commands.entity(entity).try_insert(AlreadyDespawned).safe_despawn();
             next_state.set(GameState::GameOver);
         }
     }
@@ -653,7 +654,7 @@ pub fn handle_player_hit(
                     health.0 = upgrades.max_health;
                     player.invincible_timer = 3.0;
                 } else {
-                    commands.entity(entity).try_insert(AlreadyDespawned).despawn();
+                    commands.entity(entity).try_insert(AlreadyDespawned).safe_despawn();
                     next_state.set(GameState::GameOver);
                 }
             }
@@ -665,7 +666,7 @@ pub fn handle_player_hit(
 
 pub fn damage_text_system(
     mut commands: Commands,
-    mut damage_query: Query<(Entity, &mut Transform, &mut DamageText, &mut TextColor), Without<AlreadyDespawned>>,
+    mut damage_query: Query<(Entity, &mut Transform, &mut DamageText, &mut TextColor), Without<PendingDespawn>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
@@ -681,7 +682,7 @@ pub fn damage_text_system(
     // Cleanup in separate pass
     for (entity, _, damage_text, _) in damage_query.iter() {
         if damage_text.timer <= 0.0 {
-            commands.entity(entity).try_insert(AlreadyDespawned).despawn();
+            commands.entity(entity).try_insert(AlreadyDespawned).safe_despawn();
         }
     }
 }
@@ -713,7 +714,7 @@ pub fn enemy_flash_system(
     enemy_query: Query<&Sprite, (
         With<Enemy>, 
         Without<FlashEffect>, 
-        Without<AlreadyDespawned>, 
+        Without<PendingDespawn>, 
         Without<PendingDespawn>
     )>,
     time: Res<Time>,
@@ -793,9 +794,9 @@ pub fn screen_shake_system(
 
 pub fn performance_optimization_system(
     mut commands: Commands,
-    particle_query: Query<Entity, (With<Particle>, Without<AlreadyDespawned>)>,
-    explosion_query: Query<Entity, (With<Explosion>, Without<AlreadyDespawned>)>,
-    audio_query: Query<Entity, (With<AudioPlayer>, Without<AlreadyDespawned>)>,
+    particle_query: Query<Entity, (With<Particle>, Without<PendingDespawn>)>,
+    explosion_query: Query<Entity, (With<Explosion>, Without<PendingDespawn>)>,
+    audio_query: Query<Entity, (With<AudioPlayer>, Without<PendingDespawn>)>,
     time: Res<Time>,
     mut cleanup_timer: Local<f32>,
 ) {
@@ -811,7 +812,7 @@ pub fn performance_optimization_system(
             let remove_count = (total_entities - CLEANUP_PARTICLES_TO).min(particles.len());
             
             for &entity in particles.iter().take(remove_count) {
-                commands.entity(entity).try_insert(AlreadyDespawned).despawn();
+                commands.entity(entity).try_insert(AlreadyDespawned).safe_despawn();
             }
         }
         

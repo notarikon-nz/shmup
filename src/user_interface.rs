@@ -4,6 +4,7 @@ use crate::components::*;
 use crate::resources::*;
 use crate::wave_systems::*;
 use crate::enemy_types::{Enemy};
+use crate::despawn::*;
 
 // ===== CONSTANTS =====
 const UI_FONT_SIZE_LARGE: f32 = 48.0;
@@ -202,7 +203,7 @@ pub fn enhanced_evolution_ui_with_limits(
         match (near_chamber, existing_ui_query.single()) {
             (true, Err(_)) => spawn_evolution_ui(&mut commands, atp.amount, &fonts, limits),
             (false, Ok(entity)) => { 
-                commands.entity(entity).despawn();
+                commands.entity(entity).safe_despawn();
             },
             _ => {},
         }
@@ -272,7 +273,7 @@ pub fn update_evolution_ui(
             (false, Ok(entity)) => { 
                 info!("outside range, despawning ui");
                 if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                    entity_commands.despawn();
+                    entity_commands.safe_despawn();
                 }
             },
             _ => {},
@@ -453,11 +454,11 @@ pub fn setup_pause_ui(mut commands: Commands, fonts: Res<GameFonts>) {
 
 // ===== CLEANUP FUNCTIONS =====
 pub fn cleanup_game_over_ui(mut commands: Commands, query: Query<Entity, With<GameOverUI>>) {
-    for entity in query.iter() { commands.entity(entity).despawn(); }
+    for entity in query.iter() { commands.entity(entity).safe_despawn(); }
 }
 
 pub fn cleanup_pause_ui(mut commands: Commands, query: Query<Entity, With<PauseOverlay>>) {
-    for entity in query.iter() { commands.entity(entity).despawn(); }
+    for entity in query.iter() { commands.entity(entity).safe_despawn(); }
 }
 
 // ===== FPS COUNTER =====

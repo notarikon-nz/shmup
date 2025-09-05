@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 use crate::events::*;
+use crate::despawn::*;
 
 pub fn spawn_extra_life_powerup(
     mut commands: Commands,
@@ -50,7 +51,7 @@ pub fn spawn_extra_life_powerup(
 // 7. Extra Life Collection
 pub fn collect_extra_life(
     mut commands: Commands,
-    extra_life_query: Query<(Entity, &Transform, &Collider), (With<ExtraLifePowerUp>, Without<AlreadyDespawned>)>,
+    extra_life_query: Query<(Entity, &Transform, &Collider), (With<ExtraLifePowerUp>, Without<PendingDespawn>)>,
     mut player_query: Query<(&Transform, &Collider, &mut Player)>,
     mut particle_events: EventWriter<SpawnParticles>,
 ) {
@@ -77,8 +78,7 @@ pub fn collect_extra_life(
                 });
 
                 commands.entity(life_entity)
-                    .insert(AlreadyDespawned)
-                    .despawn();
+                    .safe_despawn();
             }
         }
     }

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::components::*;
 use crate::resources::*;
 use crate::input::*;
+use crate::despawn::*;
 
 // ===== CONSTANTS =====
 const MENU_ITEM_HEIGHT: f32 = 40.0;
@@ -321,74 +322,6 @@ pub fn setup_enhanced_pause_menu(
     }
 }
 
-pub fn pause_menu_navigation_system(
-    mut menu_state: ResMut<PauseMenuState>,
-    input_manager: Res<InputManager>,
-    mut menu_items: Query<(&mut BackgroundColor, &EvolutionMenuItem)>,
-    mut selector: Query<&mut Node, With<MenuSelector>>,
-    mut commands: Commands,
-    mut player_query: Query<(&mut ATP, &mut UpgradeLimits, &mut EvolutionSystem, &mut CellularUpgrades), With<Player>>,
-    current_state: Res<State<IsPaused>>,
-    mut next_state: ResMut<NextState<IsPaused>>,
-) {
-    // if !menu_state.menu_active { return; }
-
-    // Navigation
-    if input_manager.just_pressed(InputAction::MoveUp) {
-        menu_state.selected_index = if menu_state.selected_index == 0 {
-            EVOLUTION_MENU_ITEMS - 1
-        } else {
-            menu_state.selected_index - 1
-        };
-    }
-    
-    if input_manager.just_pressed(InputAction::MoveDown) {
-        menu_state.selected_index = (menu_state.selected_index + 1) % EVOLUTION_MENU_ITEMS;
-    }
-
-    // Update visual selection
-    for (mut bg_color, menu_item) in menu_items.iter_mut() {
-        *bg_color = if menu_item.index == menu_state.selected_index {
-            BackgroundColor(Color::srgba(0.2, 0.4, 0.3, 0.8))
-        } else {
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0))
-        };
-    }
-
-    // Update selector position
-    if let Ok(mut selector_node) = selector.single_mut() {
-        let y_offset = menu_state.selected_index as f32 * (MENU_ITEM_HEIGHT + 4.0);
-        selector_node.top = Val::Px(120.0 + y_offset); // Account for title and ATP display
-    }
-
-    // Selection
-    if input_manager.just_pressed(InputAction::Shoot) { // Using Shoot as confirm
-        if let Ok((mut atp, mut limits, mut evolution_system, mut upgrades)) = player_query.single_mut() {
-            let selected_item = menu_items.iter()
-                .find(|(_, item)| item.index == menu_state.selected_index)
-                .map(|(_, item)| item.upgrade_type.clone());
-
-            if let Some(upgrade_type) = selected_item {
-                match upgrade_type {
-                    UpgradeType::ExitMenu => {
-                        menu_state.menu_active = false;
-                        next_state.set(IsPaused::Running);
-                    }
-                    _ => {
-                        process_upgrade(&upgrade_type, &mut atp, &mut limits, &mut evolution_system, &mut upgrades);
-                    }
-                }
-            }
-        }
-    }
-
-    // ESC to exit
-    if input_manager.just_pressed(InputAction::Pause) {
-        menu_state.menu_active = false;
-        next_state.set(IsPaused::Running);
-    }
-}
-
 fn process_upgrade(
     upgrade_type: &UpgradeType,
     atp: &mut ATP,
@@ -454,6 +387,6 @@ pub fn cleanup_pause_menu_system(
     pause_menu_query: Query<Entity, With<PauseMenuRoot>>,
 ) {
     for entity in pause_menu_query.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).safe_despawn();
     }
 }
